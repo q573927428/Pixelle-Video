@@ -47,6 +47,14 @@ class StoryboardConfig:
     tts_speed: Optional[float] = None          # TTS speed multiplier (0.5-2.0, 1.0 = normal)
     ref_audio: Optional[str] = None            # Reference audio for voice cloning (ComfyUI mode only)
     
+    # VoxCPM API specific params (for 极致克隆模式)
+    voxcpm_cfg: Optional[float] = None         # VoxCPM CFG scale
+    voxcpm_normalize: bool = False             # VoxCPM normalize
+    voxcpm_denoise: bool = False               # VoxCPM denoise
+    voxcpm_control_instruction: Optional[str] = None  # VoxCPM control instruction (极致克隆模式)
+    voxcpm_use_prompt_text: bool = False       # VoxCPM use prompt text
+    voxcpm_prompt_text: Optional[str] = None   # VoxCPM prompt text
+    
     # Media workflow
     media_workflow: Optional[str] = None       # Media workflow filename (image or video, None = use default)
     api_video_params: Optional[Dict[str, Any]] = None  # Extra direct API video generation parameters

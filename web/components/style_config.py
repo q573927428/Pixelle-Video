@@ -23,6 +23,7 @@ from loguru import logger
 
 from web.i18n import tr, get_language
 from web.utils.async_helpers import run_async
+from web.utils.upload_history import render_upload_area
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
 from web.pipelines.api_workflows import (
     list_api_media_workflows,
@@ -155,22 +156,14 @@ def render_style_config(pixelle_video):
                         key="tts_voxcpm_prompt_text"
                     )
                 
-                # Reference audio for voice cloning
-                ref_audio_file = st.file_uploader(
-                    tr("tts.ref_audio"),
-                    type=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
-                    help=tr("tts.ref_audio_help"),
-                    key="tts_voxcpm_ref_audio"
+                # Reference audio for voice cloning (upload or history, preview inline)
+                ref_audio_path, _ = render_upload_area(
+                    category="ref_audio",
+                    upload_label=tr("tts.ref_audio"),
+                    accept_types=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+                    accept_multiple=False,
+                    upload_key="tts_voxcpm_ref_audio",
                 )
-                
-                ref_audio_path = None
-                if ref_audio_file is not None:
-                    st.audio(ref_audio_file)
-                    temp_dir = Path("temp")
-                    temp_dir.mkdir(exist_ok=True)
-                    ref_audio_path = str(temp_dir / f"ref_audio_{ref_audio_file.name}")
-                    with open(ref_audio_path, "wb") as f:
-                        f.write(ref_audio_file.getbuffer())
                 
                 selected_voice = None
                 tts_speed = None
@@ -255,26 +248,14 @@ def render_style_config(pixelle_video):
             # Check and warn for selfhost TTS workflow (auto popup if not confirmed)
             check_and_warn_selfhost_workflow(tts_workflow_key)
             
-            # Reference audio upload (optional, for voice cloning)
-            ref_audio_file = st.file_uploader(
-                tr("tts.ref_audio"),
-                type=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
-                help=tr("tts.ref_audio_help"),
-                key="ref_audio_upload"
+            # Reference audio for voice cloning (upload or history, preview inline)
+            ref_audio_path, _ = render_upload_area(
+                category="ref_audio",
+                upload_label=tr("tts.ref_audio"),
+                accept_types=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+                accept_multiple=False,
+                upload_key="ref_audio_upload",
             )
-            
-            # Save uploaded ref_audio to temp file if provided
-            ref_audio_path = None
-            if ref_audio_file is not None:
-                # Audio preview player (directly play uploaded file)
-                st.audio(ref_audio_file)
-                
-                # Save to temp directory
-                temp_dir = Path("temp")
-                temp_dir.mkdir(exist_ok=True)
-                ref_audio_path = temp_dir / f"ref_audio_{ref_audio_file.name}"
-                with open(ref_audio_path, "wb") as f:
-                    f.write(ref_audio_file.getbuffer())
             
             # Variables for video generation
             selected_voice = None
@@ -1039,6 +1020,11 @@ def render_style_config(pixelle_video):
     
     # Return all style configuration parameters
     final_media_workflow = workflow_key
+    
+    # VoxCPM params (read from session_state)
+    voxcpm_cfg = st.session_state.get("tts_voxcpm_cfg", 2.0) if tts_mode == "local" and tts_engine == "voxcpm_api" else None
+    voxcpm_normalize = st.session_state.get("tts_voxcpm_normalize", False) if tts_mode == "local" and tts_engine == "voxcpm_api" else False
+    voxcpm_denoise = st.session_state.get("tts_voxcpm_denoise", False) if tts_mode == "local" and tts_engine == "voxcpm_api" else False
 
     return {
         "tts_inference_mode": tts_mode,
@@ -1047,6 +1033,13 @@ def render_style_config(pixelle_video):
         "tts_speed": tts_speed if tts_mode == "local" else None,
         "tts_workflow": tts_workflow_key if tts_mode == "comfyui" else None,
         "ref_audio": str(ref_audio_path) if ref_audio_path else None,
+        # VoxCPM params for standard/quick-create pipeline
+        "voxcpm_cfg": voxcpm_cfg,
+        "voxcpm_normalize": voxcpm_normalize,
+        "voxcpm_denoise": voxcpm_denoise,
+        "voxcpm_control_instruction": st.session_state.get("tts_voxcpm_control_instruction", ""),
+        "voxcpm_use_prompt_text": st.session_state.get("tts_voxcpm_use_prompt_text", False),
+        "voxcpm_prompt_text": st.session_state.get("tts_voxcpm_prompt_text", ""),
         "frame_template": frame_template,
         "template_params": custom_values_for_video if custom_values_for_video else None,
         "media_workflow": final_media_workflow,

@@ -56,6 +56,13 @@ def render_single_output(pixelle_video, video_params):
     tts_speed = video_params.get("tts_speed")
     tts_workflow_key = video_params.get("tts_workflow")
     ref_audio_path = video_params.get("ref_audio")
+    tts_engine = video_params.get("tts_engine")
+    voxcpm_cfg = video_params.get("voxcpm_cfg")
+    voxcpm_normalize = video_params.get("voxcpm_normalize", False)
+    voxcpm_denoise = video_params.get("voxcpm_denoise", False)
+    voxcpm_control_instruction = video_params.get("voxcpm_control_instruction", "")
+    voxcpm_use_prompt_text = video_params.get("voxcpm_use_prompt_text", False)
+    voxcpm_prompt_text = video_params.get("voxcpm_prompt_text", "")
     
     frame_template = video_params.get("frame_template")
     custom_values_for_video = video_params.get("template_params", {})
@@ -156,6 +163,16 @@ def render_single_output(pixelle_video, video_params):
                 if tts_mode == "local":
                     video_params["tts_voice"] = selected_voice
                     video_params["tts_speed"] = tts_speed
+                    video_params["tts_engine"] = tts_engine
+                    if ref_audio_path:
+                        video_params["ref_audio"] = str(ref_audio_path)
+                    # VoxCPM params (for 极致克隆模式)
+                    video_params["voxcpm_cfg"] = voxcpm_cfg
+                    video_params["voxcpm_normalize"] = voxcpm_normalize
+                    video_params["voxcpm_denoise"] = voxcpm_denoise
+                    video_params["voxcpm_control_instruction"] = voxcpm_control_instruction
+                    video_params["voxcpm_use_prompt_text"] = voxcpm_use_prompt_text
+                    video_params["voxcpm_prompt_text"] = voxcpm_prompt_text
                 else:  # comfyui
                     video_params["tts_workflow"] = tts_workflow_key
                     if ref_audio_path:

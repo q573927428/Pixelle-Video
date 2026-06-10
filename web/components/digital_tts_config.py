@@ -22,6 +22,7 @@ from loguru import logger
 
 from web.i18n import tr, get_language
 from web.utils.async_helpers import run_async
+from web.utils.upload_history import render_upload_area
 from pixelle_video.config import config_manager
 
 
@@ -140,22 +141,14 @@ def render_style_config(pixelle_video):
                         key="digital_tts_voxcpm_prompt_text"
                     )
                 
-                # Reference audio for voice cloning
-                ref_audio_file = st.file_uploader(
-                    tr("tts.ref_audio"),
-                    type=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
-                    help=tr("tts.ref_audio_help"),
-                    key="digital_tts_voxcpm_ref_audio"
+                # Reference audio for voice cloning (upload or history, preview inline)
+                ref_audio_path, _ = render_upload_area(
+                    category="ref_audio",
+                    upload_label=tr("tts.ref_audio"),
+                    accept_types=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+                    accept_multiple=False,
+                    upload_key="digital_tts_voxcpm_ref_audio",
                 )
-                
-                ref_audio_path = None
-                if ref_audio_file is not None:
-                    st.audio(ref_audio_file)
-                    temp_dir = Path("temp")
-                    temp_dir.mkdir(exist_ok=True)
-                    ref_audio_path = str(temp_dir / f"ref_audio_{ref_audio_file.name}")
-                    with open(ref_audio_path, "wb") as f:
-                        f.write(ref_audio_file.getbuffer())
                 
                 selected_voice = None
                 tts_speed = None
@@ -213,26 +206,14 @@ def render_style_config(pixelle_video):
         else:  # comfyui mode
             tts_workflow_key = "runninghub/tts_index2.json"  # fallback
             
-            # Reference audio upload (optional, for voice cloning)
-            ref_audio_file = st.file_uploader(
-                tr("tts.ref_audio"),
-                type=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
-                help=tr("tts.ref_audio_help"),
-                key="digital_ref_audio_upload"
+            # Reference audio for voice cloning (upload or history, preview inline)
+            ref_audio_path, _ = render_upload_area(
+                category="ref_audio",
+                upload_label=tr("tts.ref_audio"),
+                accept_types=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+                accept_multiple=False,
+                upload_key="digital_ref_audio_upload",
             )
-            
-            # Save uploaded ref_audio to temp file if provided
-            ref_audio_path = None
-            if ref_audio_file is not None:
-                # Audio preview player (directly play uploaded file)
-                st.audio(ref_audio_file)
-                
-                # Save to temp directory
-                temp_dir = Path("temp")
-                temp_dir.mkdir(exist_ok=True)
-                ref_audio_path = temp_dir / f"ref_audio_{ref_audio_file.name}"
-                with open(ref_audio_path, "wb") as f:
-                    f.write(ref_audio_file.getbuffer())
             
             # Variables for video generation
             selected_voice = None

@@ -19,6 +19,7 @@ from web.components.content_input import render_version_info
 from web.components.digital_tts_config import render_style_config
 from web.utils.async_helpers import run_async
 from web.utils.history_persistence import save_web_generation_history
+from web.utils.upload_history import render_upload_area
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
 from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import create_task_output_dir
@@ -85,42 +86,16 @@ class DigitalHumanPipelineUI(PipelineUI):
                 st.markdown(f"**{tr('help.how')}**")
                 st.markdown(tr("digital_human.assets.how"))
             
-            # File uploader for multiple files
-            uploaded_files = st.file_uploader(
-                tr("digital_human.assets.upload"),
-                type=["jpg", "jpeg", "png", "webp"],
-                accept_multiple_files=True,
-                help=tr("digital_human.assets.upload_help"),
-                key="character_files"
+            # Combined upload + history area (preview is inline inside the component)
+            _, character_asset_paths = render_upload_area(
+                category="character_image",
+                upload_label=tr("digital_human.assets.upload"),
+                accept_types=["jpg", "jpeg", "png", "webp"],
+                accept_multiple=True,
+                upload_key="character_files",
             )
-            
-            # Save uploaded files to temp directory with unique session ID
-            character_asset_paths = []
-            if uploaded_files:
-                import uuid
-                session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                temp_dir = Path(f"temp/assets_{session_id}")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                for uploaded_file in uploaded_files:
-                    file_path = temp_dir / uploaded_file.name
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    character_asset_paths.append(str(file_path.absolute()))
-                
-                st.success(tr("digital_human.assets.character_sucess"))
-                
-                # Preview uploaded assets
-                with st.expander(tr("digital_human.assets.preview"), expanded=True):
-                    # Show in a grid (3 columns)
-                    cols = st.columns(3)
-                    for i, (file, path) in enumerate(zip(uploaded_files, character_asset_paths)):
-                        with cols[i % 3]:
-                            # Check if image
-                            ext = Path(path).suffix.lower()
-                            if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-                                st.image(file, caption=file.name, use_container_width=True)
-            else:
+
+            if not character_asset_paths:
                 st.info(tr("digital_human.assets.character_empty_hint"))
 
             return {"character_assets": character_asset_paths}
@@ -345,44 +320,19 @@ class DigitalHumanPipelineUI(PipelineUI):
             text_help = tr("input.text_help_digital") if mode == "digital" else tr("input.text_help_fixed")
             
             if mode == "digital":
-                # File uploader for multiple files
-                uploaded_files = st.file_uploader(
-                    tr("digital_human.assets.upload"),
-                    type=["jpg", "jpeg", "png", "webp"],
-                    accept_multiple_files=True,
-                    help=tr("digital_human.assets.upload_help"),
-                    key="digital_files"
+                # Combined upload + history area for goods images (preview is inline)
+                _, goods_asset_paths = render_upload_area(
+                    category="goods_image",
+                    upload_label=tr("digital_human.assets.upload"),
+                    accept_types=["jpg", "jpeg", "png", "webp"],
+                    accept_multiple=True,
+                    upload_key="digital_files",
                 )
-                
-                # Save uploaded files to temp directory with unique session ID
-                goods_asset_paths = []
-                if uploaded_files:
-                    import uuid
-                    session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                    temp_dir = Path(f"temp/assets_{session_id}")
-                    temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                    for uploaded_file in uploaded_files:
-                        file_path = temp_dir / uploaded_file.name
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        goods_asset_paths.append(str(file_path.absolute()))
-                
-                    st.success(tr("digital_human.assets.goods_sucess"))
-                
-                    # Preview uploaded assets
-                    with st.expander(tr("digital_human.assets.preview"), expanded=True):
-                        # Show in a grid (3 columns)
-                        cols = st.columns(3)
-                        for i, (file, path) in enumerate(zip(uploaded_files, goods_asset_paths)):
-                            with cols[i % 3]:
-                                # Check if image
-                                ext = Path(path).suffix.lower()
-                                if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-                                    st.image(file, caption=file.name, use_container_width=True)
-                else:
+
+                if not goods_asset_paths:
                     st.info(tr("digital_human.assets.goods_empty_hint"))
-                    # Text input
+
+                # Text input
                 goods_text = st.text_area(
                     tr("digital_human.input_text"),
                     placeholder=text_placeholder,
@@ -551,6 +501,9 @@ class DigitalHumanPipelineUI(PipelineUI):
                                         prompt_val = video_params.get("voxcpm_prompt_text", "") or ""
                                         if prompt_val:
                                             tts_kwargs["prompt_text"] = prompt_val
+                                    # Reference audio for voice cloning (极致克隆模式)
+                                    if ref_audio:
+                                        tts_kwargs["ref_audio"] = ref_audio
                                 else:
                                     tts_kwargs["voice"] = tts_voice
                                     tts_kwargs["speed"] = tts_speed

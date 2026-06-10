@@ -266,6 +266,13 @@ class StandardPipeline(LinearVideoPipeline):
             tts_workflow=final_tts_workflow,
             tts_speed=ctx.params.get("tts_speed", 1.2),
             ref_audio=ctx.params.get("ref_audio"),
+            # VoxCPM params (for 极致克隆模式)
+            voxcpm_cfg=ctx.params.get("voxcpm_cfg"),
+            voxcpm_normalize=ctx.params.get("voxcpm_normalize", False),
+            voxcpm_denoise=ctx.params.get("voxcpm_denoise", False),
+            voxcpm_control_instruction=ctx.params.get("voxcpm_control_instruction", ""),
+            voxcpm_use_prompt_text=ctx.params.get("voxcpm_use_prompt_text", False),
+            voxcpm_prompt_text=ctx.params.get("voxcpm_prompt_text", ""),
             media_width=ctx.params.get("media_width"),
             media_height=ctx.params.get("media_height"),
             media_workflow=ctx.params.get("media_workflow"),

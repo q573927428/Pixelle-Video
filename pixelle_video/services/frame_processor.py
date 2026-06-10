@@ -169,15 +169,33 @@ class FrameProcessor:
         }
         
         if config.tts_inference_mode == "local":
-            # Local mode: pass engine, voice, and speed
+            # Local mode: pass engine, voice, speed, and voxcpm params
             if config.tts_engine:
                 tts_params["engine"] = config.tts_engine
-            if config.voice_id:
-                tts_params["voice"] = config.voice_id
-            if config.tts_speed is not None:
-                tts_params["speed"] = config.tts_speed
-            if config.ref_audio:
-                tts_params["ref_audio"] = config.ref_audio
+            if config.tts_engine == "voxcpm_api":
+                # VoxCPM extra params
+                if config.voxcpm_cfg is not None:
+                    tts_params["cfg"] = config.voxcpm_cfg
+                if config.voxcpm_normalize:
+                    tts_params["normalize"] = config.voxcpm_normalize
+                if config.voxcpm_denoise:
+                    tts_params["denoise"] = config.voxcpm_denoise
+                if config.voxcpm_control_instruction:
+                    tts_params["control_instruction"] = config.voxcpm_control_instruction
+                if config.voxcpm_use_prompt_text:
+                    tts_params["use_prompt_text"] = True
+                    if config.voxcpm_prompt_text:
+                        tts_params["prompt_text"] = config.voxcpm_prompt_text
+                # Reference audio for voice cloning
+                if config.ref_audio:
+                    tts_params["ref_audio"] = config.ref_audio
+            else:
+                if config.voice_id:
+                    tts_params["voice"] = config.voice_id
+                if config.tts_speed is not None:
+                    tts_params["speed"] = config.tts_speed
+                if config.ref_audio:
+                    tts_params["ref_audio"] = config.ref_audio
         else:  # comfyui
             # ComfyUI mode: pass workflow, voice, speed, and ref_audio
             if config.tts_workflow:

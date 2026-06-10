@@ -274,6 +274,10 @@ class TTSService(ComfyBaseService):
                 cfg=cfg,
                 do_normalize=do_normalize,
                 denoise=denoise,
+                # 极致克隆模式参数
+                control_instruction=kwargs.get("control_instruction", ""),
+                use_prompt_text=kwargs.get("use_prompt_text", False),
+                prompt_text=kwargs.get("prompt_text", ""),
             )
             
             logger.info(f"✅ Generated audio (VoxCPM API): {result_path}")
