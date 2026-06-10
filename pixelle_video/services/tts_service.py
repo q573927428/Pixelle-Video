@@ -120,7 +120,8 @@ class TTSService(ComfyBaseService):
                 text=text,
                 voice=voice,
                 speed=speed,
-                output_path=output_path
+                output_path=output_path,
+                **params
             )
         else:  # comfyui
             # 1. Resolve workflow (returns structured info)
@@ -144,6 +145,55 @@ class TTSService(ComfyBaseService):
         voice: Optional[str] = None,
         speed: Optional[float] = None,
         output_path: Optional[str] = None,
+        **kwargs
+    ) -> str:
+        """
+        Generate speech using local TTS engine (Edge TTS or VoxCPM API)
+        
+        Args:
+            text: Text to convert to speech
+            voice: Edge TTS voice ID (default: from config)
+            speed: Speech speed multiplier (default: from config)
+            output_path: Custom output path (auto-generated if None)
+            **kwargs: Additional parameters (e.g., ref_audio, cfg, normalize, denoise for VoxCPM)
+                    Also accepts 'engine' to override the configured engine.
+        
+        Returns:
+            Generated audio file path
+        """
+        # Get config defaults
+        local_config = self.config.get("local", {})
+        
+        # Determine which local engine to use (kwargs > config)
+        engine = kwargs.pop("engine", None) or local_config.get("engine", "edge_tts")
+        
+        # Generate output path if not provided
+        if not output_path:
+            unique_id = uuid.uuid4().hex
+            output_path = f"output/{unique_id}.mp3"
+            Path("output").mkdir(parents=True, exist_ok=True)
+        
+        if engine == "voxcpm_api":
+            return await self._call_voxcpm_tts(
+                text=text,
+                output_path=output_path,
+                **kwargs
+            )
+        else:
+            # Default: Edge TTS
+            return await self._call_edge_tts(
+                text=text,
+                output_path=output_path,
+                voice=voice,
+                speed=speed,
+            )
+    
+    async def _call_edge_tts(
+        self,
+        text: str,
+        output_path: str,
+        voice: Optional[str] = None,
+        speed: Optional[float] = None,
     ) -> str:
         """
         Generate speech using local Edge TTS
@@ -152,12 +202,11 @@ class TTSService(ComfyBaseService):
             text: Text to convert to speech
             voice: Edge TTS voice ID (default: from config)
             speed: Speech speed multiplier (default: from config)
-            output_path: Custom output path (auto-generated if None)
+            output_path: Output file path
         
         Returns:
             Generated audio file path
         """
-        # Get config defaults
         local_config = self.config.get("local", {})
         
         # Determine voice and speed (param > config)
@@ -169,16 +218,6 @@ class TTSService(ComfyBaseService):
         
         logger.info(f"🎙️  Using local Edge TTS: voice={final_voice}, speed={final_speed}x (rate={rate})")
         
-        # Generate output path if not provided
-        if not output_path:
-            # Generate unique filename
-            unique_id = uuid.uuid4().hex
-            output_path = f"output/{unique_id}.mp3"
-            
-            # Ensure output directory exists
-            Path("output").mkdir(parents=True, exist_ok=True)
-        
-        # Call Edge TTS
         try:
             audio_bytes = await edge_tts(
                 text=text,
@@ -191,7 +230,61 @@ class TTSService(ComfyBaseService):
             return output_path
         
         except Exception as e:
-            logger.error(f"Local TTS generation error: {e}")
+            logger.error(f"Edge TTS generation error: {e}")
+            raise
+    
+    async def _call_voxcpm_tts(
+        self,
+        text: str,
+        output_path: str,
+        **kwargs
+    ) -> str:
+        """
+        Generate speech using VoxCPM API (HuggingFace Spaces)
+        
+        Args:
+            text: Text to convert to speech
+            output_path: Output file path
+            **kwargs: VoxCPM parameters (ref_audio, cfg, normalize, denoise, etc.)
+        
+        Returns:
+            Generated audio file path
+        """
+        local_config = self.config.get("local", {})
+        
+        # Determine VoxCPM parameters (kwargs > config > defaults)
+        cfg = kwargs.get("cfg") or local_config.get("voxcpm_cfg", 2.0)
+        do_normalize = kwargs.get("normalize", local_config.get("voxcpm_normalize", False))
+        denoise = kwargs.get("denoise", local_config.get("voxcpm_denoise", False))
+        ref_audio = kwargs.get("ref_audio")
+        hf_token = local_config.get("hf_token") or None
+        
+        logger.info(f"🎙️  Using VoxCPM API: cfg={cfg}, normalize={do_normalize}, denoise={denoise}")
+        if ref_audio:
+            logger.info(f"   Reference audio: {ref_audio}")
+        
+        try:
+            from pixelle_video.services.voxcpm_api import VoxCPMAPIService
+            
+            voxcpm = VoxCPMAPIService(hf_token=hf_token)
+            result_path = await voxcpm.generate(
+                text=text,
+                output_path=output_path,
+                reference_audio=ref_audio,
+                cfg=cfg,
+                do_normalize=do_normalize,
+                denoise=denoise,
+            )
+            
+            logger.info(f"✅ Generated audio (VoxCPM API): {result_path}")
+            return result_path
+        
+        except ImportError as e:
+            logger.error(f"VoxCPM API not available: {e}")
+            logger.error("Install with: pip install gradio-client")
+            raise
+        except Exception as e:
+            logger.error(f"VoxCPM generation error: {e}")
             raise
     
     async def _call_comfyui_workflow(

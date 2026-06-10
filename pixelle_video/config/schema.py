@@ -59,9 +59,14 @@ class APIProvidersConfig(BaseModel):
 
 
 class TTSLocalConfig(BaseModel):
-    """Local TTS configuration (Edge TTS)"""
+    """Local TTS configuration (Edge TTS / VoxCPM API)"""
+    engine: str = Field(default="edge_tts", description="Local TTS engine: 'edge_tts' or 'voxcpm_api'")
     voice: str = Field(default="zh-CN-YunjianNeural", description="Edge TTS voice ID")
     speed: float = Field(default=1.2, ge=0.5, le=2.0, description="Speech speed multiplier (0.5-2.0)")
+    voxcpm_cfg: float = Field(default=2.0, ge=1.0, le=5.0, description="VoxCPM CFG scale (1.0-5.0)")
+    voxcpm_normalize: bool = Field(default=False, description="VoxCPM normalize audio")
+    voxcpm_denoise: bool = Field(default=False, description="VoxCPM denoise audio")
+    hf_token: str = Field(default="", description="HuggingFace token for VoxCPM API (optional)")
 
 
 class TTSComfyUIConfig(BaseModel):

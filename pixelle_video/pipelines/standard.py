@@ -261,6 +261,7 @@ class StandardPipeline(LinearVideoPipeline):
             max_image_prompt_words=ctx.params.get("max_image_prompt_words", 60),
             video_fps=ctx.params.get("video_fps", 30),
             tts_inference_mode=tts_inference_mode or "local",
+            tts_engine=ctx.params.get("tts_engine", "edge_tts"),
             voice_id=final_voice_id,
             tts_workflow=final_tts_workflow,
             tts_speed=ctx.params.get("tts_speed", 1.2),

@@ -517,13 +517,18 @@ class DigitalHumanPipelineUI(PipelineUI):
                         import json
                         from pathlib import Path
 
-                        async def generate_tts_reference(text: str) -> str:
-                            audio_path = os.path.join(task_dir, "narration.mp3")
+                        def _build_tts_kwargs(text: str, audio_path: str) -> dict:
+                            """Build TTS kwargs including engine and clone params"""
                             tts_inference_mode = video_params.get("tts_inference_mode", "local")
                             tts_voice = video_params.get("tts_voice")
                             tts_speed = video_params.get("tts_speed")
                             tts_workflow = video_params.get("tts_workflow")
                             ref_audio = video_params.get("ref_audio")
+                            tts_engine = video_params.get("tts_engine")
+
+                            logger.info(f"🎤 _build_tts_kwargs: mode={tts_inference_mode}, engine={tts_engine}, voice={tts_voice}")
+                            logger.info(f"   video_params keys: voxcpm_cfg={video_params.get('voxcpm_cfg')}, control_instruction={video_params.get('voxcpm_control_instruction')}")
+                            logger.info(f"   ref_audio={ref_audio}")
 
                             tts_kwargs = {
                                 "text": text,
@@ -531,14 +536,34 @@ class DigitalHumanPipelineUI(PipelineUI):
                                 "inference_mode": tts_inference_mode,
                             }
                             if tts_inference_mode == "local":
-                                tts_kwargs["voice"] = tts_voice
-                                tts_kwargs["speed"] = tts_speed
+                                if tts_engine:
+                                    tts_kwargs["engine"] = tts_engine
+                                if tts_engine == "voxcpm_api":
+                                    # VoxCPM extra params (from video_params, already captured in UI)
+                                    tts_kwargs["cfg"] = video_params.get("voxcpm_cfg", 2.0) or 2.0
+                                    tts_kwargs["normalize"] = video_params.get("voxcpm_normalize", False) or False
+                                    tts_kwargs["denoise"] = video_params.get("voxcpm_denoise", False) or False
+                                    control_val = video_params.get("voxcpm_control_instruction", "") or ""
+                                    if control_val:
+                                        tts_kwargs["control_instruction"] = control_val
+                                    if video_params.get("voxcpm_use_prompt_text", False):
+                                        tts_kwargs["use_prompt_text"] = True
+                                        prompt_val = video_params.get("voxcpm_prompt_text", "") or ""
+                                        if prompt_val:
+                                            tts_kwargs["prompt_text"] = prompt_val
+                                else:
+                                    tts_kwargs["voice"] = tts_voice
+                                    tts_kwargs["speed"] = tts_speed
                             elif tts_inference_mode == "comfyui":
                                 if tts_workflow:
                                     tts_kwargs["workflow"] = tts_workflow
                                 if ref_audio:
                                     tts_kwargs["ref_audio"] = ref_audio
+                            return tts_kwargs
 
+                        async def generate_tts_reference(text: str) -> str:
+                            audio_path = os.path.join(task_dir, "narration.mp3")
+                            tts_kwargs = _build_tts_kwargs(text, audio_path)
                             await pixelle_video.tts(**tts_kwargs)
                             return audio_path
 
@@ -603,34 +628,20 @@ class DigitalHumanPipelineUI(PipelineUI):
 
                         kit = await pixelle_video._get_or_create_comfykit()
 
+                        # DEBUG: log which TTS path will be used
+                        logger.info(f"🔍 DIGITAL HUMAN - mode={mode}, engine={video_params.get('tts_engine')}, customize_mode=(mode == 'customize')")
+                        logger.info(f"🔍 DIGITAL HUMAN - using api_video_workflow: {api_video_workflow is not None}")
+                        logger.info(f"🔍 DIGITAL HUMAN - goods_text/goods_title empty: text={bool(goods_text)}, title={bool(goods_title)}")
+
                         if mode == "customize":
                             status_text.text(tr("progress.step_audio"))
                             progress_bar.progress(25)
                             generated_image_path = character_assets[0]   
                             generated_text = goods_text                 
 
-                            # TTS
+                            # TTS (use shared _build_tts_kwargs)
                             audio_path = os.path.join(task_dir, "narration.mp3")
-                            tts_inference_mode = video_params.get("tts_inference_mode", "local")
-                            tts_voice = video_params.get("tts_voice")
-                            tts_speed = video_params.get("tts_speed")
-                            tts_workflow = video_params.get("tts_workflow")
-                            ref_audio = video_params.get("ref_audio")
-
-                            tts_kwargs = {
-                                "text": generated_text,
-                                "output_path": audio_path,
-                                "inference_mode": tts_inference_mode
-                            }
-                            if tts_inference_mode == "local":
-                                tts_kwargs["voice"] = tts_voice
-                                tts_kwargs["speed"] = tts_speed
-                            elif tts_inference_mode == "comfyui":
-                                if tts_workflow:
-                                    tts_kwargs["workflow"] = tts_workflow
-                                if ref_audio:
-                                    tts_kwargs["ref_audio"] = ref_audio
-
+                            tts_kwargs = _build_tts_kwargs(generated_text, audio_path)
                             await pixelle_video.tts(**tts_kwargs)
                             progress_bar.progress(65)
                             status_text.text(tr("progress.concatenating"))
@@ -724,29 +735,11 @@ class DigitalHumanPipelineUI(PipelineUI):
                                     generated_image_url = getattr(combine_image, "images", [None])[0]
                                 status_text.text(tr("progress.step_audio"))
                                 audio_path = os.path.join(task_dir, "narration.mp3")
-                                tts_inference_mode = video_params.get("tts_inference_mode", "local")
-                                tts_voice = video_params.get("tts_voice")
-                                tts_speed = video_params.get("tts_speed")
-                                tts_workflow = video_params.get("tts_workflow")
-                                ref_audio = video_params.get("ref_audio")
-
-                                tts_kwargs = {
-                                    "text": generated_text,
-                                    "output_path": audio_path,
-                                    "inference_mode": tts_inference_mode
-                                }
-                                if tts_inference_mode == "local":
-                                    tts_kwargs["voice"] = tts_voice
-                                    tts_kwargs["speed"] = tts_speed
-                                elif tts_inference_mode == "comfyui":
-                                    if tts_workflow:
-                                        tts_kwargs["workflow"] = tts_workflow
-                                    if ref_audio:
-                                        tts_kwargs["ref_audio"] = ref_audio
-
-                                await pixelle_video.tts(**tts_kwargs)
                                 progress_bar.progress(65)
                                 status_text.text(tr("progress.concatenating"))
+                                # TTS (use shared _build_tts_kwargs)
+                                tts_kwargs = _build_tts_kwargs(generated_text, audio_path)
+                                await pixelle_video.tts(**tts_kwargs)
 
                                 if not second_workflow_path.exists():
                                     raise Exception(f"The second step workflow file does not exist:{second_workflow_path}")
@@ -830,29 +823,11 @@ class DigitalHumanPipelineUI(PipelineUI):
                                 
                                 status_text.text(tr("progress.step_audio"))
                                 audio_path = os.path.join(task_dir, "narration.mp3")
-                                tts_inference_mode = video_params.get("tts_inference_mode", "local")
-                                tts_voice = video_params.get("tts_voice")
-                                tts_speed = video_params.get("tts_speed")
-                                tts_workflow = video_params.get("tts_workflow")
-                                ref_audio = video_params.get("ref_audio")
-
-                                tts_kwargs = {
-                                    "text": generated_text,
-                                    "output_path": audio_path,
-                                    "inference_mode": tts_inference_mode
-                                }
-                                if tts_inference_mode == "local":
-                                    tts_kwargs["voice"] = tts_voice
-                                    tts_kwargs["speed"] = tts_speed
-                                elif tts_inference_mode == "comfyui":
-                                    if tts_workflow:
-                                        tts_kwargs["workflow"] = tts_workflow
-                                    if ref_audio:
-                                        tts_kwargs["ref_audio"] = ref_audio
-
-                                await pixelle_video.tts(**tts_kwargs)
                                 progress_bar.progress(65)
                                 status_text.text(tr("progress.concatenating"))
+                                # TTS (use shared _build_tts_kwargs)
+                                tts_kwargs = _build_tts_kwargs(generated_text, audio_path)
+                                await pixelle_video.tts(**tts_kwargs)
 
                                 if not second_workflow_path.exists():
                                     raise Exception(f"The second step workflow file does not exist:{second_workflow_path}")

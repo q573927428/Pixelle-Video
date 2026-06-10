@@ -41,6 +41,7 @@ class StoryboardConfig:
     
     # Audio parameters
     tts_inference_mode: str = "local"          # TTS inference mode: "local" or "comfyui"
+    tts_engine: str = "edge_tts"               # Local TTS engine: "edge_tts" or "voxcpm_api"
     voice_id: Optional[str] = None             # Voice ID (for local: Edge TTS voice ID; for comfyui: workflow-specific)
     tts_workflow: Optional[str] = None         # TTS workflow filename (for ComfyUI mode, None = use default)
     tts_speed: Optional[float] = None          # TTS speed multiplier (0.5-2.0, 1.0 = normal)

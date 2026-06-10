@@ -169,11 +169,15 @@ class FrameProcessor:
         }
         
         if config.tts_inference_mode == "local":
-            # Local mode: pass voice and speed
+            # Local mode: pass engine, voice, and speed
+            if config.tts_engine:
+                tts_params["engine"] = config.tts_engine
             if config.voice_id:
                 tts_params["voice"] = config.voice_id
             if config.tts_speed is not None:
                 tts_params["speed"] = config.tts_speed
+            if config.ref_audio:
+                tts_params["ref_audio"] = config.ref_audio
         else:  # comfyui
             # ComfyUI mode: pass workflow, voice, speed, and ref_audio
             if config.tts_workflow:

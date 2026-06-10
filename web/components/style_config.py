@@ -77,61 +77,148 @@ def render_style_config(pixelle_video):
         # Local Mode UI
         # ================================================================
         if tts_mode == "local":
-            # Import voice configuration
-            from pixelle_video.tts_voices import EDGE_TTS_VOICES, get_voice_display_name
-            
-            # Get saved voice from config
+            # Get saved config
             local_config = tts_config.get("local", {})
-            saved_voice = local_config.get("voice", "zh-CN-YunjianNeural")
-            saved_speed = local_config.get("speed", 1.2)
+            saved_engine = local_config.get("engine", "edge_tts")
             
-            # Build voice options with i18n
-            voice_options = []
-            voice_ids = []
-            default_voice_index = 0
+            # TTS Engine selector
+            engine_options = ["edge_tts", "voxcpm_api"]
+            engine_labels = {
+                "edge_tts": tr("tts.engine.edge_tts"),
+                "voxcpm_api": tr("tts.engine.voxcpm_api"),
+            }
+            engine_default_index = engine_options.index(saved_engine) if saved_engine in engine_options else 0
             
-            for idx, voice_config in enumerate(EDGE_TTS_VOICES):
-                voice_id = voice_config["id"]
-                display_name = get_voice_display_name(voice_id, tr, get_language())
-                voice_options.append(display_name)
-                voice_ids.append(voice_id)
-                
-                # Set default index if matches saved voice
-                if voice_id == saved_voice:
-                    default_voice_index = idx
-            
-            # Two-column layout: Voice | Speed
-            voice_col, speed_col = st.columns([1, 1])
-            
-            with voice_col:
-                # Voice selector
-                selected_voice_display = st.selectbox(
-                    tr("tts.voice_selector"),
-                    voice_options,
-                    index=default_voice_index,
-                    key="tts_local_voice"
-                )
-                
-                # Get actual voice ID
-                selected_voice_index = voice_options.index(selected_voice_display)
-                selected_voice = voice_ids[selected_voice_index]
-            
-            with speed_col:
-                # Speed slider
-                tts_speed = st.slider(
-                    tr("tts.speed"),
-                    min_value=0.5,
-                    max_value=2.0,
-                    value=saved_speed,
-                    step=0.1,
-                    format="%.1fx",
-                    key="tts_local_speed"
-                )
-                st.caption(tr("tts.speed_label", speed=f"{tts_speed:.1f}"))
+            tts_engine = st.radio(
+                tr("tts.engine_selector"),
+                engine_options,
+                horizontal=True,
+                format_func=lambda x: engine_labels.get(x, x),
+                index=engine_default_index,
+                key="tts_local_engine"
+            )
             
             # Variables for video generation
             tts_workflow_key = None
             ref_audio_path = None
+            
+            if tts_engine == "voxcpm_api":
+                # VoxCPM API specific UI
+                st.caption(tr("tts.engine.voxcpm_hint"))
+                
+                # VoxCPM parameters
+                col1, col2 = st.columns(2)
+                with col1:
+                    voxcpm_cfg = st.slider(
+                        tr("tts.voxcpm.cfg"),
+                        min_value=1.0,
+                        max_value=5.0,
+                        value=local_config.get("voxcpm_cfg", 2.0),
+                        step=0.1,
+                        format="%.1f",
+                        key="tts_voxcpm_cfg"
+                    )
+                with col2:
+                    voxcpm_normalize = st.checkbox(
+                        tr("tts.voxcpm.normalize"),
+                        value=local_config.get("voxcpm_normalize", False),
+                        key="tts_voxcpm_normalize"
+                    )
+                    voxcpm_denoise = st.checkbox(
+                        tr("tts.voxcpm.denoise"),
+                        value=local_config.get("voxcpm_denoise", False),
+                        key="tts_voxcpm_denoise"
+                    )
+                
+                # 极致克隆模式 - Control instruction
+                st.markdown(f"**{tr('tts.voxcpm.clone_mode')}**")
+                control_instruction = st.text_input(
+                    tr("tts.voxcpm.control_instruction"),
+                    value="",
+                    placeholder=tr("tts.voxcpm.control_instruction_placeholder"),
+                    key="tts_voxcpm_control_instruction"
+                )
+                
+                # Prompt text for guided cloning
+                col_pt1, col_pt2 = st.columns(2)
+                with col_pt1:
+                    use_prompt_text = st.checkbox(
+                        tr("tts.voxcpm.use_prompt_text"),
+                        value=False,
+                        key="tts_voxcpm_use_prompt_text"
+                    )
+                with col_pt2:
+                    prompt_text = st.text_input(
+                        tr("tts.voxcpm.prompt_text"),
+                        value="",
+                        placeholder=tr("tts.voxcpm.prompt_text_placeholder"),
+                        key="tts_voxcpm_prompt_text"
+                    )
+                
+                # Reference audio for voice cloning
+                ref_audio_file = st.file_uploader(
+                    tr("tts.ref_audio"),
+                    type=["mp3", "wav", "flac", "m4a", "aac", "ogg"],
+                    help=tr("tts.ref_audio_help"),
+                    key="tts_voxcpm_ref_audio"
+                )
+                
+                ref_audio_path = None
+                if ref_audio_file is not None:
+                    st.audio(ref_audio_file)
+                    temp_dir = Path("temp")
+                    temp_dir.mkdir(exist_ok=True)
+                    ref_audio_path = str(temp_dir / f"ref_audio_{ref_audio_file.name}")
+                    with open(ref_audio_path, "wb") as f:
+                        f.write(ref_audio_file.getbuffer())
+                
+                selected_voice = None
+                tts_speed = None
+                
+            else:
+                # Edge TTS: Original voice + speed UI
+                from pixelle_video.tts_voices import EDGE_TTS_VOICES, get_voice_display_name
+                
+                saved_voice = local_config.get("voice", "zh-CN-YunjianNeural")
+                saved_speed = local_config.get("speed", 1.2)
+                
+                # Build voice options with i18n
+                voice_options = []
+                voice_ids = []
+                default_voice_index = 0
+                
+                for idx, voice_config in enumerate(EDGE_TTS_VOICES):
+                    voice_id = voice_config["id"]
+                    display_name = get_voice_display_name(voice_id, tr, get_language())
+                    voice_options.append(display_name)
+                    voice_ids.append(voice_id)
+                    
+                    if voice_id == saved_voice:
+                        default_voice_index = idx
+                
+                voice_col, speed_col = st.columns([1, 1])
+                
+                with voice_col:
+                    selected_voice_display = st.selectbox(
+                        tr("tts.voice_selector"),
+                        voice_options,
+                        index=default_voice_index,
+                        key="tts_local_voice"
+                    )
+                    selected_voice_index = voice_options.index(selected_voice_display)
+                    selected_voice = voice_ids[selected_voice_index]
+                
+                with speed_col:
+                    tts_speed = st.slider(
+                        tr("tts.speed"),
+                        min_value=0.5,
+                        max_value=2.0,
+                        value=saved_speed,
+                        step=0.1,
+                        format="%.1fx",
+                        key="tts_local_speed"
+                    )
+                    st.caption(tr("tts.speed_label", speed=f"{tts_speed:.1f}"))
         
         # ================================================================
         # ComfyUI Mode UI
@@ -216,8 +303,26 @@ def render_style_config(pixelle_video):
                         }
                         
                         if tts_mode == "local":
-                            tts_params["voice"] = selected_voice
-                            tts_params["speed"] = tts_speed
+                            if tts_engine == "voxcpm_api":
+                                tts_params["engine"] = "voxcpm_api"
+                                tts_params["cfg"] = st.session_state.get("tts_voxcpm_cfg", 2.0)
+                                tts_params["normalize"] = st.session_state.get("tts_voxcpm_normalize", False)
+                                tts_params["denoise"] = st.session_state.get("tts_voxcpm_denoise", False)
+                                if ref_audio_path:
+                                    tts_params["ref_audio"] = str(ref_audio_path)
+                                # 极致克隆模式参数
+                                control_val = st.session_state.get("tts_voxcpm_control_instruction", "")
+                                if control_val:
+                                    tts_params["control_instruction"] = control_val
+                                if st.session_state.get("tts_voxcpm_use_prompt_text", False):
+                                    tts_params["use_prompt_text"] = True
+                                    prompt_val = st.session_state.get("tts_voxcpm_prompt_text", "")
+                                    if prompt_val:
+                                        tts_params["prompt_text"] = prompt_val
+                            else:
+                                tts_params["engine"] = "edge_tts"
+                                tts_params["voice"] = selected_voice
+                                tts_params["speed"] = tts_speed
                         else:  # comfyui
                             tts_params["workflow"] = tts_workflow_key
                             if ref_audio_path:
@@ -937,6 +1042,7 @@ def render_style_config(pixelle_video):
 
     return {
         "tts_inference_mode": tts_mode,
+        "tts_engine": tts_engine if tts_mode == "local" else None,
         "tts_voice": selected_voice if tts_mode == "local" else None,
         "tts_speed": tts_speed if tts_mode == "local" else None,
         "tts_workflow": tts_workflow_key if tts_mode == "comfyui" else None,
