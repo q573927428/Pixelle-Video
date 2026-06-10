@@ -3,10 +3,15 @@ VoxCPM TTS via HuggingFace Spaces API
 
 Calls the openbmb/VoxCPM-Demo /generate endpoint on HuggingFace Spaces
 using the gradio_client library.
+
+Supports long text splitting: automatically splits text into segments
+to avoid trailing quality degradation in voice-cloned TTS.
 """
 
 import os
+import re
 import uuid
+import subprocess
 from pathlib import Path
 from typing import Any, Optional
 
@@ -79,6 +84,123 @@ class VoxCPMAPIService:
             logger.debug("Gradio client created")
         return self._client
     
+    @staticmethod
+    def _split_text(text: str, max_chars: int = 100) -> list[str]:
+        """
+        Split long text into segments at sentence boundaries.
+        Each segment will be at most max_chars characters (except single sentences > max_chars).
+        
+        Args:
+            text: Input text to split
+            max_chars: Maximum characters per segment
+        
+        Returns:
+            List of text segments
+        """
+        # Split by Chinese/English sentence-ending punctuation
+        sentences = re.split(r'(?<=[。！？.!?])', text)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        if not sentences:
+            return [text]
+        
+        # Short text: no split needed
+        if len(text) <= max_chars:
+            return [text]
+        
+        segments = []
+        current = ""
+        
+        for sentence in sentences:
+            # If a single sentence exceeds max_chars, split it by comma as fallback
+            if len(sentence) > max_chars:
+                if current:
+                    segments.append(current)
+                    current = ""
+                # Split long sentence by commas
+                parts = re.split(r'(?<=[，,])', sentence)
+                for part in parts:
+                    if not part.strip():
+                        continue
+                    if current and len(current) + len(part) > max_chars:
+                        segments.append(current)
+                        current = part
+                    else:
+                        current += part
+            # Normal case: append sentence to current segment
+            elif current and len(current) + len(sentence) > max_chars:
+                segments.append(current)
+                current = sentence
+            else:
+                current += sentence
+        
+        if current:
+            segments.append(current)
+        
+        # Merge very short segments into previous one
+        merged = []
+        for seg in segments:
+            if merged and (len(seg) < 10 or len(merged[-1]) < 25):
+                merged[-1] += seg
+            else:
+                merged.append(seg)
+        
+        return merged if merged else [text]
+    
+    @staticmethod
+    def _concat_audio_segments(segment_paths: list[str], output_path: str) -> str:
+        """
+        Concatenate multiple audio segments into one file using ffmpeg.
+        
+        Args:
+            segment_paths: List of audio file paths to concatenate
+            output_path: Final output file path
+        
+        Returns:
+            Path to the concatenated audio file
+        """
+        if len(segment_paths) == 1:
+            import shutil
+            shutil.copy2(segment_paths[0], output_path)
+            logger.info(f"✅ Single segment audio (no concat needed): {output_path}")
+            return output_path
+        
+        # Create concat file list for ffmpeg
+        concat_list_path = output_path + ".concat_list.txt"
+        try:
+            with open(concat_list_path, 'w', encoding='utf-8') as f:
+                for seg_path in segment_paths:
+                    normalized_path = seg_path.replace('\\', '/')
+                    f.write(f"file '{normalized_path}'\n")
+            
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_list_path,
+                "-c", "copy",
+                output_path
+            ]
+            
+            logger.info(f"🎵 Concatenating {len(segment_paths)} audio segments...")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+            
+            if result.returncode != 0:
+                logger.error(f"ffmpeg concat failed: {result.stderr}")
+                raise RuntimeError(f"Audio concatenation failed: {result.stderr}")
+            
+            logger.info(f"✅ Concatenated audio: {output_path}")
+            return output_path
+        
+        finally:
+            if os.path.exists(concat_list_path):
+                os.remove(concat_list_path)
+    
     async def generate(
         self,
         text: str,
@@ -123,6 +245,18 @@ class VoxCPMAPIService:
             output_path = f"output/{unique_id}.mp3"
             Path("output").mkdir(parents=True, exist_ok=True)
         
+        # ====================================================================
+        # Split long text into segments to avoid trailing quality degradation
+        # ====================================================================
+        segments = self._split_text(text, max_chars=100)
+        
+        if len(segments) > 1:
+            logger.info(f"📝 Long text detected: {len(text)} chars, split into {len(segments)} segments")
+            for i, seg in enumerate(segments):
+                logger.debug(f"  Segment {i+1}: {seg[:60]}... ({len(seg)} chars)")
+        else:
+            logger.info(f"📝 Text length: {len(text)} chars, single segment")
+        
         try:
             # Prepare reference audio if provided (must be string path)
             ref_audio_input = None
@@ -140,37 +274,68 @@ class VoxCPMAPIService:
             if use_prompt_text and prompt_text:
                 logger.info(f"  提示文本引导: prompt_text='{prompt_text}'")
             
-            # Call the /generate endpoint
-            logger.debug(f"Calling VoxCPM API with cfg={cfg}, normalize={do_normalize}, denoise={denoise}")
-            client = self._get_client()
+            # ====================================================================
+            # Generate each segment separately, then concatenate
+            # ====================================================================
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
             
-            result = client.predict(
-                text_input=text,
-                control_instruction=control_instruction,
-                reference_wav_path_input=ref_audio_input,
-                use_prompt_text=use_prompt_text,
-                prompt_text_input=prompt_text,
-                cfg_value_input=cfg,
-                do_normalize=do_normalize,
-                denoise=denoise,
-                api_name="/generate"
-            )
+            segment_paths = []
             
-            # The result is a filepath (string) to the generated audio
-            if not result:
-                raise Exception("VoxCPM API returned empty result")
-            
-            audio_source_path = str(result)
-            logger.debug(f"VoxCPM generated audio at: {audio_source_path}")
-            
-            # If output_path differs, copy the file
-            if audio_source_path != output_path:
+            for idx, seg_text in enumerate(segments):
+                if len(segments) > 1:
+                    logger.info(f"🔊 Generating segment {idx+1}/{len(segments)}: '{seg_text[:50]}...'")
+                else:
+                    logger.info(f"🔊 VoxCPM generating speech for text: {text[:50]}...")
+                
+                # Generate segment to temp file
+                seg_output = f"{output_path}.seg{idx}.mp3"
+                
+                client = self._get_client()
+                
+                # All segments use consistent cloning mode parameters for voice consistency
+                result = client.predict(
+                    text_input=seg_text,
+                    control_instruction=control_instruction,
+                    reference_wav_path_input=ref_audio_input,
+                    use_prompt_text=use_prompt_text,
+                    prompt_text_input=prompt_text,
+                    cfg_value_input=cfg,
+                    do_normalize=do_normalize,
+                    denoise=denoise,
+                    api_name="/generate"
+                )
+                
+                if not result:
+                    raise Exception(f"VoxCPM API returned empty result for segment {idx+1}")
+                
+                audio_source_path = str(result)
+                logger.debug(f"  Segment {idx+1} audio at: {audio_source_path}")
+                
+                # Copy segment to local temp file
                 import shutil
-                os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                shutil.copy2(audio_source_path, output_path)
-                logger.info(f"✅ Copied VoxCPM audio to: {output_path}")
+                shutil.copy2(audio_source_path, seg_output)
+                segment_paths.append(seg_output)
+            
+            # ====================================================================
+            # Concatenate all segments
+            # ====================================================================
+            if len(segment_paths) > 1:
+                logger.info(f"🎵 Merging {len(segment_paths)} audio segments...")
+                self._concat_audio_segments(segment_paths, output_path)
+                
+                # Cleanup temp segment files
+                for seg_path in segment_paths:
+                    if os.path.exists(seg_path):
+                        os.remove(seg_path)
+                
+                logger.info(f"✅ Generated audio (merged from {len(segment_paths)} segments): {output_path}")
             else:
-                logger.info(f"✅ VoxCPM audio: {output_path}")
+                # Single segment, just copy to output
+                import shutil
+                shutil.copy2(segment_paths[0], output_path)
+                if os.path.exists(segment_paths[0]) and segment_paths[0] != output_path:
+                    os.remove(segment_paths[0])
+                logger.info(f"✅ Generated audio: {output_path}")
             
             return output_path
         
