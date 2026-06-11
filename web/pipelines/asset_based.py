@@ -36,6 +36,7 @@ from web.pipelines.api_workflows import (
 from web.components.content_input import render_bgm_section, render_version_info
 from web.utils.async_helpers import run_async
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
+from web.utils.upload_history import render_upload_area
 from pixelle_video.config import config_manager
 from pixelle_video.models.progress import ProgressEvent
 
@@ -89,7 +90,9 @@ class AssetBasedPipelineUI(PipelineUI):
             self._render_output_preview(pixelle_video, video_params)
     
     def _render_asset_input(self) -> dict:
-        """Render asset upload section"""
+        """Render asset upload section with history support"""
+        asset_paths = []
+
         with st.container(border=True):
             st.markdown(f"**{tr('asset_based.section.assets')}**")
             
@@ -98,47 +101,33 @@ class AssetBasedPipelineUI(PipelineUI):
                 st.markdown(tr("asset_based.assets.what"))
                 st.markdown(f"**{tr('help.how')}**")
                 st.markdown(tr("asset_based.assets.how"))
-            
-            # File uploader for multiple files
-            uploaded_files = st.file_uploader(
-                tr("asset_based.assets.upload"),
-                type=["jpg", "jpeg", "png", "gif", "webp", "mp4", "mov", "avi", "mkv", "webm"],
-                accept_multiple_files=True,
-                help=tr("asset_based.assets.upload_help"),
-                key="asset_files"
+
+            # ──────── Image upload + history ────────
+            st.caption("🖼️ 图片素材" if get_language() == "zh_CN" else "🖼️ Image Assets")
+            _, image_paths = render_upload_area(
+                category="image",
+                upload_label=tr("asset_based.assets.upload_image"),
+                accept_types=["jpg", "jpeg", "png", "gif", "webp"],
+                accept_multiple=True,
+                upload_key="asset_images",
             )
-            
-            # Save uploaded files to temp directory with unique session ID
-            asset_paths = []
-            if uploaded_files:
-                import uuid
-                session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                temp_dir = Path(f"temp/assets_{session_id}")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                for uploaded_file in uploaded_files:
-                    file_path = temp_dir / uploaded_file.name
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    asset_paths.append(str(file_path.absolute()))
-                
-                st.success(tr("asset_based.assets.count", count=len(asset_paths)))
-                
-                # Preview uploaded assets
-                with st.expander(tr("asset_based.assets.preview"), expanded=True):
-                    # Show in a grid (3 columns)
-                    cols = st.columns(3)
-                    for i, (file, path) in enumerate(zip(uploaded_files, asset_paths)):
-                        with cols[i % 3]:
-                            # Check if image or video
-                            ext = Path(path).suffix.lower()
-                            if ext in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
-                                st.image(file, caption=file.name, use_container_width=True)
-                            elif ext in [".mp4", ".mov", ".avi", ".mkv", ".webm"]:
-                                st.video(file)
-                                st.caption(file.name)
-            else:
+            asset_paths.extend(image_paths)
+
+            # ──────── Video upload + history ────────
+            st.caption("🎥 视频素材" if get_language() == "zh_CN" else "🎥 Video Assets")
+            _, video_paths = render_upload_area(
+                category="video",
+                upload_label=tr("asset_based.assets.upload_video"),
+                accept_types=["mp4", "mov", "avi", "mkv", "webm"],
+                accept_multiple=True,
+                upload_key="asset_videos",
+            )
+            asset_paths.extend(video_paths)
+
+            if not asset_paths:
                 st.info(tr("asset_based.assets.empty_hint"))
+            else:
+                st.success(tr("asset_based.assets.count", count=len(asset_paths)))
         
         # Video title & intent
         with st.container(border=True):

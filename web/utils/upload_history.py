@@ -3,8 +3,8 @@ Upload history management for Web UI
 
 Stores uploaded file references in a JSON file so records
 survive page refresh and server restart. Users can re-use
-previously uploaded character images, product images,
-and reference audio files without re-uploading.
+previously uploaded images, videos, and audio files without
+re-uploading.
 """
 
 from __future__ import annotations
@@ -22,7 +22,11 @@ from loguru import logger
 _SESSION_KEY = "_upload_history_store"
 
 # Supported file categories
-UploadCategory = Literal["character_image", "goods_image", "ref_audio"]
+# image: all images share one history pool
+# video: all videos share one history pool
+# ref_audio: all audio share one history pool
+# character_image / goods_image: kept for backward compatibility and digital_human
+UploadCategory = Literal["character_image", "goods_image", "ref_audio", "image", "video"]
 
 # JSON file path for persistence
 _HISTORY_FILE = Path("temp/upload_history.json")
@@ -68,7 +72,7 @@ def record_upload(category: UploadCategory, name: str, path: str) -> str:
     Record a newly uploaded file into history (persisted to file).
 
     Args:
-        category: File category (character_image, goods_image, ref_audio)
+        category: File category
         name: Original file name
         path: Absolute path to the saved file
 
@@ -143,11 +147,20 @@ def _get_upload_dir(category: UploadCategory) -> Path:
         "character_image": "character",
         "goods_image": "goods",
         "ref_audio": "audio",
+        "image": "image",
+        "video": "video",
     }
     dir_name = cat_map.get(category, "misc")
     upload_dir = Path(f"temp/uploads/{dir_name}")
     upload_dir.mkdir(parents=True, exist_ok=True)
     return upload_dir
+
+
+def _is_video_file(path: str) -> bool:
+    """Check if a file path is a video based on extension."""
+    video_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    ext = Path(path).suffix.lower()
+    return ext in video_exts
 
 
 def render_upload_area(
@@ -215,9 +228,22 @@ def render_upload_area(
                 abs_path = str(file_path.absolute())
                 all_paths.append(abs_path)
                 record_upload(category, uploaded_file.name, abs_path)
-                # For single-file categories (audio), track it
+                # For single-file categories, track it
                 if not accept_multiple:
                     selected_path = abs_path
+            # Show preview for uploaded files
+            if all_paths:
+                with st.expander("📷 上传预览", expanded=True):
+                    cols = st.columns(min(len(all_paths), 3))
+                    for i, path in enumerate(all_paths):
+                        with cols[i % 3]:
+                            if _is_video_file(path):
+                                st.video(path)
+                                st.caption(Path(path).name)
+                            elif category == "ref_audio":
+                                st.audio(path)
+                            else:
+                                st.image(path, caption=Path(path).name, use_container_width=True)
     else:
         # History tab
         if not has_history:
@@ -258,6 +284,9 @@ def render_upload_area(
                     with col_preview:
                         if category == "ref_audio":
                             st.audio(file_path)
+                        elif _is_video_file(file_path):
+                            st.video(file_path)
+                            st.caption(Path(file_path).name)
                         else:
                             st.image(file_path, caption=Path(file_path).name, use_container_width=True)
                     with col_del:

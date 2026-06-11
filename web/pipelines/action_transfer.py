@@ -21,6 +21,7 @@ from web.pipelines.api_workflows import (
 from web.components.content_input import render_version_info
 from web.utils.async_helpers import run_async
 from web.utils.history_persistence import save_web_generation_history
+from web.utils.upload_history import render_upload_area
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
 from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import create_task_output_dir
@@ -80,43 +81,19 @@ class ActionTransferPipelineUI(PipelineUI):
                 st.markdown(f"**{tr('help.how')}**")
                 st.markdown(tr("action_transfer.assets.video_how"))
 
-            # File uploader for multiple files
-            uploaded_files = st.file_uploader(
-                tr("action_transfer.assets.video_upload"),
-                type=["mp4","mkv","mov"],
-                accept_multiple_files=True,
-                help=tr("action_transfer.assets.video_upload_help"),
-                key="action_reference_files"
+            # Combined upload + history area for reference video
+            _, video_asset_paths = render_upload_area(
+                category="video",
+                upload_label=tr("action_transfer.assets.video_upload"),
+                accept_types=["mp4", "mkv", "mov"],
+                accept_multiple=True,
+                upload_key="action_reference_files",
             )
 
-            # Save uploaded files to temp directory with unique session ID
-            video_asset_paths = []
-            if uploaded_files:
-                import uuid
-                session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                temp_dir = Path(f"temp/assets_{session_id}")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                for uploaded_file in uploaded_files:
-                    file_path = temp_dir / uploaded_file.name
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    video_asset_paths.append(str(file_path.absolute()))
-                
-                st.success(tr("action_transfer.assets.video_sucess"))
-                
-                # Preview uploaded assets
-                with st.expander(tr("action_transfer.assets.preview"), expanded=True):
-                    # Show in a grid (3 columns)
-                    cols = st.columns(3)
-                    for i, (file, path) in enumerate(zip(uploaded_files, video_asset_paths)):
-                        with cols[i % 3]:
-                            # Check if image
-                            ext = Path(path).suffix.lower()
-                            if ext in [".mp4", ".mkv", ".mov"]:
-                                st.video(file)
-            else:
+            if not video_asset_paths:
                 st.info(tr("action_transfer.assets.video_empty_hint"))
+            else:
+                st.success(tr("action_transfer.assets.video_sucess"))
             
             # Get the video length (rounded down).
             if video_asset_paths:
@@ -141,43 +118,19 @@ class ActionTransferPipelineUI(PipelineUI):
                 st.markdown(f"**{tr('help.how')}**")
                 st.markdown(tr("action_transfer.assets.image_how"))
 
-            # File uploader for multiple files
-            uploaded_files = st.file_uploader(
-                tr("action_transfer.assets.image_upload"),
-                type=["jpg", "jpeg", "png", "webp"],
-                accept_multiple_files=True,
-                help=tr("action_transfer.assets.image_upload_help"),
-                key="image_files"
-                )
+            # Combined upload + history area for action-transfer images
+            _, image_asset_paths = render_upload_area(
+                category="image",
+                upload_label=tr("action_transfer.assets.image_upload"),
+                accept_types=["jpg", "jpeg", "png", "webp"],
+                accept_multiple=True,
+                upload_key="image_files",
+            )
 
-             # Save uploaded files to temp directory with unique session ID
-            image_asset_paths = []
-            if uploaded_files:
-                import uuid
-                session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                temp_dir = Path(f"temp/assets_{session_id}")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                for uploaded_file in uploaded_files:
-                    file_path = temp_dir / uploaded_file.name
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    image_asset_paths.append(str(file_path.absolute()))
-                
-                st.success(tr("action_transfer.assets.image_sucess"))
-                
-                # Preview uploaded assets
-                with st.expander(tr("action_transfer.assets.preview"), expanded=True):
-                    # Show in a grid (3 columns)
-                    cols = st.columns(3)
-                    for i, (file, path) in enumerate(zip(uploaded_files, image_asset_paths)):
-                        with cols[i % 3]:
-                            # Check if image
-                            ext = Path(path).suffix.lower()
-                            if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-                                st.image(file, caption=file.name, use_container_width=True)
-            else:
+            if not image_asset_paths:
                 st.info(tr("action_transfer.assets.image_empty_hint"))
+            else:
+                st.success(tr("action_transfer.assets.image_sucess"))
             
             def list_action_transfer_workflows():
                 if workflow_source == "api":

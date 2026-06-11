@@ -20,6 +20,7 @@ from web.pipelines.api_workflows import (
 from web.components.content_input import render_version_info
 from web.utils.async_helpers import run_async
 from web.utils.history_persistence import save_web_generation_history
+from web.utils.upload_history import render_upload_area
 from web.utils.streamlit_helpers import check_and_warn_selfhost_workflow
 from pixelle_video.config import config_manager
 from pixelle_video.utils.os_util import create_task_output_dir
@@ -86,43 +87,19 @@ class ImageToVideoPipelineUI(PipelineUI):
                     key_prefix="i2v_",
                 )
 
-            # File uploader for multiple files
-            uploaded_files = st.file_uploader(
-                tr("i2v.assets.upload"),
-                type=["jpg", "jpeg", "png", "webp"],
-                accept_multiple_files=True,
-                help=tr("i2v.assets.upload_help"),
-                key="material_files"
+            # Combined upload + history area for first-frame images
+            _, image_asset_paths = render_upload_area(
+                category="image",
+                upload_label=tr("i2v.assets.upload"),
+                accept_types=["jpg", "jpeg", "png", "webp"],
+                accept_multiple=True,
+                upload_key="material_files",
             )
 
-            # Save uploaded files to temp directory with unique session ID
-            audio_asset_paths = []
-            if uploaded_files:
-                import uuid
-                session_id = str(uuid.uuid4()).replace('-', '')[:12]
-                temp_dir = Path(f"temp/assets_{session_id}")
-                temp_dir.mkdir(parents=True, exist_ok=True)
-                
-                for uploaded_file in uploaded_files:
-                    file_path = temp_dir / uploaded_file.name
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    audio_asset_paths.append(str(file_path.absolute()))
-                
-                st.success(tr("i2v.assets.character_sucess"))
-                
-                # Preview uploaded assets
-                with st.expander(tr("i2v.assets.preview"), expanded=True):
-                    # Show in a grid (3 columns)
-                    cols = st.columns(3)
-                    for i, (file, path) in enumerate(zip(uploaded_files, audio_asset_paths)):
-                        with cols[i % 3]:
-                            # Check if image
-                            ext = Path(path).suffix.lower()
-                            if ext in [".jpg", ".jpeg", ".png", ".webp"]:
-                                st.image(file, caption=file.name, use_container_width=True)
-            else:
+            if not image_asset_paths:
                 st.info(tr("i2v.assets.character_empty_hint"))
+            else:
+                st.success(tr("i2v.assets.character_sucess"))
             
             prompt_text = st.text_area(
                         tr("i2v.input_text"),
@@ -205,7 +182,7 @@ class ImageToVideoPipelineUI(PipelineUI):
             ) if is_api_workflow(workflow_key) else {}
             
             return {
-                "audio_assets": audio_asset_paths,
+                "audio_assets": image_asset_paths,
                 "prompt_text": prompt_text,
                 "workflow_key": workflow_key,
                 "api_video_params": api_video_params,
