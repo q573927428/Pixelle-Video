@@ -261,13 +261,13 @@ def render_upload_area(
                         else:
                             st.image(file_path, caption=Path(file_path).name, width=200)
                     with col_del:
-                        if st.button("🗑️ 删除", key=f"del_history_{category}_{record_id}", use_container_width=True):
+                        if st.button("🗑️ 删除", key=f"del_history_{category}_{record_id}_{upload_key}", use_container_width=True):
                             delete_record(record_id)
                             st.rerun()
                 elif file_path and not Path(file_path).exists():
                     st.warning(f"文件已不存在: {file_path}")
                     # Show delete button for broken records too
-                    if st.button("🗑️ 删除此记录", key=f"del_history_broken_{category}_{record_id}", use_container_width=True):
+                    if st.button("🗑️ 删除此记录", key=f"del_history_broken_{category}_{record_id}_{upload_key}", use_container_width=True):
                         delete_record(record_id)
                         st.rerun()
 

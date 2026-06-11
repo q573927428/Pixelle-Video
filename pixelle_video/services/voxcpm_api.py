@@ -85,7 +85,7 @@ class VoxCPMAPIService:
         return self._client
     
     @staticmethod
-    def _split_text(text: str, max_chars: int = 100) -> list[str]:
+    def _split_text(text: str, max_chars: int = 80) -> list[str]:
         """
         Split long text into segments at sentence boundaries.
         Each segment will be at most max_chars characters (except single sentences > max_chars).
@@ -97,8 +97,8 @@ class VoxCPMAPIService:
         Returns:
             List of text segments
         """
-        # Split by Chinese/English sentence-ending punctuation
-        sentences = re.split(r'(?<=[。！？.!?])', text)
+        # Split by Chinese/English sentence-ending punctuation and mid-sentence delimiters
+        sentences = re.split(r'(?<=[。！？.!?、，；])', text)
         sentences = [s.strip() for s in sentences if s.strip()]
         
         if not sentences:
@@ -117,8 +117,8 @@ class VoxCPMAPIService:
                 if current:
                     segments.append(current)
                     current = ""
-                # Split long sentence by commas
-                parts = re.split(r'(?<=[，,])', sentence)
+                # Split long sentence by commas/delimiters
+                parts = re.split(r'(?<=[，,、；])', sentence)
                 for part in parts:
                     if not part.strip():
                         continue
@@ -165,12 +165,13 @@ class VoxCPMAPIService:
             logger.info(f"✅ Single segment audio (no concat needed): {output_path}")
             return output_path
         
-        # Create concat file list for ffmpeg
-        concat_list_path = output_path + ".concat_list.txt"
+        # Create concat file list in cwd (not in output subdir) to avoid ffmpeg relative path issues
+        concat_list_name = os.path.basename(output_path) + ".concat_list.txt"
+        concat_list_path = os.path.join(os.getcwd(), concat_list_name)
         try:
             with open(concat_list_path, 'w', encoding='utf-8') as f:
                 for seg_path in segment_paths:
-                    normalized_path = seg_path.replace('\\', '/')
+                    normalized_path = os.path.abspath(seg_path).replace('\\', '/')
                     f.write(f"file '{normalized_path}'\n")
             
             cmd = [
@@ -211,6 +212,7 @@ class VoxCPMAPIService:
         cfg: float = 2.0,
         do_normalize: bool = False,
         denoise: bool = False,
+        max_chars_per_segment: int = 80,
         output_path: Optional[str] = None,
     ) -> str:
         """
@@ -248,7 +250,7 @@ class VoxCPMAPIService:
         # ====================================================================
         # Split long text into segments to avoid trailing quality degradation
         # ====================================================================
-        segments = self._split_text(text, max_chars=100)
+        segments = self._split_text(text, max_chars=max_chars_per_segment)
         
         if len(segments) > 1:
             logger.info(f"📝 Long text detected: {len(text)} chars, split into {len(segments)} segments")
