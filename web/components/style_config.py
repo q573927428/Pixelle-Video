@@ -140,20 +140,6 @@ def render_style_config(pixelle_video):
                     key="tts_voxcpm_control_instruction"
                 )
                 
-                # Prompt text for guided cloning
-                use_prompt_text = st.checkbox(
-                    tr("tts.voxcpm.use_prompt_text"),
-                    value=False,
-                    key="tts_voxcpm_use_prompt_text"
-                )
-                if use_prompt_text:
-                    prompt_text = st.text_input(
-                        tr("tts.voxcpm.prompt_text"),
-                        value="",
-                        placeholder=tr("tts.voxcpm.prompt_text_placeholder"),
-                        key="tts_voxcpm_prompt_text"
-                    )
-                
                 # Reference audio for voice cloning (upload or history, preview inline)
                 ref_audio_path, _ = render_upload_area(
                     category="ref_audio",
@@ -162,6 +148,62 @@ def render_style_config(pixelle_video):
                     accept_multiple=False,
                     upload_key="tts_voxcpm_ref_audio",
                 )
+                
+                # Prompt text for guided cloning
+                use_prompt_text = st.checkbox(
+                    tr("tts.voxcpm.use_prompt_text"),
+                    value=False,
+                    key="tts_voxcpm_use_prompt_text"
+                )
+                if use_prompt_text:
+                    pending_prompt_text = st.session_state.pop("tts_voxcpm_prompt_text_pending", None)
+                    if pending_prompt_text is not None:
+                        st.session_state["tts_voxcpm_prompt_text"] = pending_prompt_text
+                        st.session_state["tts_voxcpm_prompt_text_input"] = pending_prompt_text
+                    elif "tts_voxcpm_prompt_text_input" not in st.session_state:
+                        st.session_state["tts_voxcpm_prompt_text_input"] = st.session_state.get("tts_voxcpm_prompt_text", "")
+
+                    transcribe_error = st.session_state.pop("tts_voxcpm_transcribe_error", None)
+                    if transcribe_error:
+                        st.error(tr("tts.voxcpm.transcribe_failed", error=transcribe_error))
+
+                    is_transcribing = st.session_state.get("tts_voxcpm_transcribing", False)
+
+                    col_trans, col_btn = st.columns([4, 0.55], vertical_alignment="bottom")
+                    with col_trans:
+                        prompt_text = st.text_input(
+                            tr("tts.voxcpm.prompt_text"),
+                            placeholder=tr("tts.voxcpm.prompt_text_placeholder"),
+                            key="tts_voxcpm_prompt_text_input",
+                            label_visibility="collapsed",
+                        )
+                        st.session_state["tts_voxcpm_prompt_text"] = prompt_text
+                    with col_btn:
+                        button_label = "⏳" if is_transcribing else "🎙️"
+                        if st.button(
+                            button_label,
+                            key="tts_voxcpm_auto_transcribe",
+                            help=tr("tts.voxcpm.auto_transcribe_help"),
+                            width="stretch",
+                            disabled=is_transcribing,
+                        ):
+                            if ref_audio_path and os.path.exists(ref_audio_path):
+                                st.session_state["tts_voxcpm_transcribing"] = True
+                                st.rerun()
+                            else:
+                                st.warning(tr("tts.voxcpm.transcribe_no_audio"))
+
+                    if is_transcribing:
+                        try:
+                            from pixelle_video.services.dashscope_asr import get_asr_service
+                            asr = get_asr_service()
+                            recognized = asr.transcribe(ref_audio_path)
+                            st.session_state["tts_voxcpm_prompt_text_pending"] = recognized
+                        except Exception as e:
+                            st.session_state["tts_voxcpm_transcribe_error"] = str(e)
+                        finally:
+                            st.session_state["tts_voxcpm_transcribing"] = False
+                            st.rerun()
                 
                 selected_voice = None
                 tts_speed = None
@@ -272,7 +314,7 @@ def render_style_config(pixelle_video):
             )
             
             # Preview button
-            if st.button(tr("tts.preview_button"), key="preview_tts", use_container_width=True):
+            if st.button(tr("tts.preview_button"), key="preview_tts", width="stretch"):
                 with st.spinner(tr("tts.previewing")):
                     try:
                         # Build TTS params based on mode
@@ -524,7 +566,7 @@ def render_style_config(pixelle_video):
                                 
                                 # Display preview image or placeholder
                                 if preview_path and os.path.exists(preview_path):
-                                    st.image(preview_path, use_container_width=True)
+                                    st.image(preview_path, width="stretch")
                                 else:
                                     # Placeholder for templates without preview (fixed height, compact layout)
                                     st.markdown(
@@ -564,7 +606,7 @@ def render_style_config(pixelle_video):
                                 if st.button(
                                     button_label,
                                     key=f"template_{template.template_path}",
-                                    use_container_width=True,
+                                    width="stretch",
                                     type=button_type,
                                 ):
                                     st.session_state['selected_template'] = template.template_path
@@ -726,7 +768,7 @@ def render_style_config(pixelle_video):
             st.info(f"📐 {tr('template.size_info')}: {template_width} × {template_height}")
             
             # Preview button
-            if st.button(tr("template.preview_button"), key="btn_preview_template", use_container_width=True):
+            if st.button(tr("template.preview_button"), key="btn_preview_template", width="stretch"):
                 with st.spinner(tr("template.preview_generating")):
                     try:
                         from pixelle_video.services.frame_html import HTMLFrameGenerator
@@ -940,7 +982,7 @@ def render_style_config(pixelle_video):
             
                 # Preview button
                 preview_button_label = tr("style.video_preview") if template_media_type == "video" else tr("style.preview")
-                if st.button(preview_button_label, key="preview_style", use_container_width=True):
+                if st.button(preview_button_label, key="preview_style", width="stretch"):
                     if not workflow_key:
                         st.error(
                             "请先选择可用的工作流或模型。"
