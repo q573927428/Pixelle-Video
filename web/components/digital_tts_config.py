@@ -126,14 +126,12 @@ def render_style_config(pixelle_video):
                 )
                 
                 # Prompt text for guided cloning
-                col_pt1, col_pt2 = st.columns(2)
-                with col_pt1:
-                    use_prompt_text = st.checkbox(
-                        tr("tts.voxcpm.use_prompt_text"),
-                        value=False,
-                        key="digital_tts_voxcpm_use_prompt_text"
-                    )
-                with col_pt2:
+                use_prompt_text = st.checkbox(
+                    tr("tts.voxcpm.use_prompt_text"),
+                    value=False,
+                    key="digital_tts_voxcpm_use_prompt_text"
+                )
+                if use_prompt_text:
                     prompt_text = st.text_input(
                         tr("tts.voxcpm.prompt_text"),
                         value="",
