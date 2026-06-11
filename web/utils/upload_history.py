@@ -259,7 +259,7 @@ def render_upload_area(
                         if category == "ref_audio":
                             st.audio(file_path)
                         else:
-                            st.image(file_path, caption=Path(file_path).name, width=200)
+                            st.image(file_path, caption=Path(file_path).name, use_container_width=True)
                     with col_del:
                         if st.button("🗑️ 删除", key=f"del_history_{category}_{record_id}_{upload_key}", use_container_width=True):
                             delete_record(record_id)
