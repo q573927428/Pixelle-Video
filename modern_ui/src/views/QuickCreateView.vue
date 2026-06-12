@@ -143,6 +143,10 @@ async function generate() {
 async function generateSingle() {
   if (!quickForm.value.text.trim()) { ElMessage.warning('请输入主题或文案'); return }
   if (!quickForm.value.frame_template) { ElMessage.warning('请选择画面模板'); return }
+  // 如果选择的是 API 模型，将 api_model 值赋给 media_workflow，否则后端会回退到 config.yaml 的默认 RunningHub 工作流
+  if (quickForm.value.api_model && !quickForm.value.media_workflow) {
+    quickForm.value.media_workflow = quickForm.value.api_model
+  }
   await submitTask('/api/video/generate/async', cleanedPayload(quickForm.value))
 }
 
@@ -189,7 +193,7 @@ async function generateBatch() {
     min_image_prompt_words: form.min_image_prompt_words,
     max_image_prompt_words: form.max_image_prompt_words,
     video_fps: form.video_fps,
-    media_workflow: form.media_workflow,
+    media_workflow: form.media_workflow || form.api_model || undefined,
     frame_template: form.frame_template,
     prompt_prefix: form.prompt_prefix,
     bgm_path: form.bgm_path,

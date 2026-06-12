@@ -38,3 +38,7 @@ uv run streamlit run web/app.py
 
 
 ## 待完成
+INFO:     127.0.0.1:61332 - "GET /api/files/output/20260611_164921_f0ff/final.mp4 HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61329 - "GET /api/files/output/20260612_162422_de1d/final.mp4 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:61333 - "GET /api/files/output/20260611_124053_e939/final.mp4 HTTP/1.1" 404 Not Found
+前端访问历史记录页面后端显示2个404一个206 是哪里的问题？

@@ -91,180 +91,6 @@
       </div>
     </div>
 
-    <!-- ====== 第二板块：画面与媒体配置 ====== -->
-    <div class="form-section-wrapper">
-      <div class="form-section">
-      <div class="form-section-title">🎨 画面与媒体配置</div>
-      <div class="form-section-body">
-
-      <!-- 分镜类型 -->
-      <el-form-item label="分镜类型">
-        <el-radio-group v-model="templateType" @change="onTemplateTypeChange">
-          <el-radio-button value="static">📄 静态样式</el-radio-button>
-          <el-radio-button value="image">🖼️ 生成插图</el-radio-button>
-          <el-radio-button value="video">🎬 生成视频</el-radio-button>
-        </el-radio-group>
-      </el-form-item>
-
-      <!-- 当前选中模板信息 -->
-      <div v-if="selectedTemplateInfo" class="soft-panel" style="margin-bottom:12px;">
-        <div class="small"><strong>{{ selectedTemplateInfo.display_name }}</strong></div>
-        <div class="small muted">📐 模板尺寸: {{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</div>
-      </div>
-
-      <!-- 尺寸切换按钮组 -->
-      <div v-if="sizeGroups.length > 0" class="size-tabs" style="margin-bottom:10px;">
-        <el-radio-group v-model="activeSizeTab" @change="onSizeTabChange" size="small">
-          <el-radio-button
-            v-for="group in sizeGroups"
-            :key="group.size"
-            :value="group.size"
-          >{{ group.label }}</el-radio-button>
-        </el-radio-group>
-      </div>
-
-      <!-- 模板网格（当前选中的尺寸组） -->
-      <div v-if="currentGroupTemplates.length > 0" class="template-grid">
-        <div
-          v-for="tpl in currentGroupTemplates"
-          :key="tpl.key"
-          class="template-card"
-          :class="{ 'is-selected': selectedKey === tpl.key }"
-          @click="selectTemplate(tpl.key)"
-        >
-          <div class="template-thumb">
-            <img
-              v-if="getPreviewUrl(tpl.key)"
-              :src="getPreviewUrl(tpl.key)"
-              class="template-thumb-img"
-              loading="lazy"
-              @error="onPreviewError($event, tpl.key)"
-            />
-            <div v-else class="template-thumb-placeholder">{{ tpl.display_name.replace(/^(static_|image_|video_)/, '') }}</div>
-          </div>
-          <div class="template-card-footer">
-            <span class="small" :class="selectedKey === tpl.key ? '' : 'muted'">
-              {{ selectedKey === tpl.key ? '✅ 已选' : '选择' }}
-            </span>
-          </div>
-        </div>
-      </div>
-      <div v-else class="small muted" style="margin:8px 0 14px;">当前类型下没有可用模板，请选择其他分镜类型。</div>
-
-      <!-- 最终视频尺寸 -->
-      <div v-if="selectedTemplateInfo" style="margin:6px 0 14px;">
-        <el-tag size="small" type="info" effect="plain">最终视频尺寸：{{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</el-tag>
-      </div>
-
-      <!-- 自定义参数区域 -->
-      <div v-if="Object.keys(templateParams).length > 0" class="soft-panel" style="margin-bottom:14px;">
-        <div class="form-section-subtitle">📝 自定义参数</div>
-        <div v-loading="templateParamsLoading" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <template v-for="(cfg, name) in templateParams" :key="name">
-            <el-form-item v-if="cfg.type === 'text'" :label="cfg.label || name">
-              <el-input v-model="customParamValues[name]" :placeholder="String(cfg.default)" />
-            </el-form-item>
-            <el-form-item v-else-if="cfg.type === 'number'" :label="cfg.label || name">
-              <el-input-number v-model="customParamValues[name]" :default-value="Number(cfg.default)" style="width:100%;" />
-            </el-form-item>
-            <el-form-item v-else-if="cfg.type === 'color'" :label="cfg.label || name">
-              <el-color-picker v-model="customParamValues[name]" :default-value="cfg.default" show-alpha />
-            </el-form-item>
-            <el-form-item v-else-if="cfg.type === 'bool'" :label="cfg.label || name">
-              <el-checkbox v-model="customParamValues[name]" :default-value="Boolean(cfg.default)" />
-            </el-form-item>
-          </template>
-        </div>
-      </div>
-
-      <!-- 模板预览 -->
-      <div class="soft-panel" style="margin-bottom:14px;border:1px dashed rgba(125, 211, 252, 0.35);">
-        <div class="form-section-subtitle">🔍 预览模板</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <el-form-item label="标题">
-            <el-input v-model="previewTitle" placeholder="AI 改变内容创作" />
-          </el-form-item>
-          <el-form-item label="图片路径">
-            <el-input v-model="previewImage" placeholder="resources/example.png" />
-          </el-form-item>
-        </div>
-        <el-form-item label="文本">
-          <el-input v-model="previewTextContent" type="textarea" :rows="2" placeholder="Pixelle.AI 正在用人工智能改变内容创作的方式..." />
-        </el-form-item>
-        <div class="small muted" style="margin-bottom:8px;">📐 模板尺寸: {{ selectedTemplateInfo ? `${selectedTemplateInfo.width} × ${selectedTemplateInfo.height}` : '-' }}</div>
-        <el-button type="primary" size="small" @click="handlePreviewTemplate" :loading="previewTemplateLoading" style="width:100%;">
-          🖼️ 预览模板
-        </el-button>
-        <img v-if="previewTemplateUrl" :src="previewTemplateUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
-      </div>
-
-    </div>
-      </div>
-    </div>
-
-    <!-- ====== 🎨 插图/视频生成 ====== -->
-    <div class="form-section-wrapper">
-      <div class="form-section">
-      <div class="form-section-title">🎨 插图/视频生成</div>
-      <div class="form-section-body">
-
-      <div v-if="templateType !== 'static'" class="soft-panel">
-        <div class="form-section-subtitle">🎨 {{ templateType === 'video' ? '视频' : '插图' }}生成</div>
-        <div class="small muted" style="margin-bottom:10px;">💡 功能说明：根据分镜选择确定使用的素材类型</div>
-
-        <el-form-item label="生成来源">
-          <el-radio-group v-model="workflowSource" size="small">
-            <el-radio-button value="runninghub">RunningHub</el-radio-button>
-            <el-radio-button value="selfhost">本地 ComfyUI</el-radio-button>
-            <el-radio-button value="api">API 模型</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-        <template v-if="workflowSource !== 'api'">
-          <el-form-item label="Workflow">
-            <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
-              <el-option v-for="wf in filteredWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
-            </el-select>
-          </el-form-item>
-        </template>
-        <template v-else>
-          <el-form-item label="API 模型">
-            <el-select v-model="form.api_model" filterable clearable placeholder="选择 API 模型" style="width:100%;">
-              <el-option
-                v-for="m in apiMediaModels"
-                :key="m.value"
-                :label="m.label"
-                :value="m.value"
-              />
-            </el-select>
-          </el-form-item>
-        </template>
-
-        <!-- 媒体尺寸信息 -->
-        <div v-if="selectedTemplateInfo" class="small muted" style="margin:4px 0 10px;">
-          📐 {{ templateType === 'video' ? '视频' : '插图' }}尺寸：{{ selectedTemplateInfo.width }}x{{ selectedTemplateInfo.height }}（由模板自动决定）
-        </div>
-
-        <el-form-item label="提示词前缀">
-          <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" placeholder="在生成图片提示词前添加固定前缀（可选）" />
-        </el-form-item>
-
-        <!-- 风格预览 -->
-        <div class="soft-panel" style="margin-bottom:10px;border:1px dashed rgba(125, 211, 252, 0.35);">
-          <el-form-item label="预览提示词">
-            <el-input v-model="previewPrompt" type="textarea" :rows="2" placeholder="输入预览提示词，例如：a dog" />
-          </el-form-item>
-          <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
-            👁️ 生成预览风格
-          </el-button>
-        </div>
-        <img v-if="stylePreviewUrl" :src="stylePreviewUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
-      </div>
-
-    </div>
-      </div>
-    </div>
-
     <!-- ====== 第三板块：配音合成 (TTS) ====== -->
     <div class="form-section-wrapper">
       <div class="form-section">
@@ -380,6 +206,193 @@
       </div>
     </div>
 
+
+    <!-- ====== 第二板块：画面与媒体配置 ====== -->
+    <div class="form-section-wrapper">
+      <div class="form-section">
+      <div class="form-section-title">🎨 画面与媒体配置</div>
+      <div class="form-section-body">
+
+      <!-- 分镜类型 -->
+      <el-form-item label="分镜类型">
+        <el-radio-group v-model="templateType" @change="onTemplateTypeChange">
+          <el-radio-button value="static">📄 静态样式</el-radio-button>
+          <el-radio-button value="image">🖼️ 生成插图</el-radio-button>
+          <el-radio-button value="video">🎬 生成视频</el-radio-button>
+        </el-radio-group>
+      </el-form-item>
+
+      <!-- 当前选中模板信息 -->
+      <div v-if="selectedTemplateInfo" class="soft-panel" style="margin-bottom:12px;">
+        <div class="small"><strong>{{ selectedTemplateInfo.display_name }}</strong></div>
+        <div class="small muted">📐 模板尺寸: {{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</div>
+      </div>
+
+      <!-- 尺寸切换按钮组 -->
+      <div v-if="sizeGroups.length > 0" class="size-tabs" style="margin-bottom:10px;">
+        <el-radio-group v-model="activeSizeTab" @change="onSizeTabChange" size="small">
+          <el-radio-button
+            v-for="group in sizeGroups"
+            :key="group.size"
+            :value="group.size"
+          >{{ group.label }}</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <!-- 模板网格（当前选中的尺寸组） -->
+      <div v-if="currentGroupTemplates.length > 0" class="template-grid">
+        <div
+          v-for="tpl in currentGroupTemplates"
+          :key="tpl.key"
+          class="template-card"
+          :class="{ 'is-selected': selectedKey === tpl.key }"
+          @click="selectTemplate(tpl.key)"
+        >
+          <div class="template-thumb">
+            <img
+              v-if="getPreviewUrl(tpl.key)"
+              :src="getPreviewUrl(tpl.key)"
+              class="template-thumb-img"
+              loading="lazy"
+              @error="onPreviewError($event, tpl.key)"
+            />
+            <div v-else class="template-thumb-placeholder">{{ tpl.display_name.replace(/^(static_|image_|video_)/, '') }}</div>
+          </div>
+          <div class="template-card-footer">
+            <span class="small" :class="selectedKey === tpl.key ? '' : 'muted'">
+              {{ selectedKey === tpl.key ? '✅ 已选' : '选择' }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="small muted" style="margin:8px 0 14px;">当前类型下没有可用模板，请选择其他分镜类型。</div>
+
+      <!-- 最终视频尺寸 -->
+      <div v-if="selectedTemplateInfo" style="margin:6px 0 14px;">
+        <el-tag size="small" type="info" effect="plain">最终视频尺寸：{{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</el-tag>
+      </div>
+
+      <!-- 自定义参数区域 -->
+      <div v-if="Object.keys(templateParams).length > 0" class="soft-panel" style="margin-bottom:14px;">
+        <div class="form-section-subtitle">📝 自定义参数</div>
+        <div v-loading="templateParamsLoading" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <template v-for="(cfg, name) in templateParams" :key="name">
+            <el-form-item v-if="cfg.type === 'text'" :label="cfg.label || name">
+              <el-input v-model="customParamValues[name]" :placeholder="String(cfg.default)" />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'number'" :label="cfg.label || name">
+              <el-input-number v-model="customParamValues[name]" :default-value="Number(cfg.default)" style="width:100%;" />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'color'" :label="cfg.label || name">
+              <el-color-picker v-model="customParamValues[name]" :default-value="cfg.default" show-alpha />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'bool'" :label="cfg.label || name">
+              <el-checkbox v-model="customParamValues[name]" :default-value="Boolean(cfg.default)" />
+            </el-form-item>
+          </template>
+        </div>
+      </div>
+
+      <!-- 模板预览（默认折叠） -->
+      <div class="soft-panel" style="margin-bottom:14px;border:1px dashed rgba(125, 211, 252, 0.35);">
+        <div class="form-section-subtitle" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;" @click="previewTemplateCollapsed = !previewTemplateCollapsed">
+          <span>🔍 预览模板</span>
+          <span style="font-size:12px;color:#64748b;">{{ previewTemplateCollapsed ? '展开 ▸' : '折叠 ▾' }}</span>
+        </div>
+        <template v-if="!previewTemplateCollapsed">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <el-form-item label="标题">
+              <el-input v-model="previewTitle" placeholder="AI 改变内容创作" />
+            </el-form-item>
+            <el-form-item label="图片路径">
+              <el-input v-model="previewImage" placeholder="resources/example.png" />
+            </el-form-item>
+          </div>
+          <el-form-item label="文本">
+            <el-input v-model="previewTextContent" type="textarea" :rows="2" placeholder="Pixelle.AI 正在用人工智能改变内容创作的方式..." />
+          </el-form-item>
+          <div class="small muted" style="margin-bottom:8px;">📐 模板尺寸: {{ selectedTemplateInfo ? `${selectedTemplateInfo.width} × ${selectedTemplateInfo.height}` : '-' }}</div>
+          <el-button type="primary" size="small" @click="handlePreviewTemplate" :loading="previewTemplateLoading" style="width:100%;">
+            🖼️ 预览模板
+          </el-button>
+          <img v-if="previewTemplateUrl" :src="previewTemplateUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
+        </template>
+      </div>
+
+    </div>
+      </div>
+    </div>
+
+    <!-- ====== 🎨 插图/视频生成 ====== -->
+    <div class="form-section-wrapper">
+      <div class="form-section">
+      <div class="form-section-title">🎨 {{ templateType === 'video' ? '视频' : '插图' }}生成</div>
+      <div class="form-section-body">
+
+      <div v-if="templateType !== 'static'" class="soft-panel">
+        <div class="form-section-subtitle">🎨 {{ templateType === 'video' ? '视频' : '插图' }}生成</div>
+        <div class="small muted" style="margin-bottom:10px;">💡 功能说明：根据分镜选择确定使用的素材类型</div>
+
+        <el-form-item label="生成来源">
+          <el-radio-group v-model="workflowSource" size="small">
+            <el-radio-button value="runninghub">RunningHub</el-radio-button>
+            <!-- <el-radio-button value="selfhost">本地 ComfyUI</el-radio-button> -->
+            <el-radio-button value="api">API 模型</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <template v-if="workflowSource !== 'api'">
+          <el-form-item label="Workflow">
+            <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
+              <el-option v-for="wf in filteredWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
+            </el-select>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="API 模型">
+            <el-select v-model="form.api_model" filterable clearable placeholder="选择 API 模型" style="width:100%;">
+              <el-option
+                v-for="m in apiMediaModels"
+                :key="m.value"
+                :label="m.label"
+                :value="m.value"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
+
+        <!-- 媒体尺寸信息 -->
+        <div v-if="selectedTemplateInfo" class="small muted" style="margin:4px 0 10px;">
+          📐 {{ templateType === 'video' ? '视频' : '插图' }}尺寸：{{ selectedTemplateInfo.width }}x{{ selectedTemplateInfo.height }}（由模板自动决定）
+        </div>
+
+        <el-form-item label="提示词前缀">
+          <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" placeholder="在生成图片提示词前添加固定前缀（可选）" />
+        </el-form-item>
+
+        <!-- 预览提示词（默认折叠） -->
+        <div class="soft-panel" style="margin-bottom:10px;border:1px dashed rgba(125, 211, 252, 0.35);">
+          <div class="form-section-subtitle" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;" @click="previewPromptCollapsed = !previewPromptCollapsed">
+            <span>🔍 预览提示词</span>
+            <span style="font-size:12px;color:#64748b;">{{ previewPromptCollapsed ? '展开 ▸' : '折叠 ▾' }}</span>
+          </div>
+          <template v-if="!previewPromptCollapsed">
+            <el-form-item>
+              <el-input v-model="previewPrompt" type="textarea" :rows="2" placeholder="输入预览提示词，例如：a dog" />
+            </el-form-item>
+            <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
+              👁️ 生成预览风格
+            </el-button>
+          </template>
+        </div>
+        <img v-if="stylePreviewUrl" :src="stylePreviewUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
+      </div>
+
+    </div>
+      </div>
+    </div>
+
+  
     <!-- ====== 第四板块：背景音乐 ====== -->
     <div class="form-section-wrapper">
       <div class="form-section">
@@ -590,6 +603,10 @@ watch(() => props.templates, (tpls) => {
     }
   }
 }, { immediate: true })
+
+// 折叠状态（默认折叠）
+const previewTemplateCollapsed = ref(true)
+const previewPromptCollapsed = ref(true)
 
 // 模板预览
 const previewTitle = ref('AI 改变内容创作')
