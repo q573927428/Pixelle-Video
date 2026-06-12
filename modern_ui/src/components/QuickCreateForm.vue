@@ -198,10 +198,17 @@
         <img v-if="previewTemplateUrl" :src="previewTemplateUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
       </div>
 
-      <el-divider />
+    </div>
+      </div>
+    </div>
 
-      <!-- 🎨 插图/视频生成 -->
-      <div v-if="templateType !== 'static'" class="soft-panel" style="margin-bottom:14px;">
+    <!-- ====== 🎨 插图/视频生成 ====== -->
+    <div class="form-section-wrapper">
+      <div class="form-section">
+      <div class="form-section-title">🎨 插图/视频生成</div>
+      <div class="form-section-body">
+
+      <div v-if="templateType !== 'static'" class="soft-panel">
         <div class="form-section-subtitle">🎨 {{ templateType === 'video' ? '视频' : '插图' }}生成</div>
         <div class="small muted" style="margin-bottom:10px;">💡 功能说明：根据分镜选择确定使用的素材类型</div>
 
@@ -234,8 +241,8 @@
         </template>
 
         <!-- 媒体尺寸信息 -->
-        <div v-if="templateMediaSize && templateMediaSize.width > 0" class="small muted" style="margin:4px 0 10px;">
-          📐 {{ templateType === 'video' ? '视频' : '插图' }}尺寸：{{ templateMediaSize.width }}x{{ templateMediaSize.height }}（由模板自动决定）
+        <div v-if="selectedTemplateInfo" class="small muted" style="margin:4px 0 10px;">
+          📐 {{ templateType === 'video' ? '视频' : '插图' }}尺寸：{{ selectedTemplateInfo.width }}x{{ selectedTemplateInfo.height }}（由模板自动决定）
         </div>
 
         <el-form-item label="提示词前缀">
@@ -668,11 +675,12 @@ async function handlePreviewStyle() {
   
   stylePreviewLoading.value = true
   stylePreviewUrl.value = ''
+  const tpl = selectedTemplateInfo.value
   try {
     const payload: Record<string, any> = {
       prompt: props.form.prompt_prefix + previewPrompt.value.trim(),
-      width: templateMediaSize.value.width || 1024,
-      height: templateMediaSize.value.height || 1024,
+      width: tpl?.width || 1024,
+      height: tpl?.height || 1024,
     }
     if (workflowSource.value === 'api') {
       payload.workflow = props.form.api_model
