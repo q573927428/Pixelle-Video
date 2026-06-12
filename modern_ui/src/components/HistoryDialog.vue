@@ -22,17 +22,16 @@
       </div>
     </div>
 
-    <!-- ===== 视频类：卡片布局 ===== -->
-    <div v-else-if="layoutType === 'video'" class="history-video-list">
-      <div v-for="rec in filteredRecords" :key="rec.id" class="history-video-card" @click="selectRecord(rec)">
+    <!-- ===== 视频类：网格画廊布局（同图片类） ===== -->
+    <div v-else-if="layoutType === 'video'" class="history-grid">
+      <div v-for="rec in filteredRecords" :key="rec.id" class="history-grid-item" @click="selectRecord(rec)">
         <button class="history-delete-btn" @click="handleDelete(rec, $event)">✕</button>
-        <div class="history-video-preview">
+        <div class="history-grid-preview">
           <video :src="getUrl(rec)" muted @mouseover="playHover($event)" @mouseleave="stopHover($event)" />
           <div class="history-video-play-icon">▶</div>
         </div>
-        <div class="history-video-info">
-          <div class="history-video-name">{{ rec.name }}</div>
-          <div class="small muted">{{ rec.category }}</div>
+        <div class="history-grid-info">
+          <div class="history-grid-name">{{ rec.name }}</div>
         </div>
       </div>
     </div>
@@ -191,10 +190,24 @@ async function handleDelete(rec: any, e: Event) {
   display: grid;
   place-items: center;
 }
-.history-grid-preview img {
+.history-grid-preview img,
+.history-grid-preview video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+.history-grid-preview {
+  position: relative;
+}
+.history-grid-preview .history-video-play-icon {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  color: #fff;
+  background: rgba(0,0,0,0.2);
+  pointer-events: none;
 }
 .history-grid-info {
   padding: 8px 10px;
@@ -207,66 +220,7 @@ async function handleDelete(rec: any, e: Event) {
   white-space: nowrap;
 }
 
-/* ===== 视频卡片布局 ===== */
-.history-video-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-height: 480px;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-.history-video-card {
-  display: flex;
-  gap: 14px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: rgba(2,6,23,0.28);
-  cursor: pointer;
-  align-items: center;
-  transition: background 0.15s;
-}
-.history-video-card:hover {
-  background: rgba(30,41,59,0.5);
-}
-.history-video-preview {
-  position: relative;
-  width: 120px;
-  height: 80px;
-  flex-shrink: 0;
-  border-radius: 10px;
-  overflow: hidden;
-  background: rgba(15,23,42,0.5);
-  display: grid;
-  place-items: center;
-}
-.history-video-preview video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.history-video-play-icon {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  font-size: 24px;
-  color: #fff;
-  background: rgba(0,0,0,0.2);
-  pointer-events: none;
-}
-.history-video-info {
-  flex: 1;
-  min-width: 0;
-}
-.history-video-name {
-  font-weight: 700;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+/* ===== 视频卡片布局（不再使用，保留仅作兼容） ===== */
 
 /* ===== 音频列表布局 ===== */
 .history-audio-list {
