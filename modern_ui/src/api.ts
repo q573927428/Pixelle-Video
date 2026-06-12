@@ -47,6 +47,10 @@ export async function loadTaskHistory(page = 1, pageSize = 20, status?: string) 
   return request<{ tasks: any[]; total: number; page: number; page_size: number; total_pages: number }>(`/api/tasks/history?${params}`)
 }
 
+export async function deleteTaskHistory(taskId: string): Promise<{ success: boolean; message: string }> {
+  return request(`/api/tasks/history/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
+}
+
 export async function checkHealth() {
   try {
     await request('/health')

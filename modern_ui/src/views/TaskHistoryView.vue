@@ -59,12 +59,24 @@
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
           <div class="history-item-info">
-            <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
+          <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
             <div class="history-item-meta">
               <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
                 {{ task.status === 'completed' ? '已完成' : '失败' }}
               </el-tag>
               <span class="small muted">{{ formatTime(task.created_at) }}</span>
+              <span style="flex:1" />
+              <el-tooltip content="删除此记录" placement="top" :show-after="300">
+                <el-button
+                  text
+                  size="small"
+                  type="danger"
+                  class="delete-btn"
+                  @click.stop="handleDelete(task)"
+                >
+                  <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></el-icon>
+                </el-button>
+              </el-tooltip>
             </div>
           </div>
         </div>
@@ -138,7 +150,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { loadTaskHistory } from '../api'
+import { loadTaskHistory, deleteTaskHistory } from '../api'
+import { ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
 const tasks = ref<any[]>([])
@@ -268,6 +281,27 @@ function playHover(e: Event) {
 function stopHover(e: Event) {
   const video = (e.currentTarget as HTMLElement).querySelector('video')
   if (video) { video.pause(); video.currentTime = 0 }
+}
+
+async function handleDelete(task: any) {
+  if (!task.task_id) return
+  try {
+    await ElMessageBox.confirm(
+      `确定要永久删除任务「${task.title || '未命名任务'}」？\n所有相关文件（视频、帧、元数据）将被清除。`,
+      '删除确认',
+      { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning', confirmButtonClass: 'el-button--danger' }
+    )
+    await deleteTaskHistory(task.task_id)
+    ElMessage.success('任务已删除')
+    // Remove from local list without re-fetch for instant feedback
+    tasks.value = tasks.value.filter((t: any) => t.task_id !== task.task_id)
+    // Reload to update pagination and stats
+    loadData()
+  } catch (e: any) {
+    if (e === 'cancel') return // User cancelled
+    const msg = typeof e === 'string' ? e : e?.message || '删除失败'
+    ElMessage.error(`删除失败：${msg}`)
+  }
 }
 </script>
 
@@ -413,6 +447,19 @@ function stopHover(e: Event) {
   width: 100%;
   max-height: 400px;
   border-radius: 10px;
+}
+
+.history-item-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.delete-btn {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.history-item:hover .delete-btn {
+  opacity: 1;
 }
 
 .page-content {

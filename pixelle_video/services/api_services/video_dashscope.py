@@ -252,11 +252,12 @@ class DashscopeVideoClient:
         if audio_path and not os.path.exists(audio_path):
             raise FileNotFoundError(f"驱动音频不存在: {audio_path}")
 
-        # 自动裁剪所有音频到允许时长（driving_audio + reference_audio 都受限制）
+        # 将音频裁剪到与视频等长（但不超过万象 API 允许的最大值 10 秒）
+        audio_max_duration = min(duration, 10)
         if audio_path:
-            audio_path, _ = self._truncate_audio_to_duration(audio_path, duration)
+            audio_path, _ = self._truncate_audio_to_duration(audio_path, audio_max_duration)
         if reference_audio_path:
-            reference_audio_path, _ = self._truncate_audio_to_duration(reference_audio_path, duration)
+            reference_audio_path, _ = self._truncate_audio_to_duration(reference_audio_path, audio_max_duration)
 
         logger.info(f"DashscopeVideoClient: model={model}, prompt={prompt[:60]}...")
 

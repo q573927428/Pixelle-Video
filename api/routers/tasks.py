@@ -75,6 +75,34 @@ async def list_task_history(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/history/{task_id}")
+async def delete_task_history(
+    task_id: str,
+    pixelle_video: PixelleVideoDep,
+):
+    """
+    Delete a task from history permanently (removes all files).
+    """
+    try:
+        if not pixelle_video.history:
+            raise HTTPException(status_code=503, detail="History service not available")
+
+        success = await pixelle_video.history.delete_task(task_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+
+        return {
+            "success": True,
+            "message": f"Task {task_id} deleted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete task history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/history/{task_id}")
 async def get_task_history_detail(
     task_id: str,
