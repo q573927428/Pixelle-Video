@@ -256,8 +256,8 @@
       <div class="form-section-body">
       <el-form-item label="模式">
         <el-radio-group v-model="form.mode">
-          <el-radio-button value="digital">💻 带货模式</el-radio-button>
           <el-radio-button value="customize">🧐 自定义模式</el-radio-button>
+          <el-radio-button value="digital">💻 带货模式</el-radio-button>
         </el-radio-group>
       </el-form-item>
 

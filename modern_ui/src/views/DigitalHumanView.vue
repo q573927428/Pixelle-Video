@@ -59,7 +59,7 @@ const { running, progress, statusText, result, submitTask } = useTaskRunner()
 const { mediaWorkflows, ttsWorkflows, ttsVoices, uploads, handleUpload: uploadResource } = useResources()
 
 const digitalForm = ref<DigitalForm>({
-  mode: 'digital', character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
+  mode: 'customize', character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',
     second_workflow_path: 'workflows/runninghub/digital_combination.json',
