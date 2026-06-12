@@ -138,8 +138,8 @@
 
       <!-- 3.1 前置图片生成服务 -->
       <div class="sub-section">
-        <div class="sub-section-title">3.1 前置图片生成服务</div>
-        <el-form-item label="图片生成服务来源">
+        <div class="sub-section-title">3.1 前置图片生成服务来源</div>
+        <el-form-item >
           <el-radio-group v-model="form.image_service_mode">
             <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
             <el-radio-button value="api">API 模型</el-radio-button>
@@ -157,7 +157,6 @@
                 :value="wf.key"
               />
             </el-select>
-            <div class="small muted" style="margin-top:4px;">(默认) digital_image.json - Runninghub</div>
           </el-form-item>
         </div>
 
@@ -179,8 +178,8 @@
 
       <!-- 3.2 口播视频合成服务 -->
       <div class="sub-section">
-        <div class="sub-section-title">3.2 口播视频合成服务</div>
-        <el-form-item label="视频合成服务来源">
+        <div class="sub-section-title">3.2 口播视频合成服务来源</div>
+        <el-form-item>
           <el-radio-group v-model="form.video_service_mode">
             <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
             <el-radio-button value="api">API 模型</el-radio-button>
@@ -198,7 +197,6 @@
                 :value="wf.key"
               />
             </el-select>
-            <div class="small muted" style="margin-top:4px;">(默认) digital_combination.json - Runninghub</div>
           </el-form-item>
         </div>
 
