@@ -352,6 +352,19 @@ const { createApp } = Vue;
             voxcpm_control_instruction: "",
             voxcpm_use_prompt_text: false,
             voxcpm_prompt_text: "",
+            // 第三板块：服务配置 - 前置图片生成
+            image_service_mode: "runninghub",
+            image_api_model: "",
+            // 第三板块：服务配置 - 口播视频合成
+            video_service_mode: "runninghub",
+            video_api_model: "",
+            video_api_params: {
+              duration: 5,
+              resolution: "1280x720",
+              aspect_ratio: "9:16",
+              negative_prompt: "",
+              watermark: false,
+            },
           },
           i2vForm: {
             image_assets: [],

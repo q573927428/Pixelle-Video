@@ -109,6 +109,14 @@ export interface DigitalWorkflowConfig {
   api_video_params: Record<string, any>
 }
 
+export interface VideoApiParams {
+  duration: number
+  resolution: string
+  aspect_ratio: string
+  negative_prompt: string
+  watermark: boolean
+}
+
 export interface DigitalForm {
   mode: 'digital' | 'customize'
   character_asset: string | null
@@ -128,6 +136,13 @@ export interface DigitalForm {
   voxcpm_control_instruction: string
   voxcpm_use_prompt_text: boolean
   voxcpm_prompt_text: string
+  // 第三板块：服务配置 - 前置图片生成
+  image_service_mode: 'runninghub' | 'api'
+  image_api_model: string
+  // 第三板块：服务配置 - 口播视频合成
+  video_service_mode: 'runninghub' | 'api'
+  video_api_model: string
+  video_api_params: VideoApiParams
 }
 
 export interface I2vForm {
