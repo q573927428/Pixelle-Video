@@ -102,6 +102,18 @@ export function loadLocalHistory(): any[] {
   }
 }
 
+export function deleteFromLocalHistory(id: string): any[] {
+  try {
+    const key = 'pixelle_upload_history'
+    let history: any[] = JSON.parse(localStorage.getItem(key) || '[]')
+    history = history.filter((r: any) => r.id !== id)
+    localStorage.setItem(key, JSON.stringify(history))
+    return history
+  } catch (_) {
+    return []
+  }
+}
+
 // ====== Config API ======
 
 export interface LLMConfig {

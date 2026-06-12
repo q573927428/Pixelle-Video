@@ -12,6 +12,7 @@
     <!-- ===== 图片类：网格画廊布局 ===== -->
     <div v-else-if="layoutType === 'image'" class="history-grid">
       <div v-for="rec in filteredRecords" :key="rec.id" class="history-grid-item" @click="selectRecord(rec)">
+        <button class="history-delete-btn" @click="handleDelete(rec, $event)">✕</button>
         <div class="history-grid-preview">
           <img :src="getUrl(rec)" @error="onImgError" />
         </div>
@@ -24,6 +25,7 @@
     <!-- ===== 视频类：卡片布局 ===== -->
     <div v-else-if="layoutType === 'video'" class="history-video-list">
       <div v-for="rec in filteredRecords" :key="rec.id" class="history-video-card" @click="selectRecord(rec)">
+        <button class="history-delete-btn" @click="handleDelete(rec, $event)">✕</button>
         <div class="history-video-preview">
           <video :src="getUrl(rec)" muted @mouseover="playHover($event)" @mouseleave="stopHover($event)" />
           <div class="history-video-play-icon">▶</div>
@@ -38,6 +40,7 @@
     <!-- ===== 音频类：列表布局 ===== -->
     <div v-else-if="layoutType === 'audio'" class="history-audio-list">
       <div v-for="rec in filteredRecords" :key="rec.id" class="history-audio-item" @click="selectRecord(rec)">
+        <button class="history-delete-btn" @click="handleDelete(rec, $event)">✕</button>
         <div class="history-audio-icon">🎵</div>
         <div class="history-audio-info">
           <div class="history-audio-name">{{ rec.name }}</div>
@@ -51,6 +54,7 @@
     <!-- ===== 兜底：默认列表布局 ===== -->
     <div v-else class="history-default-list">
       <div v-for="rec in filteredRecords" :key="rec.id" class="history-default-item" @click="selectRecord(rec)">
+        <button class="history-delete-btn" @click="handleDelete(rec, $event)">✕</button>
         <span>📄 {{ rec.name }}</span>
         <span class="small muted">{{ rec.category }}</span>
       </div>
@@ -60,7 +64,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { makePreviewUrl } from '../api'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import { makePreviewUrl, deleteFromLocalHistory } from '../api'
 
 const props = defineProps<{
   modelValue: boolean
@@ -72,6 +77,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', v: boolean): void
   (e: 'select', record: any): void
+  (e: 'delete'): void
 }>()
 
 const categoryFilterMap: Record<string, string[]> = {
@@ -136,6 +142,22 @@ function playHover(e: Event) {
 function stopHover(e: Event) {
   const video = (e.currentTarget as HTMLElement).querySelector('video')
   if (video) { video.pause(); video.currentTime = 0 }
+}
+
+async function handleDelete(rec: any, e: Event) {
+  e.stopPropagation()
+  try {
+    await ElMessageBox.confirm(`确定要删除「${rec.name}」吗？`, '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    deleteFromLocalHistory(rec.id)
+    ElMessage.success('删除成功')
+    emit('delete')
+  } catch (_) {
+    // 取消删除不处理
+  }
 }
 </script>
 
@@ -312,5 +334,44 @@ function stopHover(e: Event) {
 }
 .history-default-item:hover {
   background: rgba(30,41,59,0.5);
+}
+
+/* ===== 删除按钮通用样式 ===== */
+.history-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(239,68,68,0.85);
+  color: #fff;
+  font-size: 11px;
+  line-height: 22px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 2;
+  padding: 0;
+}
+.history-grid-item:hover .history-delete-btn,
+.history-video-card:hover .history-delete-btn,
+.history-audio-item:hover .history-delete-btn,
+.history-default-item:hover .history-delete-btn {
+  opacity: 1;
+}
+.history-delete-btn:hover {
+  background: rgba(220,38,38,1);
+  transform: scale(1.1);
+}
+
+/* 父容器需要 position: relative 以支持绝对定位删除按钮 */
+.history-grid-item,
+.history-video-card,
+.history-audio-item,
+.history-default-item {
+  position: relative;
 }
 </style>

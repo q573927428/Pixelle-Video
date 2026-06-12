@@ -39,7 +39,7 @@
         </div>
       </div>
     </div>
-    <HistoryDialog v-model="historyVisible" :loading="historyLoading" :records="historyRecords" :filter-category="historyFilterCategory" @select="onHistorySelect" />
+    <HistoryDialog v-model="historyVisible" :loading="historyLoading" :records="historyRecords" :filter-category="historyFilterCategory" @select="onHistorySelect" @delete="refreshHistory" />
   </div>
 </template>
 
@@ -87,9 +87,13 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   }
 }
 
-function openHistory(category: string) {
+function refreshHistory() {
   const localHistory = loadLocalHistory()
   historyRecords.value = localHistory.slice(0, 50)
+}
+
+function openHistory(category: string) {
+  refreshHistory()
   historyFilterCategory.value = category
   historyVisible.value = true
 }
