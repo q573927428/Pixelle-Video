@@ -144,7 +144,6 @@
             <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
             <el-radio-button value="api">API 模型</el-radio-button>
           </el-radio-group>
-          <div class="service-hint">选择前置图片生成使用的模型服务来源：RunningHub 使用云端工作流；API 调用直接请求模型供应商。</div>
         </el-form-item>
 
         <!-- RunningHub 模式 -->
@@ -186,7 +185,6 @@
             <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
             <el-radio-button value="api">API 模型</el-radio-button>
           </el-radio-group>
-          <div class="service-hint">选择口播视频合成使用的模型服务来源：RunningHub 使用云端工作流；API 调用直接请求模型供应商。</div>
         </el-form-item>
 
         <!-- RunningHub 模式 -->

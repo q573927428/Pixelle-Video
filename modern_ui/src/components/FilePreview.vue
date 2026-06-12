@@ -68,8 +68,10 @@ function openUrl(filePath: string) {
   gap: 12px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed #e4e7ed;
+  border: 1px dashed #e4e7ed;
   width: 100%;
+  justify-content: center;
+  padding: 10px;
 }
 .file-preview-item {
   position: relative;
@@ -88,11 +90,13 @@ function openUrl(filePath: string) {
   overflow: hidden;
 }
 .preview-img {
-  width: 180px;
   height: 140px;
-  object-fit: cover;
+  width: auto;
+  max-width: 260px;
+  object-fit: contain;
   cursor: pointer;
   display: block;
+  background: #f0f2f5;
 }
 .preview-video {
   width: 240px;
