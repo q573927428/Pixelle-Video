@@ -50,32 +50,6 @@ async def list_tasks(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/{task_id}", response_model=Task)
-async def get_task(task_id: str):
-    """
-    Get task details
-    
-    Retrieve detailed information about a specific task.
-    
-    - **task_id**: Task ID
-    
-    Returns task details including status, progress, and result (if completed).
-    """
-    try:
-        task = task_manager.get_task(task_id)
-        
-        if not task:
-            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-        
-        return task
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get task error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/history")
 async def list_task_history(
     pixelle_video: PixelleVideoDep,
@@ -128,6 +102,32 @@ async def get_task_history_detail(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/{task_id}", response_model=Task)
+async def get_task(task_id: str):
+    """
+    Get task details
+    
+    Retrieve detailed information about a specific task.
+    
+    - **task_id**: Task ID
+    
+    Returns task details including status, progress, and result (if completed).
+    """
+    try:
+        task = task_manager.get_task(task_id)
+        
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        return task
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/{task_id}")
 async def cancel_task(task_id: str):
     """
@@ -155,4 +155,3 @@ async def cancel_task(task_id: str):
     except Exception as e:
         logger.error(f"Cancel task error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
