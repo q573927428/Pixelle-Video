@@ -39,3 +39,12 @@ uv run streamlit run web/app.py
 第二，只要是过千的机子，一定要花几块钱买个保价，真出问题也有得赔。
 所以说，只要找对转运做好这两点，放心冲你的梦中情机就完事儿！
 
+
+## 待完成
+modern_ui\src\components\DigitalHumanForm.vue
+API 视频模型参数              
+<div class="sub-section" style="margin-top:12px;">
+默认折叠起来。
+
+
+从历史上传选择里面添加删除功能

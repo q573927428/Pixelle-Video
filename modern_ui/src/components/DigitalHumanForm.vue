@@ -56,7 +56,7 @@
         <!-- VoxCPM API 选项 -->
         <div v-if="form.tts_engine === 'voxcpm_api'" class="voxcpm-section">
           <el-form-item label="CFG 强度">
-            <el-slider v-model="form.voxcpm_cfg" :min="1.0" :max="5.0" :step="0.1" show-input />
+            <el-slider v-model="form.voxcpm_cfg" :min="1.0" :max="3.0" :step="0.1" show-input />
           </el-form-item>
           <el-form-item label="控制指令">
             <el-input v-model="form.voxcpm_control_instruction" placeholder="例如：自然、温柔" />

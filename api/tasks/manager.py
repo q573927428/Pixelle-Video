@@ -22,8 +22,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from loguru import logger
 
-from api.tasks.models import Task, TaskStatus, TaskType, TaskProgress
+from api.tasks.models import Task, TaskStatus, TaskType, TaskProgress, ConfirmationData
 from api.config import api_config
+
+
+class TaskConfirmationTimeout(Exception):
+    """Raised when user confirmation times out or is rejected."""
+    pass
 
 
 class TaskManager:
@@ -34,12 +39,14 @@ class TaskManager:
     - In-memory storage (can be replaced with Redis later)
     - Task lifecycle management
     - Progress tracking
+    - User confirmation support (when tasks need user input)
     - Auto cleanup of old tasks
     """
     
     def __init__(self):
         self._tasks: Dict[str, Task] = {}
         self._task_futures: Dict[str, asyncio.Task] = {}
+        self._confirmation_events: Dict[str, asyncio.Event] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
         self._running = False
     
@@ -73,6 +80,7 @@ class TaskManager:
         
         self._tasks.clear()
         self._task_futures.clear()
+        self._confirmation_events.clear()
         logger.info("✅ Task manager stopped")
     
     def create_task(
@@ -101,6 +109,110 @@ class TaskManager:
         self._tasks[task_id] = task
         logger.info(f"Created task {task_id} ({task_type})")
         return task
+    
+    def add_warning(self, task_id: str, warning: str):
+        """
+        Add a warning message to the task (non-blocking info).
+        
+        Args:
+            task_id: Task ID
+            warning: Warning message to display to the user
+        """
+        task = self._tasks.get(task_id)
+        if not task:
+            return
+        if warning not in task.warnings:
+            task.warnings.append(warning)
+            logger.warning(f"Task {task_id} warning: {warning}")
+    
+    async def request_confirmation(
+        self,
+        task_id: str,
+        confirmation: ConfirmationData,
+        timeout: float = 300.0,
+    ) -> bool:
+        """
+        Request user confirmation for a pending task.
+        
+        Sets the task status to PENDING_CONFIRMATION and waits for the user
+        to respond via the confirm/reject API endpoint.
+        
+        Args:
+            task_id: Task ID
+            confirmation: Confirmation data describing what needs user input
+            timeout: Maximum wait time in seconds (default 5 minutes)
+            
+        Returns:
+            True if user confirmed, False if rejected or timed out
+            
+        Raises:
+            TaskConfirmationTimeout: If confirmation times out
+        """
+        task = self._tasks.get(task_id)
+        if not task:
+            raise ValueError(f"Task {task_id} not found")
+        
+        # Create event if not exists
+        if task_id not in self._confirmation_events:
+            self._confirmation_events[task_id] = asyncio.Event()
+        
+        event = self._confirmation_events[task_id]
+        
+        # Set task to confirmation-pending state
+        task.status = TaskStatus.PENDING_CONFIRMATION
+        task.confirmation = confirmation
+        event.clear()
+        
+        logger.info(
+            f"Task {task_id} waiting for user confirmation: "
+            f"{confirmation.type} - {confirmation.message}"
+        )
+        
+        # Wait for user response with timeout
+        try:
+            await asyncio.wait_for(event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(f"Task {task_id} confirmation timed out after {timeout}s")
+            task.status = TaskStatus.RUNNING
+            task.confirmation = None
+            self._confirmation_events.pop(task_id, None)
+            raise TaskConfirmationTimeout(
+                f"User confirmation timed out after {timeout} seconds"
+            )
+        
+        # Check confirmation result
+        result = getattr(event, "_confirm_result", True)
+        self._confirmation_events.pop(task_id, None)
+        task.confirmation = None
+        
+        if result:
+            task.status = TaskStatus.RUNNING
+            logger.info(f"Task {task_id} user confirmed, resuming execution")
+        else:
+            task.status = TaskStatus.CANCELLED
+            task.completed_at = datetime.now()
+            logger.info(f"Task {task_id} user rejected, cancelling task")
+        
+        return result
+    
+    def confirm_task(self, task_id: str, confirmed: bool = True) -> bool:
+        """
+        Respond to a pending confirmation request.
+        
+        Args:
+            task_id: Task ID
+            confirmed: True to continue, False to cancel
+            
+        Returns:
+            True if confirmation was processed, False if task not awaiting confirmation
+        """
+        event = self._confirmation_events.get(task_id)
+        if not event:
+            return False
+        
+        setattr(event, "_confirm_result", confirmed)
+        event.set()
+        return True
     
     async def execute_task(
         self,
@@ -138,6 +250,18 @@ class TaskManager:
                 task.result = result
                 task.completed_at = datetime.now()
                 logger.info(f"Task {task_id} completed")
+                
+            except TaskConfirmationTimeout:
+                # Confirmation timed out - fail gracefully
+                task.status = TaskStatus.FAILED
+                task.error = "User confirmation timed out"
+                task.completed_at = datetime.now()
+                logger.error(f"Task {task_id} failed: confirmation timeout")
+                
+            except asyncio.CancelledError:
+                task.status = TaskStatus.CANCELLED
+                task.completed_at = datetime.now()
+                logger.info(f"Task {task_id} cancelled")
                 
             except Exception as e:
                 task.status = TaskStatus.FAILED
@@ -223,6 +347,14 @@ class TaskManager:
         # Do not cancel already-terminal tasks
         if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
             return False
+        
+        # Handle PENDING_CONFIRMATION: trigger confirmation event so pipeline
+        # can cleanly exit instead of being forcefully cancelled mid-process
+        if task.status == TaskStatus.PENDING_CONFIRMATION:
+            event = self._confirmation_events.get(task_id)
+            if event:
+                setattr(event, "_confirm_result", False)
+                event.set()
 
         # Cancel future if running
         future = self._task_futures.get(task_id)
@@ -232,6 +364,8 @@ class TaskManager:
         # Update task status
         task.status = TaskStatus.CANCELLED
         task.completed_at = datetime.now()
+        task.confirmation = None
+        self._confirmation_events.pop(task_id, None)
         logger.info(f"Cancelled task {task_id}")
         return True
     
@@ -260,6 +394,7 @@ class TaskManager:
             del self._tasks[task_id]
             if task_id in self._task_futures:
                 del self._task_futures[task_id]
+            self._confirmation_events.pop(task_id, None)
         
         if tasks_to_remove:
             logger.info(f"Cleaned up {len(tasks_to_remove)} old tasks")

@@ -1,15 +1,3 @@
-# Copyright (C) 2025 AIDC-AI
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
 Task management endpoints
 
@@ -18,12 +6,22 @@ Endpoints for managing async tasks (checking status, canceling, etc.)
 
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from loguru import logger
 
 from api.tasks import task_manager, Task, TaskStatus
 from api.dependencies import PixelleVideoDep
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
+
+
+class ConfirmRequest(BaseModel):
+    confirmed: bool = True
+
+
+class ConfirmResponse(BaseModel):
+    success: bool
+    message: str
 
 
 @router.get("", response_model=List[Task])
@@ -99,6 +97,45 @@ async def get_task_history_detail(
         raise
     except Exception as e:
         logger.error(f"Get task history detail error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{task_id}/confirm", response_model=ConfirmResponse)
+async def confirm_task(task_id: str, body: ConfirmRequest):
+    """
+    Confirm or reject a pending user confirmation request.
+    
+    When a task is in PENDING_CONFIRMATION status (e.g., audio too long),
+    this endpoint allows the user to confirm (continue) or reject (cancel).
+    
+    - **task_id**: Task ID
+    - **body.confirmed**: True to continue, False to cancel
+    """
+    try:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+        
+        if task.status != TaskStatus.PENDING_CONFIRMATION:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Task {task_id} is not awaiting confirmation (status={task.status})"
+            )
+        
+        success = task_manager.confirm_task(task_id, confirmed=body.confirmed)
+        if not success:
+            raise HTTPException(status_code=409, detail=f"Task {task_id} confirmation already processed")
+        
+        action = "confirmed" if body.confirmed else "rejected"
+        return ConfirmResponse(
+            success=True,
+            message=f"Task {task_id} {action} successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Confirm task error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

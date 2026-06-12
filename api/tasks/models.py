@@ -1,15 +1,3 @@
-# Copyright (C) 2025 AIDC-AI
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#     http://www.apache.org/licenses/LICENSE-2.0
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
 Task data models
 """
@@ -24,6 +12,7 @@ class TaskStatus(str, Enum):
     """Task status"""
     PENDING = "pending"
     RUNNING = "running"
+    PENDING_CONFIRMATION = "pending_confirmation"
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
@@ -42,6 +31,13 @@ class TaskProgress(BaseModel):
     message: str = ""
 
 
+class ConfirmationData(BaseModel):
+    """Data for when task needs user confirmation"""
+    type: str = "audio_truncation"
+    message: str = ""
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class Task(BaseModel):
     """Task model"""
     task_id: str
@@ -50,6 +46,12 @@ class Task(BaseModel):
     
     # Progress tracking
     progress: Optional[TaskProgress] = None
+    
+    # Warnings (non-blocking, for info display)
+    warnings: list[str] = Field(default_factory=list)
+    
+    # Confirmation data (when status is PENDING_CONFIRMATION)
+    confirmation: Optional[ConfirmationData] = None
     
     # Result
     result: Optional[Any] = None
@@ -67,4 +69,3 @@ class Task(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
-
