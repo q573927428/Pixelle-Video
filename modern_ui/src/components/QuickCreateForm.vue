@@ -96,19 +96,145 @@
       <div class="form-section">
       <div class="form-section-title">🎨 画面与媒体配置</div>
       <div class="form-section-body">
-      <el-form-item label="画面模板">
-        <el-select v-model="form.frame_template" filterable placeholder="选择 HTML 模板" style="width:100%;">
-          <el-option v-for="tpl in templates" :key="tpl.key" :label="`${tpl.display_name} · ${tpl.size}`" :value="tpl.key" />
-        </el-select>
+
+      <!-- 分镜类型 -->
+      <el-form-item label="分镜类型">
+        <el-radio-group v-model="templateType" @change="onTemplateTypeChange">
+          <el-radio-button value="static">📄 静态样式</el-radio-button>
+          <el-radio-button value="image">🖼️ 生成插图</el-radio-button>
+          <el-radio-button value="video">🎬 生成视频</el-radio-button>
+        </el-radio-group>
       </el-form-item>
-      <el-form-item label="媒体工作流">
-        <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
-          <el-option v-for="wf in mediaWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
-        </el-select>
-      </el-form-item>
-      <el-form-item label="图片风格前缀">
-        <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" placeholder="在生成图片提示词前添加固定前缀（可选）" />
-      </el-form-item>
+
+      <!-- 当前选中模板信息 -->
+      <div v-if="selectedTemplateInfo" class="soft-panel" style="margin-bottom:12px;">
+        <div class="small"><strong>{{ selectedTemplateInfo.display_name }}</strong></div>
+        <div class="small muted">📐 模板尺寸: {{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</div>
+      </div>
+
+      <!-- 尺寸切换按钮组 -->
+      <div v-if="sizeGroups.length > 0" class="size-tabs" style="margin-bottom:10px;">
+        <el-radio-group v-model="activeSizeTab" @change="onSizeTabChange" size="small">
+          <el-radio-button
+            v-for="group in sizeGroups"
+            :key="group.size"
+            :value="group.size"
+          >{{ group.label }}</el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <!-- 模板网格（当前选中的尺寸组） -->
+      <div v-if="currentGroupTemplates.length > 0" class="template-grid">
+        <div
+          v-for="tpl in currentGroupTemplates"
+          :key="tpl.key"
+          class="template-card"
+          :class="{ 'is-selected': selectedKey === tpl.key }"
+          @click="selectTemplate(tpl.key)"
+        >
+          <div class="template-thumb">
+            <img
+              v-if="getPreviewUrl(tpl.key)"
+              :src="getPreviewUrl(tpl.key)"
+              class="template-thumb-img"
+              loading="lazy"
+              @error="onPreviewError($event, tpl.key)"
+            />
+            <div v-else class="template-thumb-placeholder">{{ tpl.display_name.replace(/^(static_|image_|video_)/, '') }}</div>
+          </div>
+          <div class="template-card-footer">
+            <span class="small" :class="selectedKey === tpl.key ? '' : 'muted'">
+              {{ selectedKey === tpl.key ? '✅ 已选' : '选择' }}
+            </span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="small muted" style="margin:8px 0 14px;">当前类型下没有可用模板，请选择其他分镜类型。</div>
+
+      <!-- 最终视频尺寸 -->
+      <div v-if="selectedTemplateInfo" style="margin:6px 0 14px;">
+        <el-tag size="small" type="info" effect="plain">最终视频尺寸：{{ selectedTemplateInfo.width }} × {{ selectedTemplateInfo.height }}</el-tag>
+      </div>
+
+      <!-- 自定义参数区域 -->
+      <div v-if="Object.keys(templateParams).length > 0" class="soft-panel" style="margin-bottom:14px;">
+        <div class="form-section-subtitle">📝 自定义参数</div>
+        <div v-loading="templateParamsLoading" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <template v-for="(cfg, name) in templateParams" :key="name">
+            <el-form-item v-if="cfg.type === 'text'" :label="cfg.label || name">
+              <el-input v-model="customParamValues[name]" :placeholder="String(cfg.default)" />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'number'" :label="cfg.label || name">
+              <el-input-number v-model="customParamValues[name]" :default-value="Number(cfg.default)" style="width:100%;" />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'color'" :label="cfg.label || name">
+              <el-color-picker v-model="customParamValues[name]" :default-value="cfg.default" show-alpha />
+            </el-form-item>
+            <el-form-item v-else-if="cfg.type === 'bool'" :label="cfg.label || name">
+              <el-checkbox v-model="customParamValues[name]" :default-value="Boolean(cfg.default)" />
+            </el-form-item>
+          </template>
+        </div>
+      </div>
+
+      <!-- 模板预览 -->
+      <div class="soft-panel" style="margin-bottom:14px;border:1px dashed rgba(125, 211, 252, 0.35);">
+        <div class="form-section-subtitle">🔍 预览模板</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <el-form-item label="标题">
+            <el-input v-model="previewTitle" placeholder="AI 改变内容创作" />
+          </el-form-item>
+          <el-form-item label="图片路径">
+            <el-input v-model="previewImage" placeholder="resources/example.png" />
+          </el-form-item>
+        </div>
+        <el-form-item label="文本">
+          <el-input v-model="previewTextContent" type="textarea" :rows="2" placeholder="Pixelle.AI 正在用人工智能改变内容创作的方式..." />
+        </el-form-item>
+        <div class="small muted" style="margin-bottom:8px;">📐 模板尺寸: {{ selectedTemplateInfo ? `${selectedTemplateInfo.width} × ${selectedTemplateInfo.height}` : '-' }}</div>
+        <el-button type="primary" size="small" @click="handlePreviewTemplate" :loading="previewTemplateLoading" style="width:100%;">
+          🖼️ 预览模板
+        </el-button>
+        <img v-if="previewTemplateUrl" :src="previewTemplateUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
+      </div>
+
+      <el-divider />
+
+      <!-- 🎨 插图/视频生成 -->
+      <div v-if="templateType !== 'static'" class="soft-panel" style="margin-bottom:14px;">
+        <div class="form-section-subtitle">🎨 {{ templateType === 'video' ? '视频' : '插图' }}生成</div>
+        <div class="small muted" style="margin-bottom:10px;">💡 功能说明：根据分镜选择确定使用的素材类型</div>
+
+        <el-form-item label="生成来源">
+          <el-radio-group v-model="workflowSource" size="small">
+            <el-radio-button value="runninghub">RunningHub</el-radio-button>
+            <el-radio-button value="selfhost">本地 ComfyUI</el-radio-button>
+            <el-radio-button value="api">API 模型</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="Workflow">
+          <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
+            <el-option v-for="wf in filteredWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
+          </el-select>
+        </el-form-item>
+
+        <!-- 媒体尺寸信息 -->
+        <div v-if="templateMediaSize && templateMediaSize.width > 0" class="small muted" style="margin:4px 0 10px;">
+          📐 {{ templateType === 'video' ? '视频' : '插图' }}尺寸：{{ templateMediaSize.width }}x{{ templateMediaSize.height }}（由模板自动决定）
+        </div>
+
+        <el-form-item label="提示词前缀">
+          <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" placeholder="在生成图片提示词前添加固定前缀（可选）" />
+        </el-form-item>
+
+        <!-- 风格预览 -->
+        <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
+          👁️ 预览风格
+        </el-button>
+        <img v-if="stylePreviewUrl" :src="stylePreviewUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
+      </div>
+
     </div>
       </div>
     </div>
@@ -213,7 +339,7 @@
       </div>
 
       <!-- 声音预览 -->
-      <div class="soft-panel" style="margin-top:12px;border:1px dashed var(--el-color-primary);">
+      <div class="soft-panel" style="margin-top:12px;border:1px dashed rgba(125, 211, 252, 0.35);">
         <el-form-item label="🔊 声音预览">
           <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" />
         </el-form-item>
@@ -281,6 +407,225 @@ const refAudioItems = computed<string[]>(() => {
 })
 
 const asrLoading = ref(false)
+
+// ====== 🎨 画面与媒体配置 ======
+
+// 分镜类型
+const templateType = ref<'static' | 'image' | 'video'>('image')
+
+// 按模板类型分组
+const groupedTemplates = computed(() => {
+  const groups: Record<string, TemplateInfo[]> = {}
+  const keywordMap: Record<string, string> = { static: 'static_', image: 'image_', video: 'video_' }
+  const prefix = keywordMap[templateType.value]
+  props.templates.forEach(t => {
+    if (t.name.startsWith(prefix)) {
+      if (!groups[t.size]) groups[t.size] = []
+      groups[t.size].push(t)
+    }
+  })
+  return groups
+})
+
+const sizeGroups = computed(() => {
+  return Object.entries(groupedTemplates.value).map(([size, tpls]) => ({
+    size,
+    templates: tpls,
+    label: `${tpls[0]?.orientation === 'portrait' ? '竖屏' : tpls[0]?.orientation === 'landscape' ? '横屏' : '方形'} ${size}`,
+  }))
+})
+
+const selectedTemplateInfo = computed(() => {
+  return props.templates.find(t => t.key === props.form.frame_template)
+})
+
+const activeSizeTab = ref('')
+
+// 当前选中尺寸组的模板列表
+const currentGroupTemplates = computed(() => {
+  const group = sizeGroups.value.find(g => g.size === activeSizeTab.value)
+  return group?.templates || []
+})
+
+// 当前选中的模板 key（用于模板画廊高亮）
+const selectedKey = computed(() => props.form.frame_template)
+
+function onSizeTabChange(size: string) {
+  // 仅切换显示组，不自动选中模板
+  // 如果当前选中的模板不在新组中，取消选中
+  const group = sizeGroups.value.find(g => g.size === size)
+  if (group && !group.templates.find(t => t.key === props.form.frame_template)) {
+    // 不清除选择，让用户手动点击卡片选择
+  }
+}
+
+function selectTemplate(key: string) {
+  props.form.frame_template = key
+}
+
+function onTemplateTypeChange() {
+  // 切换类型后自动设置第一个尺寸组和第一个模板
+  const groups = sizeGroups.value
+  if (groups.length > 0) {
+    activeSizeTab.value = groups[0].size
+    if (groups[0].templates.length > 0) {
+      selectTemplate(groups[0].templates[0].key)
+    }
+  }
+}
+
+// 自定义参数
+const customParamValues = ref<Record<string, any>>({})
+const templateParams = ref<Record<string, { type: string; default: any; label: string }>>({})
+const templateParamsLoading = ref(false)
+const templateMediaSize = ref({ width: 0, height: 0 })
+
+async function loadTemplateParams(templateKey: string) {
+  if (!templateKey) return
+  templateParamsLoading.value = true
+  try {
+    const res: any = await request(`/api/frame/template/params?template=${encodeURIComponent(templateKey)}`)
+    templateParams.value = res.params || {}
+    templateMediaSize.value = { width: res.media_width || 0, height: res.media_height || 0 }
+    // 初始化自定义参数默认值
+    const vals: Record<string, any> = {}
+    for (const [name, cfg] of Object.entries(res.params || {})) {
+      vals[name] = (cfg as any).default
+    }
+    customParamValues.value = vals
+  } catch (_) {
+    templateParams.value = {}
+    templateMediaSize.value = { width: 0, height: 0 }
+  } finally {
+    templateParamsLoading.value = false
+  }
+}
+
+// 监听模板变化
+import { watch } from 'vue'
+watch(() => props.form.frame_template, (newKey) => {
+  if (newKey) loadTemplateParams(newKey)
+})
+
+// 模板预览缩略图路径映射
+// docs/images/{size}/{name}.{jpg|png}  →  /api/files/docs/images/{size}/{name}.{jpg|png}
+const previewCache = ref<Record<string, string>>({})
+const failedKeys = ref<Set<string>>(new Set())
+
+function getPreviewUrl(templateKey: string): string {
+  if (failedKeys.value.has(templateKey)) return ''
+  if (templateKey) {
+    const parts = templateKey.replace(/\\/g, '/').split('/')
+    if (parts.length >= 2) {
+      const size = parts[0]
+      const name = parts[1].replace('.html', '')
+      const url = `/api/files/docs/images/${size}/${name}.jpg`
+      previewCache.value[templateKey] = url
+      return url
+    }
+  }
+  return ''
+}
+
+function onPreviewError(event: Event, templateKey: string) {
+  failedKeys.value.add(templateKey)
+  const img = event.target as HTMLImageElement
+  if (img) img.style.display = 'none'
+}
+
+// 初始化模板参数和尺寸 tab
+const initialLoad = ref(false)
+watch(() => props.templates, (tpls) => {
+  if (tpls.length > 0 && !initialLoad.value) {
+    initialLoad.value = true
+    const imgTpl = tpls.find(t => t.name.startsWith('image_'))
+    const portrait = tpls.find(t => t.orientation === 'portrait')
+    const def = imgTpl || portrait || tpls[0]
+    if (def && !props.form.frame_template) {
+      props.form.frame_template = def.key
+    }
+    if (props.form.frame_template) {
+      loadTemplateParams(props.form.frame_template)
+    }
+    // 设置默认尺寸 tab
+    if (sizeGroups.value.length > 0) {
+      activeSizeTab.value = sizeGroups.value[0].size
+    }
+  }
+}, { immediate: true })
+
+// 模板预览
+const previewTitle = ref('AI 改变内容创作')
+const previewImage = ref('resources/example.png')
+const previewTextContent = ref('Pixelle.AI 正在用人工智能改变内容创作的方式，让每个人都能轻松制作专业级视频。')
+const previewTemplateLoading = ref(false)
+const previewTemplateUrl = ref('')
+
+async function handlePreviewTemplate() {
+  if (!props.form.frame_template) { ElMessage.warning('请先选择模板'); return }
+  previewTemplateLoading.value = true
+  previewTemplateUrl.value = ''
+  try {
+    const res: any = await request('/api/frame/render', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: props.form.frame_template,
+        title: previewTitle.value,
+        text: previewTextContent.value,
+        image: previewImage.value,
+      }),
+    })
+    if (res.frame_path) {
+      previewTemplateUrl.value = filePreviewUrl(res.frame_path)
+    }
+    ElMessage.success('模板预览生成成功')
+  } catch (e: any) {
+    ElMessage.error(`预览失败：${e.message}`)
+  } finally {
+    previewTemplateLoading.value = false
+  }
+}
+
+// 媒体生成来源
+const workflowSource = ref('runninghub')
+
+const filteredWorkflows = computed(() => {
+  const prefix = templateType.value === 'video' ? 'video_' : 'image_'
+  return props.mediaWorkflows.filter(wf => wf.name.startsWith(prefix))
+})
+
+// 风格预览
+const stylePreviewLoading = ref(false)
+const stylePreviewUrl = ref('')
+
+async function handlePreviewStyle() {
+  if (!props.form.media_workflow) { ElMessage.warning('请先选择 Workflow'); return }
+  stylePreviewLoading.value = true
+  stylePreviewUrl.value = ''
+  try {
+    const res: any = await request('/api/image/generate/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        workflow: props.form.media_workflow,
+        prompt: props.form.prompt_prefix + ' a dog',
+        width: templateMediaSize.value.width || 1024,
+        height: templateMediaSize.value.height || 1024,
+      }),
+    })
+    if (res.image_url) {
+      stylePreviewUrl.value = res.image_url
+    } else if (res.image_path) {
+      stylePreviewUrl.value = filePreviewUrl(res.image_path)
+    }
+    ElMessage.success('风格预览生成成功')
+  } catch (e: any) {
+    ElMessage.error(`风格预览失败：${e.message}`)
+  } finally {
+    stylePreviewLoading.value = false
+  }
+}
 
 // 声音预览
 const previewText = ref('大家好，这是一段测试语音。')
@@ -366,3 +711,81 @@ async function handleAsrTranscribe() {
   }
 }
 </script>
+
+<style scoped>
+/* 尺寸切换按钮组 - 匹配深色主题 */
+.size-tabs .el-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.size-tabs .el-radio-button__inner {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 8px !important;
+  border: 1px solid rgba(71, 85, 105, 0.45) !important;
+  background: rgba(8, 13, 25, 0.92) !important;
+  color: #94a3b8 !important;
+}
+.size-tabs .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.3), rgba(6, 182, 212, 0.18)) !important;
+  border-color: rgba(125, 211, 252, 0.45) !important;
+  color: #fff !important;
+}
+
+/* 模板网格 */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.template-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.52);
+  cursor: pointer;
+  transition: 0.18s ease;
+  overflow: hidden;
+}
+.template-card:hover {
+  border-color: rgba(125, 211, 252, 0.36);
+  background: rgba(124, 58, 237, 0.15);
+}
+.template-card.is-selected {
+  border-color: rgba(125, 211, 252, 0.55);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.25), rgba(6, 182, 212, 0.1));
+}
+.template-thumb {
+  aspect-ratio: 88 / 157;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.4);
+  border-bottom: 1px solid var(--line);
+}
+.template-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.template-thumb-placeholder {
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+  padding: 4px;
+  word-break: break-all;
+  line-height: 1.3;
+}
+.template-card-footer {
+  padding: 6px 8px;
+  text-align: center;
+}
+.form-section-subtitle {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 10px;
+  color: #a78bfa;
+}
+</style>

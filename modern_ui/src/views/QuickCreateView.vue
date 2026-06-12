@@ -87,11 +87,7 @@ const progressStatus = computed(() => {
 })
 
 onMounted(() => {
-  // 设置默认模板
-  if (!quickForm.value.frame_template && templates.value.length) {
-    const portrait = templates.value.find((t: any) => t.orientation === 'portrait')
-    quickForm.value.frame_template = (portrait || templates.value[0]).key
-  }
+  // 默认模板由 QuickCreateForm 内部处理
 })
 
 async function handleUpload(rawFile: File, category: string, target?: string) {

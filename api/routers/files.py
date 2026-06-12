@@ -97,6 +97,7 @@ async def get_file(file_path: str):
             "data/bgm/",
             "data/templates/",
             "resources/",
+            "docs/",
             "temp/",
         ]
         
