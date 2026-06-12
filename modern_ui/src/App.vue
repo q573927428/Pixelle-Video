@@ -24,10 +24,10 @@
 
     <main class="main">
       <QuickCreateView v-if="activeView === 'quick_create'" />
-      <AssetBasedView v-if="activeView === 'custom_media'" />
+      <!-- <AssetBasedView v-if="activeView === 'custom_media'" /> -->
       <DigitalHumanView v-if="activeView === 'digital_human'" />
-      <I2vView v-if="activeView === 'image_to_video'" />
-      <ActionTransferView v-if="activeView === 'action_transfer'" />
+      <!-- <I2vView v-if="activeView === 'image_to_video'" /> -->
+      <!-- <ActionTransferView v-if="activeView === 'action_transfer'" /> -->
 
       <!-- ====== 📋 历史记录 ====== -->
       <TaskHistoryView v-if="activeView === 'history'" />
@@ -75,9 +75,9 @@ const { tasks, loadAll } = useResources()
 const navItems: NavItem[] = [
   { key: 'digital_human', icon: '🤖', label: '数字人' },
   { key: 'quick_create', icon: '⚡', label: '快速创作' },
-  { key: 'custom_media', icon: '🎨', label: '素材创作' },
-  { key: 'image_to_video', icon: '🎥', label: '图生视频' },
-  { key: 'action_transfer', icon: '💃', label: '动作迁移' },
+  // { key: 'custom_media', icon: '🎨', label: '素材创作' },
+  // { key: 'image_to_video', icon: '🎥', label: '图生视频' },
+  // { key: 'action_transfer', icon: '💃', label: '动作迁移' },
   { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
   { key: 'settings', icon: '⚙️', label: '系统配置' },
