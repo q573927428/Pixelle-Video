@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Query
 from loguru import logger
 
 from api.tasks import task_manager, Task, TaskStatus
+from api.dependencies import PixelleVideoDep
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -72,6 +73,58 @@ async def get_task(task_id: str):
         raise
     except Exception as e:
         logger.error(f"Get task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history")
+async def list_task_history(
+    pixelle_video: PixelleVideoDep,
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(20, ge=1, le=100, description="Items per page"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+):
+    """
+    List persisted task history (survives server restarts).
+    Reads from the filesystem index built by PersistenceService.
+    """
+    try:
+        if not pixelle_video.history:
+            return {"tasks": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+
+        result = await pixelle_video.history.get_task_list(
+            page=page,
+            page_size=page_size,
+            status=status or None,
+        )
+        return result
+
+    except Exception as e:
+        logger.error(f"List task history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history/{task_id}")
+async def get_task_history_detail(
+    task_id: str,
+    pixelle_video: PixelleVideoDep,
+):
+    """
+    Get full detail of a persisted task including storyboard.
+    """
+    try:
+        if not pixelle_video.history:
+            raise HTTPException(status_code=503, detail="History service not available")
+
+        detail = await pixelle_video.history.get_task_detail(task_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+
+        return detail
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get task history detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

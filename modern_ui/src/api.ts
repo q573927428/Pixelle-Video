@@ -41,6 +41,12 @@ export async function loadTasks(limit = 30) {
   return request<any[]>(`/api/tasks?limit=${limit}`)
 }
 
+export async function loadTaskHistory(page = 1, pageSize = 20, status?: string) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
+  if (status) params.set('status', status)
+  return request<{ tasks: any[]; total: number; page: number; page_size: number; total_pages: number }>(`/api/tasks/history?${params}`)
+}
+
 export async function checkHealth() {
   try {
     await request('/health')

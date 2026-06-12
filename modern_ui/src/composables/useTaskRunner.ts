@@ -55,8 +55,10 @@ export function useTaskRunner() {
     const tick = async () => {
       try {
         const task: any = await request(`/api/tasks/${taskId}`)
-        progress.value = Math.max(8, Math.min(99, task.percentage || 0))
-        statusText.value = task.message || `状态：${task.status}`
+        // 从 task.progress.percentage 获取进度百分比（后端返回的是嵌套对象）
+        const pct = task.progress?.percentage ?? 0
+        progress.value = Math.min(99, pct)
+        statusText.value = task.progress?.message || task.message || `状态：${task.status}`
         if (task.status === 'completed') {
           running.value = false
           progress.value = 100
