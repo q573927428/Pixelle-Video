@@ -190,18 +190,21 @@
         </el-form-item>
       </div>
 
-      <!-- 声音预览 -->
-      <div class="soft-panel" style="margin-top:12px;border:1px dashed rgba(125, 211, 252, 0.35);">
-        <el-form-item label="🔊 声音预览">
-          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" />
-        </el-form-item>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
-            ▶ 生成预览
-          </el-button>
-          <audio v-if="previewAudioUrl" :src="previewAudioUrl" controls style="height:32px;flex:1;min-width:0;" />
-        </div>
-      </div>
+      <!-- 声音预览（默认折叠） -->
+      <el-collapse v-model="previewActiveNames" style="margin-top:12px;">
+        <el-collapse-item name="voice-preview">
+          <template #title>
+            <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔊 声音预览</span>
+          </template>
+          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" style="margin-bottom:8px;" />
+          <div style="display:flex;gap:10px;align-items:center;">
+            <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
+              ▶ 生成预览
+            </el-button>
+            <audio v-if="previewAudioUrl" :src="previewAudioUrl" controls style="height:32px;flex:1;min-width:0;" />
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </div>
       </div>
     </div>
@@ -445,6 +448,7 @@ const refAudioItems = computed<string[]>(() => {
   return props.form.ref_audio ? [props.form.ref_audio] : []
 })
 
+const previewActiveNames = ref<string[]>([])
 const asrLoading = ref(false)
 
 // ====== 🎨 画面与媒体配置 ======

@@ -608,6 +608,45 @@
       color: #a78bfa;
     }
 
+    /* ====== Collapse 面板深色主题（DigitalHumanForm / QuickCreateForm 共享） ====== */
+    .el-collapse {
+      --el-collapse-header-bg-color: transparent;
+      --el-collapse-content-bg-color: transparent;
+      border: none;
+    }
+    .el-collapse-item {
+      border-bottom: none;
+    }
+    .el-collapse-item .el-collapse-item__header {
+      display: flex;
+      align-items: center;
+      padding: 0px 8px;
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      height: auto;
+      margin-bottom: 4px;
+    }
+    .el-collapse-item .el-collapse-item__header .sub-section-title {
+      flex: 1;
+    }
+    .el-collapse-item .el-collapse-item__arrow {
+      color: rgba(255, 255, 255, 0.7) !important;
+      margin-right: 0;
+    }
+    .el-collapse-item .el-collapse-item__wrap {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+    }
+    .el-collapse-item .el-collapse-item__content {
+      padding-bottom: 8px;
+      padding-left: 8px;
+      padding-right: 8px;
+      background: transparent;
+    }
+
     .checkbox-row {
       display: flex;
       gap: 18px;

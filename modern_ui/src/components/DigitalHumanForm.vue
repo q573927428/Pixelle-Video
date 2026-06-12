@@ -55,16 +55,16 @@
 
         <!-- VoxCPM API 选项 -->
         <div v-if="form.tts_engine === 'voxcpm_api'" class="voxcpm-section">
-          <el-form-item label="CFG 强度">
+          <!-- <el-form-item label="CFG 强度">
             <el-slider v-model="form.voxcpm_cfg" :min="1.0" :max="3.0" :step="0.1" show-input />
-          </el-form-item>
-          <el-form-item label="控制指令">
+          </el-form-item> -->
+          <!-- <el-form-item label="控制指令">
             <el-input v-model="form.voxcpm_control_instruction" placeholder="例如：自然、温柔" />
-          </el-form-item>
-          <div class="checkbox-row">
+          </el-form-item> -->
+          <!-- <div class="checkbox-row">
             <el-checkbox v-model="form.voxcpm_normalize">归一化 Normalize</el-checkbox>
             <el-checkbox v-model="form.voxcpm_denoise">降噪 Denoise</el-checkbox>
-          </div>
+          </div> -->
           <el-form-item label="参考音频">
             <div class="upload-field-container">
               <UploadBox category="ref_audio" accept="audio/*" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
@@ -114,18 +114,21 @@
         </el-form-item>
       </div>
 
-      <!-- 声音预览 -->
-      <div class="soft-panel" style="margin-top:12px;border:1px dashed var(--el-color-primary);">
-        <el-form-item label="🔊 声音预览">
-          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" />
-        </el-form-item>
-        <div style="display:flex;gap:10px;align-items:center;">
-          <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
-            ▶ 生成预览
-          </el-button>
-          <audio v-if="previewAudioUrl" :src="previewAudioUrl" controls style="height:32px;flex:1;min-width:0;" />
-        </div>
-      </div>
+      <!-- 声音预览（默认折叠） -->
+      <el-collapse v-model="previewActiveNames" style="margin-top:12px;">
+        <el-collapse-item name="voice-preview">
+          <template #title>
+            <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔊 声音预览</span>
+          </template>
+          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" style="margin-bottom:8px;" />
+          <div style="display:flex;gap:10px;align-items:center;">
+            <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
+              ▶ 生成预览
+            </el-button>
+            <audio v-if="previewAudioUrl" :src="previewAudioUrl" controls style="height:32px;flex:1;min-width:0;" />
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </div>
       </div>
     </div>
@@ -421,6 +424,7 @@ function onBatchModeChange(val: boolean) {
 }
 
 const videoApiParamsActiveNames = ref<string[]>([])
+const previewActiveNames = ref<string[]>([])
 const asrLoading = ref(false)
 
 // 声音预览
@@ -509,41 +513,4 @@ async function handleAsrTranscribe() {
 </script>
 
 <style scoped>
-.el-collapse {
-  --el-collapse-header-bg-color: transparent;
-  --el-collapse-content-bg-color: transparent;
-  border: none;
-}
-.el-collapse-item {
-  border-bottom: none;
-}
-.el-collapse-item :deep(.el-collapse-item__header) {
-  display: flex;
-  align-items: center;
-  padding: 0px 8px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 4px;
-  height: auto;
-  margin-bottom: 4px;
-}
-.el-collapse-item :deep(.el-collapse-item__header .sub-section-title) {
-  flex: 1;
-}
-.el-collapse-item :deep(.el-collapse-item__arrow) {
-  color: rgba(255, 255, 255, 0.7) !important;
-  margin-right: 0;
-}
-.el-collapse-item :deep(.el-collapse-item__wrap) {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-top: none;
-  border-radius: 0 0 4px 4px;
-}
-.el-collapse-item :deep(.el-collapse-item__content) {
-  padding-bottom: 8px;
-  padding-left: 8px;
-  padding-right: 8px;
-  background: transparent;
-}
 </style>
