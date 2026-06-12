@@ -148,6 +148,14 @@ async function generate() {
   payload.video_api_model = digitalForm.value.video_api_model
   payload.video_api_params = digitalForm.value.video_api_params
 
+  // 当选择 API 模型模式时，将选中的模型名称映射到 workflow_config 的 api 字段
+  if (digitalForm.value.image_service_mode === 'api' && digitalForm.value.image_api_model) {
+    payload.workflow_config = { ...payload.workflow_config, api_image_workflow: digitalForm.value.image_api_model }
+  }
+  if (digitalForm.value.video_service_mode === 'api' && digitalForm.value.video_api_model) {
+    payload.workflow_config = { ...payload.workflow_config, api_video_workflow: digitalForm.value.video_api_model }
+  }
+
   await submitTask('/api/pipelines/digital-human/async', payload)
 }
 

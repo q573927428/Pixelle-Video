@@ -165,13 +165,13 @@
         <div v-if="form.image_service_mode === 'api'" class="soft-panel">
           <el-form-item label="API 模型">
             <el-select v-model="form.image_api_model" filterable placeholder="选择 API 图片模型" style="width:100%;">
-              <el-option label="wan2.7-image - API Dashscope" value="wan2.7-image" />
-              <el-option label="wan2.7-image-pro - API Dashscope" value="wan2.7-image-pro" />
-              <el-option label="wan2.6-t2i - API Dashscope" value="wan2.6-t2i" />
-              <el-option label="gpt-image-2 - API OpenAI" value="gpt-image-2" />
-              <el-option label="doubao-seedream-5-0-260128 - API Seedream" value="doubao-seedream-5-0-260128" />
-              <el-option label="doubao-seedream-4-5-251128 - API Seedream" value="doubao-seedream-4-5-251128" />
-              <el-option label="doubao-seedream-4-0-250828 - API Seedream" value="doubao-seedream-4-0-250828" />
+              <el-option label="wan2.7-image - API Dashscope" value="dashscope/wan2.7-image" />
+              <el-option label="wan2.7-image-pro - API Dashscope" value="dashscope/wan2.7-image-pro" />
+              <el-option label="wan2.6-t2i - API Dashscope" value="dashscope/wan2.6-t2i" />
+              <el-option label="gpt-image-2 - API OpenAI" value="openai/gpt-image-2" />
+              <el-option label="doubao-seedream-5-0-260128 - API Seedream" value="seedream/doubao-seedream-5-0-260128" />
+              <el-option label="doubao-seedream-4-5-251128 - API Seedream" value="seedream/doubao-seedream-4-5-251128" />
+              <el-option label="doubao-seedream-4-0-250828 - API Seedream" value="seedream/doubao-seedream-4-0-250828" />
             </el-select>
           </el-form-item>
         </div>
@@ -206,8 +206,8 @@
         <div v-if="form.video_service_mode === 'api'" class="soft-panel">
           <el-form-item label="API 模型">
             <el-select v-model="form.video_api_model" filterable placeholder="选择 API 视频模型" style="width:100%;">
-              <el-option label="wan2.7-r2v - API Dashscope" value="wan2.7-r2v" />
-              <el-option label="happyhorse-1.0-r2v - API Dashscope" value="happyhorse-1.0-r2v" />
+              <el-option label="wan2.7-r2v - API Dashscope" value="dashscope/wan2.7-r2v" />
+              <el-option label="happyhorse-1.0-r2v - API Dashscope" value="dashscope/happyhorse-1.0-r2v" />
             </el-select>
           </el-form-item>
 

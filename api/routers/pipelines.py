@@ -287,6 +287,12 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
 
     generated_text = await get_script_text()
 
+    # Normalize API workflow paths: ensure they have the "api/" prefix expected by media service
+    if cfg.api_video_workflow and not cfg.api_video_workflow.startswith("api/"):
+        cfg.api_video_workflow = f"api/{cfg.api_video_workflow}"
+    if cfg.api_image_workflow and not cfg.api_image_workflow.startswith("api/"):
+        cfg.api_image_workflow = f"api/{cfg.api_image_workflow}"
+
     if cfg.api_video_workflow:
         await _run_tts(pixelle_video, request_body, generated_text, audio_path)
         reference_image_paths = [character_assets[0]]
