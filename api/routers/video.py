@@ -25,6 +25,8 @@ from api.schemas.video import (
     VideoGenerateRequest,
     VideoGenerateResponse,
     VideoGenerateAsyncResponse,
+    VideoBatchGenerateRequest,
+    VideoBatchGenerateResponse,
 )
 from api.tasks import task_manager, TaskType
 
@@ -336,4 +338,194 @@ async def generate_video_async(
         
     except Exception as e:
         logger.error(f"Async video generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/generate/batch", response_model=VideoBatchGenerateResponse)
+async def generate_video_batch(
+    request_body: VideoBatchGenerateRequest,
+    pixelle_video: PixelleVideoDep,
+    request: Request
+):
+    """
+    Batch video generation (async)
+    
+    Creates a parent task that generates multiple videos in sequence.
+    Each topic in the list generates one video with shared configuration.
+    Returns immediately with a parent task_id for tracking overall progress.
+    
+    **Workflow:**
+    1. Submit batch request with topics + shared config
+    2. Receive parent task_id in response
+    3. Poll `/api/tasks/{task_id}` to track overall batch progress
+    4. Each video's progress is reported as sub-steps
+    5. When status is "completed", all videos are generated
+    
+    Request body includes:
+    - topics: List of topics (one per video)
+    - title_prefix: Optional prefix for auto-generated titles
+    - n_scenes and other shared config: Applied to all videos
+    """
+    try:
+        n_topics = len(request_body.topics)
+        logger.info(f"Batch video generation: {n_topics} topics")
+        
+        # Create parent batch task
+        task = task_manager.create_task(
+            task_type=TaskType.VIDEO_GENERATION,
+            request_params=request_body.model_dump()
+        )
+        
+        # Define async batch execution function
+        async def execute_batch_generation():
+            """Execute batch video generation in background"""
+            # Validate frame_template
+            if not request_body.frame_template:
+                raise ValueError("frame_template is required to determine media size")
+            
+            from pixelle_video.services.frame_html import HTMLFrameGenerator
+            from pixelle_video.utils.template_util import resolve_template_path
+            template_path = resolve_template_path(request_body.frame_template)
+            generator = HTMLFrameGenerator(template_path)
+            media_width, media_height = generator.get_media_size()
+            logger.debug(f"Batch: auto-determined media size: {media_width}x{media_height}")
+            
+            # Build shared config dict (filter out None values)
+            shared_config = {
+                "mode": "generate",
+                "n_scenes": request_body.n_scenes or 5,
+                "media_width": media_width,
+                "media_height": media_height,
+                "frame_template": request_body.frame_template,
+                "prompt_prefix": request_body.prompt_prefix or "",
+                "bgm_path": request_body.bgm_path,
+                "bgm_volume": request_body.bgm_volume or 0.3,
+                "video_fps": request_body.video_fps or 30,
+            }
+            
+            # Add TTS params
+            shared_config["tts_inference_mode"] = request_body.tts_inference_mode or "local"
+            if request_body.tts_inference_mode == "local":
+                if request_body.tts_voice:
+                    shared_config["tts_voice"] = request_body.tts_voice
+                if request_body.tts_speed is not None:
+                    shared_config["tts_speed"] = request_body.tts_speed
+                if request_body.tts_engine:
+                    shared_config["tts_engine"] = request_body.tts_engine
+                if request_body.ref_audio:
+                    shared_config["ref_audio"] = request_body.ref_audio
+                if request_body.voxcpm_cfg is not None:
+                    shared_config["voxcpm_cfg"] = request_body.voxcpm_cfg
+                if request_body.voxcpm_normalize:
+                    shared_config["voxcpm_normalize"] = True
+                if request_body.voxcpm_denoise:
+                    shared_config["voxcpm_denoise"] = True
+                if request_body.voxcpm_control_instruction:
+                    shared_config["voxcpm_control_instruction"] = request_body.voxcpm_control_instruction
+                if request_body.voxcpm_use_prompt_text:
+                    shared_config["voxcpm_use_prompt_text"] = True
+                    if request_body.voxcpm_prompt_text:
+                        shared_config["voxcpm_prompt_text"] = request_body.voxcpm_prompt_text
+            else:  # comfyui
+                if request_body.tts_workflow:
+                    shared_config["tts_workflow"] = request_body.tts_workflow
+                if request_body.ref_audio:
+                    shared_config["ref_audio"] = request_body.ref_audio
+            
+            # Add LLM params
+            if request_body.min_narration_words is not None:
+                shared_config["min_narration_words"] = request_body.min_narration_words
+            if request_body.max_narration_words is not None:
+                shared_config["max_narration_words"] = request_body.max_narration_words
+            if request_body.min_image_prompt_words is not None:
+                shared_config["min_image_prompt_words"] = request_body.min_image_prompt_words
+            if request_body.max_image_prompt_words is not None:
+                shared_config["max_image_prompt_words"] = request_body.max_image_prompt_words
+            
+            # Add media workflow
+            if request_body.media_workflow:
+                shared_config["media_workflow"] = request_body.media_workflow
+            
+            # Add template params
+            if request_body.template_params:
+                shared_config["template_params"] = request_body.template_params
+            
+            total = len(request_body.topics)
+            results = []
+            errors = []
+            
+            for idx, topic in enumerate(request_body.topics, 1):
+                try:
+                    logger.info(f"Batch task {idx}/{total}: {topic}")
+                    
+                    # Build per-video params
+                    video_params = dict(shared_config)
+                    video_params["text"] = topic
+                    
+                    # Generate title
+                    if request_body.title_prefix:
+                        video_params["title"] = f"{request_body.title_prefix} - {topic}"
+                    else:
+                        video_params["title"] = topic
+                    
+                    # Update task progress for current video
+                    task_manager.update_progress(
+                        task_id=task.task_id,
+                        current=idx - 1,
+                        total=total,
+                        message=f"正在生成第 {idx}/{total} 个视频: {topic[:30]}..."
+                    )
+                    
+                    result = await pixelle_video.generate_video(**video_params)
+                    
+                    video_url = path_to_url(request, result.video_path)
+                    results.append({
+                        "index": idx,
+                        "topic": topic,
+                        "video_url": video_url,
+                        "video_path": result.video_path,
+                        "duration": result.duration,
+                    })
+                    
+                    logger.info(f"Batch task {idx}/{total} completed: {result.video_path}")
+                    
+                except Exception as e:
+                    logger.error(f"Batch task {idx}/{total} failed: {e}")
+                    errors.append({
+                        "index": idx,
+                        "topic": topic,
+                        "error": str(e),
+                    })
+                    # Continue to next topic
+                    continue
+            
+            # Final progress update
+            task_manager.update_progress(
+                task_id=task.task_id,
+                current=total,
+                total=total,
+                message=f"批量生成完成: {len(results)}/{total} 成功, {len(errors)} 失败"
+            )
+            
+            return {
+                "results": results,
+                "errors": errors,
+                "total_count": total,
+                "success_count": len(results),
+                "failed_count": len(errors),
+            }
+        
+        # Start execution
+        await task_manager.execute_task(
+            task_id=task.task_id,
+            coro_func=execute_batch_generation
+        )
+        
+        return VideoBatchGenerateResponse(
+            task_id=task.task_id,
+            total_videos=n_topics
+        )
+        
+    except Exception as e:
+        logger.error(f"Batch video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

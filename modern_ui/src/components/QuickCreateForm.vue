@@ -1,10 +1,48 @@
 <template>
   <el-form label-position="top" class="form-sections">
-    <!-- ====== 第一板块：创作模式与文案输入 ====== -->
+    <!-- ====== 第一板块：批量模式与文案输入 ====== -->
     <div class="form-section-wrapper">
       <div class="form-section">
       <div class="form-section-title">📝 创作模式与文案输入</div>
       <div class="form-section-body">
+      
+      <!-- 批量模式开关 -->
+      <el-form-item label="生成模式">
+        <el-checkbox v-model="form.batch_mode" style="margin-bottom:6px;">
+          📦 批量生成模式 — 一次性输入多个主题，批量生成视频
+        </el-checkbox>
+      </el-form-item>
+      
+      <!-- 批量模式 -->
+      <template v-if="form.batch_mode">
+        <el-alert
+          title="批量生成：每行输入一个视频主题，所有视频共享下方画面、配音、BGM 等配置。"
+          type="info"
+          :closable="false"
+          show-icon
+          style="margin-bottom: 14px;"
+        />
+        <el-form-item label="视频主题（每行一个）">
+          <el-input
+            v-model="form.batch_topics"
+            type="textarea"
+            :rows="10"
+            placeholder="输入视频主题1&#10;输入视频主题2&#10;输入视频主题3&#10;..."
+          />
+        </el-form-item>
+        <div class="soft-panel">
+          <el-form-item label="标题前缀（可选）">
+            <el-input v-model="form.batch_title_prefix" placeholder="例如：产品名称 - " clearable />
+          </el-form-item>
+          <el-form-item label="分镜数量（所有视频统一）">
+            <el-slider v-model="form.n_scenes" :min="1" :max="20" show-input />
+          </el-form-item>
+        </div>
+        <div class="small muted" style="margin-bottom: 14px;">💡 批量模式固定使用 AI 生成分镜模式。</div>
+      </template>
+      
+      <!-- 单视频模式（原有 UI） -->
+      <template v-else>
       <el-form-item label="创作模式">
         <el-radio-group v-model="form.mode">
           <el-radio-button value="generate">AI 生成分镜</el-radio-button>
@@ -47,6 +85,8 @@
           <el-slider v-model="form.video_fps" :min="15" :max="60" :step="5" show-input />
         </el-form-item>
       </div>
+      </template>
+      
     </div>
       </div>
     </div>

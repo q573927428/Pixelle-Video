@@ -77,6 +77,10 @@ export interface QuickForm {
   voxcpm_control_instruction: string
   voxcpm_use_prompt_text: boolean
   voxcpm_prompt_text: string
+  // 批量生成模式
+  batch_mode: boolean
+  batch_topics: string
+  batch_title_prefix: string
 }
 
 export interface AssetForm {

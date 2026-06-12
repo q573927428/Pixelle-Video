@@ -144,9 +144,52 @@ class VideoGenerateResponse(BaseModel):
     file_size: int = Field(..., description="File size in bytes")
 
 
+class VideoBatchGenerateRequest(BaseModel):
+    """Batch video generation request"""
+    
+    # === Batch Topics ===
+    topics: list[str] = Field(..., description="List of topics, one per video", min_length=1, max_length=100)
+    title_prefix: Optional[str] = Field(None, description="Prefix for video titles, will be prepended as '{title_prefix} - {topic}'")
+    
+    # === Shared Config (applies to all videos in batch) ===
+    n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes per video")
+    mode: Literal["generate", "fixed"] = Field("generate", description="Processing mode (fixed to 'generate' for batch)")
+    tts_inference_mode: Optional[str] = Field(None, description="TTS inference mode: 'local' or 'comfyui'")
+    tts_engine: Optional[str] = Field(None, description="Local TTS engine: 'edge_tts' or 'voxcpm_api'")
+    tts_voice: Optional[str] = Field(None, description="TTS voice ID")
+    tts_speed: Optional[float] = Field(None, description="TTS speed multiplier")
+    tts_workflow: Optional[str] = Field(None, description="TTS workflow key")
+    ref_audio: Optional[str] = Field(None, description="Reference audio path for voice cloning")
+    voxcpm_cfg: Optional[float] = Field(None, description="VoxCPM CFG scale")
+    voxcpm_normalize: bool = Field(False, description="VoxCPM normalize flag")
+    voxcpm_denoise: bool = Field(False, description="VoxCPM denoise flag")
+    voxcpm_control_instruction: Optional[str] = Field(None, description="VoxCPM control instruction")
+    voxcpm_use_prompt_text: bool = Field(False, description="VoxCPM use prompt text flag")
+    voxcpm_prompt_text: Optional[str] = Field(None, description="VoxCPM prompt text")
+    min_narration_words: Optional[int] = Field(None, description="Min narration words")
+    max_narration_words: Optional[int] = Field(None, description="Max narration words")
+    min_image_prompt_words: Optional[int] = Field(None, description="Min image prompt words")
+    max_image_prompt_words: Optional[int] = Field(None, description="Max image prompt words")
+    video_fps: Optional[int] = Field(None, description="Video FPS")
+    media_workflow: Optional[str] = Field(None, description="Media workflow key")
+    frame_template: Optional[str] = Field(None, description="HTML template path")
+    template_params: Optional[dict[str, Any]] = Field(None, description="Custom template parameters")
+    prompt_prefix: Optional[str] = Field(None, description="Image style prefix")
+    bgm_path: Optional[str] = Field(None, description="Background music path")
+    bgm_volume: Optional[float] = Field(None, description="BGM volume (0.0-1.0)")
+
+
 class VideoGenerateAsyncResponse(BaseModel):
     """Video generation async response"""
     success: bool = True
     message: str = "Task created successfully"
     task_id: str = Field(..., description="Task ID for tracking progress")
+
+
+class VideoBatchGenerateResponse(BaseModel):
+    """Batch video generation async response"""
+    success: bool = True
+    message: str = "Batch task created successfully"
+    task_id: str = Field(..., description="Parent task ID for tracking overall batch progress")
+    total_videos: int = Field(..., description="Total number of videos to generate")
 

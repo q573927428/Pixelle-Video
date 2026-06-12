@@ -47,16 +47,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { QuickForm } from '../types'
-import { filePreviewUrl, loadLocalHistory } from '../api'
+import { filePreviewUrl, loadLocalHistory, request } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import QuickCreateForm from '../components/QuickCreateForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
-const { running, progress, statusText, result, submitTask, cleanedPayload } = useTaskRunner()
+const { running, progress, statusText, result, submitTask, cleanedPayload, stopPolling } = useTaskRunner()
 const { templates, mediaWorkflows, ttsWorkflows, bgmFiles, ttsVoices, handleUpload: uploadResource } = useResources()
 
 const quickForm = ref<QuickForm>({
@@ -69,6 +69,10 @@ const quickForm = ref<QuickForm>({
   tts_speed: 1.2, voxcpm_cfg: 2.0, voxcpm_normalize: false,
   voxcpm_denoise: false, voxcpm_control_instruction: '',
   voxcpm_use_prompt_text: false, voxcpm_prompt_text: '',
+  // 批量生成模式
+  batch_mode: false,
+  batch_topics: '',
+  batch_title_prefix: '',
 })
 
 const historyVisible = ref(false)
@@ -114,10 +118,152 @@ function onHistorySelect(record: any) {
   ElMessage.success(`已选择：${record.name}`)
 }
 
+// 批量生成相关状态
+const batchResults = ref<any[]>([])
+const batchErrors = ref<any[]>([])
+const batchTotal = ref(0)
+let batchPollTimer: ReturnType<typeof setInterval> | null = null
+
+function batchStopPolling() {
+  if (batchPollTimer) {
+    clearInterval(batchPollTimer)
+    batchPollTimer = null
+  }
+}
+
+onUnmounted(() => {
+  batchStopPolling()
+})
+
 async function generate() {
+  if (quickForm.value.batch_mode) {
+    await generateBatch()
+  } else {
+    await generateSingle()
+  }
+}
+
+async function generateSingle() {
   if (!quickForm.value.text.trim()) { ElMessage.warning('请输入主题或文案'); return }
   if (!quickForm.value.frame_template) { ElMessage.warning('请选择画面模板'); return }
   await submitTask('/api/video/generate/async', cleanedPayload(quickForm.value))
+}
+
+async function generateBatch() {
+  const topics = quickForm.value.batch_topics
+    .split('\n')
+    .map(t => t.trim())
+    .filter(t => t.length > 0)
+  
+  if (topics.length === 0) { ElMessage.warning('请输入至少一个主题'); return }
+  if (!quickForm.value.frame_template) { ElMessage.warning('请选择画面模板'); return }
+  if (topics.length > 100) { ElMessage.warning('主题数量不能超过 100 个'); return }
+  
+  // 重置状态
+  running.value = true
+  progress.value = 2
+  statusText.value = '批量任务提交中...'
+  result.value = {}
+  batchResults.value = []
+  batchErrors.value = []
+  batchTotal.value = topics.length
+  
+  // 构建共享配置（从 quickForm 提取非批量字段）
+  const form = quickForm.value
+  const payload: Record<string, any> = {
+    topics,
+    title_prefix: form.batch_title_prefix || undefined,
+    n_scenes: form.n_scenes,
+    mode: 'generate',
+    tts_inference_mode: form.tts_inference_mode,
+    tts_engine: form.tts_engine,
+    tts_voice: form.tts_voice,
+    tts_speed: form.tts_speed,
+    tts_workflow: form.tts_workflow,
+    ref_audio: form.ref_audio,
+    voxcpm_cfg: form.voxcpm_cfg,
+    voxcpm_normalize: form.voxcpm_normalize,
+    voxcpm_denoise: form.voxcpm_denoise,
+    voxcpm_control_instruction: form.voxcpm_control_instruction,
+    voxcpm_use_prompt_text: form.voxcpm_use_prompt_text,
+    voxcpm_prompt_text: form.voxcpm_prompt_text,
+    min_narration_words: form.min_narration_words,
+    max_narration_words: form.max_narration_words,
+    min_image_prompt_words: form.min_image_prompt_words,
+    max_image_prompt_words: form.max_image_prompt_words,
+    video_fps: form.video_fps,
+    media_workflow: form.media_workflow,
+    frame_template: form.frame_template,
+    prompt_prefix: form.prompt_prefix,
+    bgm_path: form.bgm_path,
+    bgm_volume: form.bgm_volume,
+  }
+  
+  try {
+    const data: any = await request('/api/video/generate/batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    statusText.value = `批量任务已创建：${data.task_id} (${data.total_videos} 个视频)`
+    progress.value = 8
+    pollBatchTask(data.task_id, data.total_videos)
+  } catch (e: any) {
+    running.value = false
+    statusText.value = `批量提交失败：${e.message}`
+    ElMessage.error(statusText.value)
+  }
+}
+
+function pollBatchTask(taskId: string, totalVideos: number) {
+  batchStopPolling()
+  const tick = async () => {
+    try {
+      const task: any = await request(`/api/tasks/${taskId}`)
+      const pct = task.progress?.percentage ?? 0
+      progress.value = Math.min(99, pct)
+      statusText.value = task.progress?.message || task.message || `状态：${task.status}`
+      
+      if (task.status === 'completed') {
+        running.value = false
+        progress.value = 100
+        batchStopPolling()
+        
+        const taskResult = task.result || {}
+        batchResults.value = taskResult.results || []
+        batchErrors.value = taskResult.errors || []
+        
+        const successCount = taskResult.success_count || 0
+        const failedCount = taskResult.failed_count || 0
+        
+        statusText.value = `批量生成完成: ${successCount} 成功, ${failedCount} 失败`
+        
+        // 如果有成功结果，显示第一个视频预览
+        if (batchResults.value.length > 0) {
+          result.value = { video_url: batchResults.value[0].video_url }
+        }
+        
+        if (failedCount > 0) {
+          ElMessage.warning(`批量生成完成: ${successCount} 成功, ${failedCount} 失败`)
+        } else {
+          ElMessage.success('批量生成全部完成')
+        }
+      }
+      
+      if (['failed', 'cancelled'].includes(task.status)) {
+        running.value = false
+        statusText.value = `批量任务失败：${task.error || task.message || task.status}`
+        batchStopPolling()
+        ElMessage.error(statusText.value)
+      }
+    } catch (e: any) {
+      running.value = false
+      statusText.value = `任务查询失败：${e.message}`
+      batchStopPolling()
+    }
+  }
+  tick()
+  batchPollTimer = setInterval(tick, 3000)
 }
 
 function previewAsset(path: string) {
