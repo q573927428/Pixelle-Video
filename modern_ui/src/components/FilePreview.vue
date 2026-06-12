@@ -76,8 +76,6 @@ function openUrl(filePath: string) {
 .file-preview-item {
   position: relative;
   border-radius: 10px;
-  border: 1px solid #e4e7ed;
-  background: #f5f7fa;
   flex: 0 0 auto;
   padding: 2px;
 }
