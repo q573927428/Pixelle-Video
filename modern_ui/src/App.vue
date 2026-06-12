@@ -32,6 +32,9 @@
       <!-- ====== 📋 历史记录 ====== -->
       <TaskHistoryView v-if="activeView === 'history'" />
 
+      <!-- ====== ⚙️ 系统配置 ====== -->
+      <SettingsView v-if="activeView === 'settings'" />
+
       <!-- ====== 📤 上传中心 ====== -->
       <section v-if="activeView === 'assets'">
         <div class="grid grid-2">
@@ -107,6 +110,7 @@ import DigitalHumanView from './views/DigitalHumanView.vue'
 import I2vView from './views/I2vView.vue'
 import ActionTransferView from './views/ActionTransferView.vue'
 import TaskHistoryView from './views/TaskHistoryView.vue'
+import SettingsView from './views/SettingsView.vue'
 
 const activeView = ref('quick_create')
 const uploadCategory = ref('image')
@@ -139,6 +143,7 @@ const navItems: NavItem[] = [
   { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
   { key: 'resources', icon: '🧩', label: '资源管理' },
+  { key: 'settings', icon: '⚙️', label: '系统配置' },
 ]
 
 onMounted(() => {

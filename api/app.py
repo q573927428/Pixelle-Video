@@ -46,6 +46,7 @@ from api.dependencies import shutdown_pixelle_video
 
 # Import routers
 from api.routers import (
+    config_router,
     health_router,
     llm_router,
     tts_router,
@@ -128,6 +129,7 @@ if api_config.cors_enabled:
 app.include_router(health_router)
 
 # API routers (with /api prefix)
+app.include_router(config_router, prefix=api_config.api_prefix)
 app.include_router(llm_router, prefix=api_config.api_prefix)
 app.include_router(tts_router, prefix=api_config.api_prefix)
 app.include_router(image_router, prefix=api_config.api_prefix)

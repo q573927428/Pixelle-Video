@@ -101,3 +101,81 @@ export function loadLocalHistory(): any[] {
     return []
   }
 }
+
+// ====== Config API ======
+
+export interface LLMConfig {
+  api_key: string
+  base_url: string
+  model: string
+}
+
+export interface ComfyUIConfig {
+  comfyui_url: string
+  comfyui_api_key: string
+  runninghub_api_key: string
+  runninghub_concurrent_limit: number
+  runninghub_instance_type: string
+}
+
+export interface FullConfig {
+  llm: LLMConfig
+  comfyui: ComfyUIConfig
+  api_providers: Record<string, any>
+  presets: string[]
+}
+
+export async function getConfig(): Promise<FullConfig> {
+  return request<FullConfig>('/api/config')
+}
+
+export async function saveConfig(config: {
+  llm: LLMConfig
+  comfyui: ComfyUIConfig
+  api_providers: Record<string, any>
+}): Promise<{ success: boolean; message: string }> {
+  return request('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(config),
+  })
+}
+
+export async function loadLLMModels(apiKey: string, baseUrl: string): Promise<string[]> {
+  const res = await request<{ models: string[] }>('/api/config/llm/load-models', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, base_url: baseUrl }),
+  })
+  return res.models
+}
+
+export async function testLLMConnection(apiKey: string, baseUrl: string): Promise<{ success: boolean; message: string; model_count: number }> {
+  return request('/api/config/llm/test-connection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, base_url: baseUrl }),
+  })
+}
+
+export async function testComfyUIConnection(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${url}/system_stats`, { method: 'GET', signal: AbortSignal.timeout(5000) })
+    return res.status === 200
+  } catch {
+    return false
+  }
+}
+
+export async function resetConfig(): Promise<{ success: boolean; message: string }> {
+  return request('/api/config/reset', { method: 'POST' })
+}
+
+export async function detectPreset(): Promise<string> {
+  const res = await request<{ preset: string }>('/api/config/llm/detect-preset')
+  return res.preset
+}
+
+export async function getPresetConfig(name: string): Promise<Record<string, any>> {
+  return request(`/api/config/preset/${encodeURIComponent(name)}`)
+}

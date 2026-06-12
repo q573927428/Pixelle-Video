@@ -14,6 +14,7 @@
 API Routers
 """
 
+from api.routers.config import router as config_router
 from api.routers.health import router as health_router
 from api.routers.llm import router as llm_router
 from api.routers.tts import router as tts_router
@@ -28,6 +29,7 @@ from api.routers.pipelines import router as pipelines_router
 from api.routers.audio import router as audio_router
 
 __all__ = [
+    "config_router",
     "health_router",
     "llm_router",
     "tts_router",
