@@ -1,0 +1,18 @@
+@import url('../styles.css');
+
+/* 上传区域容器：上传区域在上，文件预览在下 */
+.upload-field-container {
+  width: 100%;
+  display: block;
+}
+.el-form-item__content > .upload-field-container {
+  width: 100%;
+  flex: 1;
+}
+.upload-field-container .upload-box-row {
+  margin-bottom: 4px;
+}
+.upload-field-container .file-preview-wrapper {
+  margin-top: 10px;
+  padding-top: 10px;
+}

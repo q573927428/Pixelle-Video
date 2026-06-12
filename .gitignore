@@ -74,3 +74,10 @@ examples/
 repositories/
 
 *.out
+
+# Vue 3 + Element Plus + Vite (modern_ui)
+node_modules/
+modern_ui/node_modules/
+modern_ui/dist/
+modern_ui/*.tsbuildinfo
+modern_ui/pnpm-lock.yaml

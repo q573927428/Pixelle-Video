@@ -59,23 +59,53 @@ async def tts_synthesize(
     ```
     """
     try:
-        logger.info(f"TTS synthesis request: {request.text[:50]}...")
+        logger.info(f"TTS synthesis request: {request.text[:50]}... (engine={request.engine})")
         
         # Build TTS parameters
         tts_params = {"text": request.text}
         
-        # Add workflow if specified
+        # ====================================================================
+        # Determine inference mode:
+        #   - workflow set → ComfyUI mode
+        #   - engine == "voxcpm_api" → local VoxCPM mode
+        #   - otherwise → local Edge TTS mode
+        # ====================================================================
         if request.workflow:
+            # ComfyUI / RunningHub workflow mode
             tts_params["workflow"] = request.workflow
+            tts_params["inference_mode"] = "comfyui"
+        elif request.engine == "voxcpm_api":
+            # Local VoxCPM API mode
+            tts_params["inference_mode"] = "local"
+            tts_params["engine"] = "voxcpm_api"
+            # Pass all VoxCPM-specific parameters
+            if request.cfg is not None:
+                tts_params["cfg"] = request.cfg
+            if request.normalize is not None:
+                tts_params["normalize"] = request.normalize
+            if request.denoise is not None:
+                tts_params["denoise"] = request.denoise
+            if request.control_instruction is not None:
+                tts_params["control_instruction"] = request.control_instruction
+            if request.use_prompt_text is not None:
+                tts_params["use_prompt_text"] = request.use_prompt_text
+            if request.prompt_text is not None:
+                tts_params["prompt_text"] = request.prompt_text
+        else:
+            # Default: local Edge TTS mode
+            tts_params["inference_mode"] = "local"
         
-        # Add ref_audio if specified
+        # Add ref_audio if specified (works for all modes)
         if request.ref_audio:
             tts_params["ref_audio"] = request.ref_audio
         
-        # Legacy voice_id support (deprecated)
-        if request.voice_id and not request.workflow:
-            logger.warning("voice_id parameter is deprecated, please use workflow instead")
+        # Pass voice_id as voice parameter
+        if request.voice_id:
             tts_params["voice"] = request.voice_id
+        
+        logger.info(f"TTS params: inference_mode={tts_params.get('inference_mode')}, "
+                     f"engine={tts_params.get('engine', 'edge_tts (default)')}, "
+                     f"text_len={len(request.text)}")
         
         # Call TTS service
         audio_path = await pixelle_video.tts(**tts_params)

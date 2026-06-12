@@ -16,12 +16,50 @@ File service endpoints
 Provides access to generated files (videos, images, audio) and resource files.
 """
 
+import json
+import uuid
 from pathlib import Path
-from fastapi import APIRouter, HTTPException
+
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from loguru import logger
 
+from api.config import api_config
+
 router = APIRouter(prefix="/files", tags=["Files"])
+
+
+@router.get("/history/list")
+async def list_upload_history(category: str = ""):
+    """
+    List upload history records.
+    
+    Args:
+        category: Optional filter by category (image, video, audio, ref_audio, etc.)
+    
+    Returns list of recent upload records.
+    """
+    try:
+        history_path = Path("temp") / "upload_history.json"
+        history = []
+        if history_path.exists():
+            try:
+                history = json.loads(history_path.read_text(encoding="utf-8"))
+            except Exception:
+                history = []
+        
+        # Filter by category if specified
+        if category:
+            history = [r for r in history if r.get("category") == category]
+        
+        # Limit to 50 most recent
+        history = history[:50]
+        
+        return {"success": True, "records": history}
+    
+    except Exception as e:
+        logger.error(f"List upload history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{file_path:path}")
@@ -59,6 +97,7 @@ async def get_file(file_path: str):
             "data/bgm/",
             "data/templates/",
             "resources/",
+            "temp/",
         ]
         
         # Check if path starts with allowed prefix, otherwise try output/
@@ -124,5 +163,92 @@ async def get_file(file_path: str):
         raise
     except Exception as e:
         logger.error(f"File access error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    category: str = Form("misc"),
+):
+    """
+    Upload a file for API/modern UI usage.
+
+    Files are stored under temp/uploads/{category}/ and can be used as local
+    paths by generation pipelines or previewed via /api/files/temp/uploads/...
+    """
+    try:
+        allowed_categories = {
+            "image",
+            "video",
+            "audio",
+            "ref_audio",
+            "character_image",
+            "goods_image",
+            "misc",
+        }
+        safe_category = category if category in allowed_categories else "misc"
+
+        original_name = Path(file.filename or "upload.bin").name
+        suffix = Path(original_name).suffix.lower()
+        allowed_suffixes = {
+            ".jpg", ".jpeg", ".png", ".gif", ".webp",
+            ".mp4", ".mov", ".avi", ".mkv", ".webm",
+            ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg",
+        }
+        if suffix not in allowed_suffixes:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix}")
+
+        content = await file.read()
+        if len(content) > api_config.max_upload_size:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Max size is {api_config.max_upload_size} bytes",
+            )
+
+        upload_dir = Path("temp") / "uploads" / safe_category
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
+        safe_stem = "".join(
+            ch if ch.isalnum() or ch in ("-", "_") else "_"
+            for ch in Path(original_name).stem
+        ).strip("_") or "upload"
+        stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
+        stored_path = upload_dir / stored_name
+        stored_path.write_bytes(content)
+
+        history_path = Path("temp") / "upload_history.json"
+        history = []
+        if history_path.exists():
+            try:
+                history = json.loads(history_path.read_text(encoding="utf-8"))
+            except Exception:
+                history = []
+
+        record = {
+            "id": str(uuid.uuid4()),
+            "category": safe_category,
+            "name": original_name,
+            "path": str(stored_path.absolute()),
+        }
+        history.insert(0, record)
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        history_path.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        relative_path = stored_path.as_posix()
+        return {
+            "success": True,
+            "filename": original_name,
+            "stored_name": stored_name,
+            "category": safe_category,
+            "path": str(stored_path.absolute()),
+            "relative_path": relative_path,
+            "url": f"/api/files/{relative_path}",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"File upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

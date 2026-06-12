@@ -123,6 +123,16 @@ class TTSService(ComfyBaseService):
                 output_path=output_path,
                 **params
             )
+        elif mode == "voxcpm_api":
+            # VoxCPM API is a local TTS engine (not ComfyUI)
+            return await self._call_local_tts(
+                text=text,
+                voice=voice,
+                speed=speed,
+                output_path=output_path,
+                engine="voxcpm_api",
+                **params
+            )
         else:  # comfyui
             # 1. Resolve workflow (returns structured info)
             workflow_info = self._resolve_workflow(workflow=workflow)

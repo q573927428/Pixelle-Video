@@ -255,7 +255,7 @@ class VoxCPMAPIService:
         if len(segments) > 1:
             logger.info(f"📝 Long text detected: {len(text)} chars, split into {len(segments)} segments")
             for i, seg in enumerate(segments):
-                logger.debug(f"  Segment {i+1}: {seg[:60]}... ({len(seg)} chars)")
+                logger.info(f"  Segment {i+1}: {seg[:60]}... ({len(seg)} chars)")
         else:
             logger.info(f"📝 Text length: {len(text)} chars, single segment")
         

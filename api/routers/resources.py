@@ -28,7 +28,10 @@ from api.schemas.resources import (
     TemplateListResponse,
     BGMInfo,
     BGMListResponse,
+    TtsVoiceInfo,
+    TtsVoiceListResponse,
 )
+from pixelle_video.tts_voices import EDGE_TTS_VOICES
 from pixelle_video.utils.os_util import list_resource_files, get_root_path, get_data_path
 from pixelle_video.utils.template_util import get_all_templates_with_info
 
@@ -193,6 +196,43 @@ async def list_templates():
         
     except Exception as e:
         logger.error(f"List templates error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tts-voices", response_model=TtsVoiceListResponse)
+async def list_tts_voices():
+    """
+    List available Edge TTS voices for local inference
+    
+    Returns list of cached Edge TTS voices with their locale and gender information.
+    
+    Example response:
+    ```json
+    {
+        "voices": [
+            {
+                "id": "zh-CN-XiaoxiaoNeural",
+                "name": "zh-CN-XiaoxiaoNeural",
+                "locale": "zh-CN",
+                "gender": "female"
+            }
+        ]
+    }
+    ```
+    """
+    try:
+        voices = [
+            TtsVoiceInfo(
+                id=v["id"],
+                name=v.get("name", v["id"]),
+                locale=v["locale"],
+                gender=v.get("gender", ""),
+            )
+            for v in EDGE_TTS_VOICES
+        ]
+        return TtsVoiceListResponse(voices=voices)
+    except Exception as e:
+        logger.error(f"List TTS voices error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -67,3 +67,18 @@ class BGMListResponse(BaseModel):
     message: str = "Success"
     bgm_files: List[BGMInfo] = Field(..., description="List of available BGM files")
 
+
+class TtsVoiceInfo(BaseModel):
+    """TTS voice information"""
+    id: str = Field(..., description="Voice ID")
+    name: str = Field(..., description="Voice display name")
+    locale: str = Field(..., description="Locale (e.g., zh-CN, en-US)")
+    gender: str = Field(..., description="Voice gender (male/female)")
+
+
+class TtsVoiceListResponse(BaseModel):
+    """TTS voice list response"""
+    success: bool = True
+    message: str = "Success"
+    voices: List[TtsVoiceInfo] = Field(..., description="List of available TTS voices")
+

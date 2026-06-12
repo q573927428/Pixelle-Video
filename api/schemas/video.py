@@ -37,6 +37,14 @@ class VideoGenerateRequest(BaseModel):
     n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
     
     # === TTS Parameters ===
+    tts_inference_mode: Optional[str] = Field(
+        None,
+        description="TTS inference mode: 'local' (Edge TTS / VoxCPM API) or 'comfyui' (ComfyUI workflow)"
+    )
+    tts_engine: Optional[str] = Field(
+        None,
+        description="Local TTS engine: 'edge_tts' (default) or 'voxcpm_api' (online VoxCPM API)"
+    )
     tts_workflow: Optional[str] = Field(
         None, 
         description="TTS workflow key (e.g., 'runninghub/tts_edge.json'). If not specified, uses default workflow from config."
@@ -48,6 +56,34 @@ class VideoGenerateRequest(BaseModel):
     voice_id: Optional[str] = Field(
         None, 
         description="(Deprecated) TTS voice ID for legacy compatibility"
+    )
+    tts_speed: Optional[float] = Field(
+        None,
+        description="TTS speed multiplier (only for local mode)"
+    )
+    voxcpm_cfg: Optional[float] = Field(
+        None,
+        description="VoxCPM CFG scale (only for voxcpm_api engine)"
+    )
+    voxcpm_normalize: bool = Field(
+        False,
+        description="VoxCPM normalize flag"
+    )
+    voxcpm_denoise: bool = Field(
+        False,
+        description="VoxCPM denoise flag"
+    )
+    voxcpm_control_instruction: Optional[str] = Field(
+        None,
+        description="VoxCPM control instruction"
+    )
+    voxcpm_use_prompt_text: bool = Field(
+        False,
+        description="VoxCPM use prompt text flag"
+    )
+    voxcpm_prompt_text: Optional[str] = Field(
+        None,
+        description="VoxCPM prompt text for extreme cloning"
     )
     
     # === LLM Parameters ===

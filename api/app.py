@@ -36,6 +36,8 @@ import argparse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 
 from api.config import api_config
@@ -54,6 +56,8 @@ from api.routers import (
     files_router,
     resources_router,
     frame_router,
+    pipelines_router,
+    audio_router,
 )
 
 
@@ -133,6 +137,33 @@ app.include_router(tasks_router, prefix=api_config.api_prefix)
 app.include_router(files_router, prefix=api_config.api_prefix)
 app.include_router(resources_router, prefix=api_config.api_prefix)
 app.include_router(frame_router, prefix=api_config.api_prefix)
+app.include_router(pipelines_router, prefix=api_config.api_prefix)
+app.include_router(audio_router, prefix=api_config.api_prefix)
+
+# Modern UI (Vue 3 + Element Plus + TypeScript) built by Vite.
+_modern_ui_dir = _project_root / "modern_ui"
+# Prefer built dist/ output, fallback to source dir for legacy/development
+_modern_ui_dist = _modern_ui_dir / "dist"
+_modern_ui_serve = _modern_ui_dist if _modern_ui_dist.exists() else _modern_ui_dir
+
+if _modern_ui_serve.exists():
+    app.mount(
+        "/modern/assets",
+        StaticFiles(directory=str(_modern_ui_serve / "assets") if _modern_ui_serve == _modern_ui_dist else str(_modern_ui_serve)),
+        name="modern-ui-assets",
+    )
+
+
+@app.get("/modern", include_in_schema=False)
+async def modern_ui():
+    """Serve the modern software-style UI."""
+    index_path = _modern_ui_serve / "index.html"
+    if not index_path.exists():
+        return {
+            "error": "Modern UI assets not found",
+            "expected": str(index_path),
+        }
+    return FileResponse(str(index_path))
 
 
 @app.get("/")
@@ -143,6 +174,7 @@ async def root():
         "version": "0.1.0",
         "docs": api_config.docs_url,
         "health": "/health",
+        "modern_ui": "/modern",
         "api": {
             "llm": f"{api_config.api_prefix}/llm",
             "tts": f"{api_config.api_prefix}/tts",
@@ -153,6 +185,7 @@ async def root():
             "files": f"{api_config.api_prefix}/files",
             "resources": f"{api_config.api_prefix}/resources",
             "frame": f"{api_config.api_prefix}/frame",
+            "pipelines": f"{api_config.api_prefix}/pipelines",
         }
     }
 

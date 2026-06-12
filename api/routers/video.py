@@ -138,6 +138,14 @@ async def generate_video_sync(
             "bgm_volume": request_body.bgm_volume,
         }
         
+        # Add TTS inference mode (local/comfyui)
+        if request_body.tts_inference_mode:
+            video_params["tts_inference_mode"] = request_body.tts_inference_mode
+        
+        # Add TTS engine (edge_tts/voxcpm_api)
+        if request_body.tts_engine:
+            video_params["tts_engine"] = request_body.tts_engine
+        
         # Add TTS workflow if specified
         if request_body.tts_workflow:
             video_params["tts_workflow"] = request_body.tts_workflow
@@ -150,6 +158,24 @@ async def generate_video_sync(
         if request_body.voice_id:
             logger.warning("voice_id parameter is deprecated, please use tts_workflow instead")
             video_params["voice_id"] = request_body.voice_id
+        
+        # Add TTS speed if specified
+        if request_body.tts_speed is not None:
+            video_params["tts_speed"] = request_body.tts_speed
+        
+        # Add VoxCPM parameters
+        if request_body.voxcpm_cfg is not None:
+            video_params["voxcpm_cfg"] = request_body.voxcpm_cfg
+        if request_body.voxcpm_normalize:
+            video_params["voxcpm_normalize"] = request_body.voxcpm_normalize
+        if request_body.voxcpm_denoise:
+            video_params["voxcpm_denoise"] = request_body.voxcpm_denoise
+        if request_body.voxcpm_control_instruction:
+            video_params["voxcpm_control_instruction"] = request_body.voxcpm_control_instruction
+        if request_body.voxcpm_use_prompt_text:
+            video_params["voxcpm_use_prompt_text"] = True
+            if request_body.voxcpm_prompt_text:
+                video_params["voxcpm_prompt_text"] = request_body.voxcpm_prompt_text
         
         # Add custom template parameters if specified
         if request_body.template_params:
@@ -239,9 +265,15 @@ async def generate_video_async(
                 "prompt_prefix": request_body.prompt_prefix,
                 "bgm_path": request_body.bgm_path,
                 "bgm_volume": request_body.bgm_volume,
-                # Progress callback can be added here if needed
-                # "progress_callback": lambda event: task_manager.update_progress(...)
             }
+            
+            # Add TTS inference mode (local/comfyui)
+            if request_body.tts_inference_mode:
+                video_params["tts_inference_mode"] = request_body.tts_inference_mode
+            
+            # Add TTS engine (edge_tts/voxcpm_api)
+            if request_body.tts_engine:
+                video_params["tts_engine"] = request_body.tts_engine
             
             # Add TTS workflow if specified
             if request_body.tts_workflow:
@@ -255,6 +287,24 @@ async def generate_video_async(
             if request_body.voice_id:
                 logger.warning("voice_id parameter is deprecated, please use tts_workflow instead")
                 video_params["voice_id"] = request_body.voice_id
+            
+            # Add TTS speed if specified
+            if request_body.tts_speed is not None:
+                video_params["tts_speed"] = request_body.tts_speed
+            
+            # Add VoxCPM parameters
+            if request_body.voxcpm_cfg is not None:
+                video_params["voxcpm_cfg"] = request_body.voxcpm_cfg
+            if request_body.voxcpm_normalize:
+                video_params["voxcpm_normalize"] = request_body.voxcpm_normalize
+            if request_body.voxcpm_denoise:
+                video_params["voxcpm_denoise"] = request_body.voxcpm_denoise
+            if request_body.voxcpm_control_instruction:
+                video_params["voxcpm_control_instruction"] = request_body.voxcpm_control_instruction
+            if request_body.voxcpm_use_prompt_text:
+                video_params["voxcpm_use_prompt_text"] = True
+                if request_body.voxcpm_prompt_text:
+                    video_params["voxcpm_prompt_text"] = request_body.voxcpm_prompt_text
             
             # Add custom template parameters if specified
             if request_body.template_params:
@@ -287,4 +337,3 @@ async def generate_video_async(
     except Exception as e:
         logger.error(f"Async video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

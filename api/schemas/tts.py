@@ -33,6 +33,36 @@ class TTSSynthesizeRequest(BaseModel):
         None, 
         description="Voice ID (deprecated, use workflow instead)"
     )
+    # Local TTS engine selection (used when workflow is not set)
+    engine: Optional[str] = Field(
+        None,
+        description="Local TTS engine: 'edge_tts' or 'voxcpm_api'. Only used when workflow is not specified."
+    )
+    # VoxCPM API parameters
+    cfg: Optional[float] = Field(
+        None,
+        description="VoxCPM CFG scale (1.0-5.0)"
+    )
+    normalize: Optional[bool] = Field(
+        None,
+        description="VoxCPM normalize audio"
+    )
+    denoise: Optional[bool] = Field(
+        None,
+        description="VoxCPM denoise audio"
+    )
+    control_instruction: Optional[str] = Field(
+        None,
+        description="VoxCPM control instruction (e.g., '自然、温柔'))"
+    )
+    use_prompt_text: Optional[bool] = Field(
+        None,
+        description="VoxCPM enable prompt text"
+    )
+    prompt_text: Optional[str] = Field(
+        None,
+        description="VoxCPM prompt text for voice cloning reference"
+    )
     
     class Config:
         json_schema_extra = {
