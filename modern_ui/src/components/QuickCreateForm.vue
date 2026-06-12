@@ -528,9 +528,20 @@ function getPreviewUrl(templateKey: string): string {
 }
 
 function onPreviewError(event: Event, templateKey: string) {
-  failedKeys.value.add(templateKey)
   const img = event.target as HTMLImageElement
-  if (img) img.style.display = 'none'
+  if (!img) return
+  // 如果 .jpg 加载失败，尝试 .png 作为 fallback
+  const currentSrc = img.src
+  if (currentSrc.endsWith('.jpg') || currentSrc.endsWith('.jpeg')) {
+    const pngSrc = currentSrc.replace(/\.jpe?g$/, '.png')
+    if (pngSrc !== currentSrc) {
+      img.src = pngSrc
+      return
+    }
+  }
+  // .png 也失败则标记为失败并隐藏
+  failedKeys.value.add(templateKey)
+  img.style.display = 'none'
 }
 
 // 初始化模板参数和尺寸 tab
