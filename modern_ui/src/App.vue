@@ -112,7 +112,7 @@ import ActionTransferView from './views/ActionTransferView.vue'
 import TaskHistoryView from './views/TaskHistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
 
-const activeView = ref('quick_create')
+const activeView = ref('digital_human')
 const uploadCategory = ref('image')
 
 const uploadAccept = computed(() => {
@@ -134,9 +134,9 @@ const historyRecords = ref<any[]>([])
 const historyFilterCategory = ref<string | undefined>(undefined)
 
 const navItems: NavItem[] = [
+  { key: 'digital_human', icon: '🤖', label: '数字人' },
   { key: 'quick_create', icon: '⚡', label: '快速创作' },
   { key: 'custom_media', icon: '🎨', label: '素材创作' },
-  { key: 'digital_human', icon: '🤖', label: '数字人' },
   { key: 'image_to_video', icon: '🎥', label: '图生视频' },
   { key: 'action_transfer', icon: '💃', label: '动作迁移' },
   { key: 'assets', icon: '📤', label: '上传中心' },
