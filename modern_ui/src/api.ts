@@ -66,8 +66,10 @@ export function filePreviewUrl(path: string): string {
   const normalized = path.replace(/\\\\/g, '/').replace(/\\/g, '/')
   const outputIndex = normalized.indexOf('output/')
   const uploadIndex = normalized.indexOf('temp/uploads/')
+  const apiResultIndex = normalized.indexOf('pixelle_video/services/code/result/')
   if (outputIndex >= 0) return `/api/files/${normalized.slice(outputIndex)}`
   if (uploadIndex >= 0) return `/api/files/${normalized.slice(uploadIndex)}`
+  if (apiResultIndex >= 0) return `/api/files/${normalized.slice(apiResultIndex)}`
   return `/api/files/${encodeURIComponent(normalized)}`
 }
 

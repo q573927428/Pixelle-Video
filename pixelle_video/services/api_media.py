@@ -703,7 +703,8 @@ class APIProviderMediaService:
     def _save_dir(self, output_path: Optional[str], fallback_name: str) -> str:
         if output_path:
             return str(Path(output_path).parent)
-        return get_output_path(fallback_name)
+        # 统一保存到 output/api/ 目录，便于文件预览
+        return get_output_path("api", fallback_name)
 
     def _ratio(self, width: Optional[int], height: Optional[int]) -> str:
         if not width or not height:

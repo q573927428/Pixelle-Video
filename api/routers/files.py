@@ -99,6 +99,7 @@ async def get_file(file_path: str):
             "resources/",
             "docs/",
             "temp/",
+            "pixelle_video/services/code/result/",
         ]
         
         # Check if path starts with allowed prefix, otherwise try output/
@@ -123,7 +124,7 @@ async def get_file(file_path: str):
         # Security: only allow access to specified directories
         try:
             rel_path = abs_path.relative_to(Path.cwd())
-            rel_path_str = str(rel_path)
+            rel_path_str = str(rel_path).replace('\\', '/')
             
             # Check if path starts with any allowed prefix
             is_allowed = any(rel_path_str.startswith(prefix.rstrip('/')) for prefix in allowed_prefixes)

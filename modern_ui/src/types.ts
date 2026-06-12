@@ -77,6 +77,8 @@ export interface QuickForm {
   voxcpm_control_instruction: string
   voxcpm_use_prompt_text: boolean
   voxcpm_prompt_text: string
+  // API 模型名称
+  api_model: string
   // 批量生成模式
   batch_mode: boolean
   batch_topics: string

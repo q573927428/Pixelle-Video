@@ -65,10 +65,11 @@ const quickForm = ref<QuickForm>({
   min_image_prompt_words: 30, max_image_prompt_words: 60,
   tts_inference_mode: 'local', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
   tts_workflow: null, ref_audio: null, media_workflow: null, video_fps: 30,
-  frame_template: null, prompt_prefix: '', bgm_path: null, bgm_volume: 0.3,
+  frame_template: null, prompt_prefix: 'Minimalist black-and-white matchstick figure style illustration, clean lines, simple sketch style', bgm_path: null, bgm_volume: 0.3,
   tts_speed: 1.2, voxcpm_cfg: 2.0, voxcpm_normalize: false,
   voxcpm_denoise: false, voxcpm_control_instruction: '',
   voxcpm_use_prompt_text: false, voxcpm_prompt_text: '',
+  api_model: '',
   // 批量生成模式
   batch_mode: false,
   batch_topics: '',

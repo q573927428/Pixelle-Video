@@ -213,11 +213,25 @@
           </el-radio-group>
         </el-form-item>
 
-        <el-form-item label="Workflow">
-          <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
-            <el-option v-for="wf in filteredWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
-          </el-select>
-        </el-form-item>
+        <template v-if="workflowSource !== 'api'">
+          <el-form-item label="Workflow">
+            <el-select v-model="form.media_workflow" filterable clearable placeholder="默认/选择图片或视频工作流" style="width:100%;">
+              <el-option v-for="wf in filteredWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
+            </el-select>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="API 模型">
+            <el-select v-model="form.api_model" filterable clearable placeholder="选择 API 模型" style="width:100%;">
+              <el-option
+                v-for="m in apiMediaModels"
+                :key="m.value"
+                :label="m.label"
+                :value="m.value"
+              />
+            </el-select>
+          </el-form-item>
+        </template>
 
         <!-- 媒体尺寸信息 -->
         <div v-if="templateMediaSize && templateMediaSize.width > 0" class="small muted" style="margin:4px 0 10px;">
@@ -229,9 +243,14 @@
         </el-form-item>
 
         <!-- 风格预览 -->
-        <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
-          👁️ 预览风格
-        </el-button>
+        <div class="soft-panel" style="margin-bottom:10px;border:1px dashed rgba(125, 211, 252, 0.35);">
+          <el-form-item label="预览提示词">
+            <el-input v-model="previewPrompt" type="textarea" :rows="2" placeholder="输入预览提示词，例如：a dog" />
+          </el-form-item>
+          <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
+            👁️ 生成预览风格
+          </el-button>
+        </div>
         <img v-if="stylePreviewUrl" :src="stylePreviewUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
       </div>
 
@@ -603,27 +622,67 @@ const workflowSource = ref('runninghub')
 
 const filteredWorkflows = computed(() => {
   const prefix = templateType.value === 'video' ? 'video_' : 'image_'
-  return props.mediaWorkflows.filter(wf => wf.name.startsWith(prefix))
+  return props.mediaWorkflows.filter(wf => {
+    // 先按模板类型过滤
+    if (!wf.name.startsWith(prefix)) return false
+    // 再按生成来源过滤
+    if (workflowSource.value === 'runninghub' && wf.source !== 'runninghub') return false
+    if (workflowSource.value === 'selfhost' && wf.source !== 'selfhost') return false
+    return true
+  })
+})
+
+// API 模型选项（值需要带 api/ 前缀以便后端路由到 API 媒体服务）
+const apiMediaModels = computed(() => {
+  if (templateType.value === 'video') {
+    return [
+      { label: 'wan2.7-r2v - API Dashscope', value: 'api/dashscope/wan2.7-r2v' },
+      { label: 'happyhorse-1.0-r2v - API Dashscope', value: 'api/dashscope/happyhorse-1.0-r2v' },
+    ]
+  }
+  return [
+    { label: 'wan2.7-image - API Dashscope', value: 'api/dashscope/wan2.7-image' },
+    { label: 'wan2.7-image-pro - API Dashscope', value: 'api/dashscope/wan2.7-image-pro' },
+    { label: 'wan2.6-t2i - API Dashscope', value: 'api/dashscope/wan2.6-t2i' },
+    { label: 'gpt-image-2 - API OpenAI', value: 'api/openai/gpt-image-2' },
+    { label: 'doubao-seedream-5-0-260128 - API Seedream', value: 'api/seedream/doubao-seedream-5-0-260128' },
+    { label: 'doubao-seedream-4-5-251128 - API Seedream', value: 'api/seedream/doubao-seedream-4-5-251128' },
+    { label: 'doubao-seedream-4-0-250828 - API Seedream', value: 'api/seedream/doubao-seedream-4-0-250828' },
+  ]
 })
 
 // 风格预览
 const stylePreviewLoading = ref(false)
 const stylePreviewUrl = ref('')
+const previewPrompt = ref('a dog')
 
 async function handlePreviewStyle() {
-  if (!props.form.media_workflow) { ElMessage.warning('请先选择 Workflow'); return }
+  if (!previewPrompt.value.trim()) { ElMessage.warning('请输入预览提示词'); return }
+  
+  // 校验：根据生成来源检查对应的字段
+  if (workflowSource.value === 'api') {
+    if (!props.form.api_model) { ElMessage.warning('请先选择 API 模型'); return }
+  } else {
+    if (!props.form.media_workflow) { ElMessage.warning('请先选择 Workflow'); return }
+  }
+  
   stylePreviewLoading.value = true
   stylePreviewUrl.value = ''
   try {
-    const res: any = await request('/api/image/generate/preview', {
+    const payload: Record<string, any> = {
+      prompt: props.form.prompt_prefix + previewPrompt.value.trim(),
+      width: templateMediaSize.value.width || 1024,
+      height: templateMediaSize.value.height || 1024,
+    }
+    if (workflowSource.value === 'api') {
+      payload.workflow = props.form.api_model
+    } else {
+      payload.workflow = props.form.media_workflow
+    }
+    const res: any = await request('/api/image/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        workflow: props.form.media_workflow,
-        prompt: props.form.prompt_prefix + ' a dog',
-        width: templateMediaSize.value.width || 1024,
-        height: templateMediaSize.value.height || 1024,
-      }),
+      body: JSON.stringify(payload),
     })
     if (res.image_url) {
       stylePreviewUrl.value = res.image_url

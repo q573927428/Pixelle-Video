@@ -163,7 +163,8 @@ class ImageClient:
                     model=model,
                     session_id=session_id or "default",
                     size=size or "2048*2048",
-                    image_paths=image_paths
+                    image_paths=image_paths,
+                    save_dir=save_dir,
                 )
 
                 if paths:

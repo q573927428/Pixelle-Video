@@ -82,6 +82,7 @@ class SeedreamClient:
         model: str = "doubao-seedream-4-5-251128",
         size: str = "1920*1080",
         image_paths: Optional[List[str]] = None,
+        save_dir: Optional[str] = None,
         **kwargs
     ) -> List[str]:
         """
@@ -213,20 +214,22 @@ class SeedreamClient:
             for idx, img_data in enumerate(response.data):
                 if img_data.url:
                     local_path = self._download_image(
-                        img_data.url, session_id, idx
+                        img_data.url, session_id, idx, save_dir=save_dir
                     )
                     if local_path:
                         generated_paths.append(local_path)
 
         return generated_paths
 
-    def _download_image(self, url: str, session_id: str, idx: int) -> Optional[str]:
+    def _download_image(self, url: str, session_id: str, idx: int, save_dir: Optional[str] = None) -> Optional[str]:
         """从URL下载图片到本地"""
         import requests
 
-        # 构建存储路径
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        result_dir = os.path.join(base_dir, "code", "result", "image", str(session_id))
+        if save_dir:
+            result_dir = save_dir
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            result_dir = os.path.join(base_dir, "code", "result", "image", str(session_id))
         os.makedirs(result_dir, exist_ok=True)
 
         file_name = f"seedream_{int(time.time())}_{idx}.png"

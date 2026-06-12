@@ -30,21 +30,31 @@ class ImageGPT:
         """
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.timeout = timeout
-        
-        kwargs = {"api_key": self.api_key, "timeout": self.timeout}
-        
         self.base_url = base_url
-        if local_proxy:
+        self.local_proxy = local_proxy
+        self._client = None
+        self.max_attempts = 10
+        self.image_processor = ImageProcessor(local_proxy=local_proxy)
+
+    def _get_client(self) -> OpenAI:
+        """Lazy-init OpenAI client to avoid crash when api_key is not set."""
+        if self._client is not None:
+            return self._client
+        if not self.api_key:
+            raise RuntimeError(
+                "OpenAI API key is not configured. "
+                "Please set OPENAI_API_KEY in settings or environment."
+            )
+        kwargs = {"api_key": self.api_key, "timeout": self.timeout}
+        if self.local_proxy:
             kwargs["http_client"] = httpx.Client(
-                proxy=local_proxy,
+                proxy=self.local_proxy,
                 timeout=self.timeout,
             )
         if self.base_url:
             kwargs["base_url"] = self.base_url
-            
-        self.client = OpenAI(**kwargs)
-        self.max_attempts = 10
-        self.image_processor = ImageProcessor(local_proxy=local_proxy)
+        self._client = OpenAI(**kwargs)
+        return self._client
 
     def _encode_image_to_base64(self, image_path: str) -> str:
         """将本地图片转换为 Base64 编码"""
@@ -88,7 +98,8 @@ class ImageGPT:
 
         while attempts < self.max_attempts:
             try:
-                response = self.client.images.generate(
+                client = self._get_client()
+                response = client.images.generate(
                     model=model,
                     prompt=prompt,
                     size=size,
