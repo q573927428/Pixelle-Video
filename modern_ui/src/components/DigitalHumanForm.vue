@@ -211,38 +211,42 @@
             </el-select>
           </el-form-item>
 
-          <div class="sub-section" style="margin-top:12px;">
-            <div class="sub-section-title" style="font-size:13px;">API 视频模型参数</div>
-            <el-form-item label="已接入能力">
-              <el-tag type="info">digital_human</el-tag>
-              <el-tag type="info" style="margin-left:6px;">reference_to_video</el-tag>
-              <el-tag type="info" style="margin-left:6px;">voice_reference</el-tag>
-            </el-form-item>
-            <el-form-item label="视频时长（秒）">
-              <el-input-number v-model="form.video_api_params.duration" :min="5" :max="15" :step="1" style="width:100%;" />
-            </el-form-item>
-            <el-form-item label="分辨率">
-              <el-select v-model="form.video_api_params.resolution" filterable placeholder="选择分辨率" style="width:100%;">
-                <el-option label="720P（默认）" value="1280x720" />
-                <el-option label="1080P" value="1920x1080" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="画幅比例">
-              <el-select v-model="form.video_api_params.aspect_ratio" filterable placeholder="选择画幅比例" style="width:100%;">
-                <el-option label="9:16（默认）" value="9:16" />
-                <el-option label="16:9" value="16:9" />
-                <el-option label="1:1" value="1:1" />
-                <el-option label="4:3" value="4:3" />
-                <el-option label="3:4" value="3:4" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="负向提示词（可选）">
-              <el-input v-model="form.video_api_params.negative_prompt" type="textarea" :rows="2" placeholder="输入不希望出现的内容" />
-            </el-form-item>
-            <el-form-item>
-              <el-checkbox v-model="form.video_api_params.watermark">添加水印</el-checkbox>
-            </el-form-item>
-          </div>
+          <el-collapse v-model="videoApiParamsActiveNames" style="margin-top:12px;">
+            <el-collapse-item name="video-api-params">
+              <template #title>
+                <span class="sub-section-title" style="font-size:13px;">API 视频模型参数</span>
+              </template>
+              <el-form-item label="已接入能力">
+                <el-tag type="info">digital_human</el-tag>
+                <el-tag type="info" style="margin-left:6px;">reference_to_video</el-tag>
+                <el-tag type="info" style="margin-left:6px;">voice_reference</el-tag>
+              </el-form-item>
+              <el-form-item label="视频时长（秒）">
+                <el-input-number v-model="form.video_api_params.duration" :min="5" :max="15" :step="1" style="width:100%;" />
+              </el-form-item>
+              <el-form-item label="分辨率">
+                <el-select v-model="form.video_api_params.resolution" filterable placeholder="选择分辨率" style="width:100%;">
+                  <el-option label="720P（默认）" value="1280x720" />
+                  <el-option label="1080P" value="1920x1080" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="画幅比例">
+                <el-select v-model="form.video_api_params.aspect_ratio" filterable placeholder="选择画幅比例" style="width:100%;">
+                  <el-option label="9:16（默认）" value="9:16" />
+                  <el-option label="16:9" value="16:9" />
+                  <el-option label="1:1" value="1:1" />
+                  <el-option label="4:3" value="4:3" />
+                  <el-option label="3:4" value="3:4" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="负向提示词（可选）">
+                <el-input v-model="form.video_api_params.negative_prompt" type="textarea" :rows="2" placeholder="输入不希望出现的内容" />
+              </el-form-item>
+              <el-form-item>
+                <el-checkbox v-model="form.video_api_params.watermark">添加水印</el-checkbox>
+              </el-form-item>
+            </el-collapse-item>
+          </el-collapse>
         </div>
       </div>
     </div>
@@ -330,6 +334,7 @@ defineEmits<{
   (e: 'select-history', category: string): void
 }>()
 
+const videoApiParamsActiveNames = ref<string[]>([])
 const asrLoading = ref(false)
 
 // 声音预览
@@ -416,3 +421,43 @@ async function handleAsrTranscribe() {
   }
 }
 </script>
+
+<style scoped>
+.el-collapse {
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-content-bg-color: transparent;
+  border: none;
+}
+.el-collapse-item {
+  border-bottom: none;
+}
+.el-collapse-item :deep(.el-collapse-item__header) {
+  display: flex;
+  align-items: center;
+  padding: 0px 8px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  height: auto;
+  margin-bottom: 4px;
+}
+.el-collapse-item :deep(.el-collapse-item__header .sub-section-title) {
+  flex: 1;
+}
+.el-collapse-item :deep(.el-collapse-item__arrow) {
+  color: rgba(255, 255, 255, 0.7) !important;
+  margin-right: 0;
+}
+.el-collapse-item :deep(.el-collapse-item__wrap) {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+.el-collapse-item :deep(.el-collapse-item__content) {
+  padding-bottom: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
+  background: transparent;
+}
+</style>

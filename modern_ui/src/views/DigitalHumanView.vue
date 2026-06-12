@@ -73,7 +73,7 @@ const digitalForm = ref<DigitalForm>({
   voxcpm_prompt_text: '',
   image_service_mode: 'runninghub', image_api_model: '',
   video_service_mode: 'runninghub', video_api_model: '',
-  video_api_params: { duration: 5, resolution: '1280x720', aspect_ratio: '9:16', negative_prompt: '', watermark: false },
+  video_api_params: { duration: 10, resolution: '1280x720', aspect_ratio: '9:16', negative_prompt: '', watermark: false },
 })
 
 const historyVisible = ref(false)
