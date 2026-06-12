@@ -44,3 +44,30 @@ uv run streamlit run web/app.py
 
 
 从历史上传选择里面添加删除功能
+
+
+
+
+
+
+2026-06-12 20:37:34.858 | DEBUG    | pixelle_video.services.voxcpm_api:generate:314 -   Segment 1 audio at: C:\Users\Administrator\AppData\Local\Temp\gradio\87858b50f335d4dadd12055d6b51d2278da0c48a93d33a727085981f7dc00ca2\tmp1wm8i2yf.mp3
+2026-06-12 20:37:34.859 | INFO     | pixelle_video.services.voxcpm_api:generate:340 - ✅ Generated audio: F:\qukuailian\ai\shipin\Pixelle-Video
+\output\20260612_203706_a9f0\narration.mp3
+2026-06-12 20:37:34.859 | INFO     | pixelle_video.services.tts_service:_call_voxcpm_tts:293 - ✅ Generated audio (VoxCPM API): F:\qukuailian\a
+i\shipin\Pixelle-Video\output\20260612_203706_a9f0\narration.mp3
+2026-06-12 20:37:34- pixelle_video.services.api_services.video_kling - WARNING - video_kling.py:93 - __init__ - KlingVideoClient: KLING_ACCESS_KEY / KLING_SECRET_KEY 未设置，请检查配置
+2026-06-12 20:37:34.918 | INFO     | pixelle_video.services.api_media:_generate_video:552 - Generating video via API provider=dashscope, model=wan2.7-r2v
+2026-06-12 20:37:34- pixelle_video.services.api_services.video_client - INFO - video_client.py:226 - _generate_wan - VideoClient: 路由至万象 model=wan2.7-r2v
+INFO:     127.0.0.1:54130 - "GET /api/tasks/345bfb1d-db04-4805-b1fe-8fa0b76f47ab HTTP/1.1" 200 OK
+2026-06-12 20:37:34- pixelle_video.services.api_services.video_dashscope - WARNING - video_dashscope.py:158 - _truncate_audio_to_duration - DashscopeVideoClient: 驱动音频时长 9.79s 超过最大允许时长 5s，将裁剪至 5s
+2026-06-12 20:37:35- pixelle_video.services.api_services.video_dashscope - INFO - video_dashscope.py:177 - _truncate_audio_to_duration - DashscopeVideoClient: 音频已裁剪: F:\qukuailian\ai\shipin\Pixelle-Video\output\20260612_203706_a9f0\narration_truncated.mp3
+2026-06-12 20:37:35- pixelle_video.services.api_services.video_dashscope - INFO - video_dashscope.py:261 - generate_video - DashscopeVideoClient: model=wan2.7-r2v, prompt=参考图1中的人物面对镜头自然口播。结合参考图2中的商品，生成竖屏商业口播视频。 口播文案：宝子们别瞧它名叫普通，用起
+来可...
+2026-06-12 20:37:36- dashscope - INFO - base_api.py:794 - wait - The task ebe89cdf-7847-4bf6-90a6-f7024d51439a is  RUNNING
+2026-06-12 20:37:37- dashscope - INFO - base_api.py:794 - wait - The task ebe89cdf-7847-4bf6-90a6-f7024d51439a is  RUNNING
+
+我前端视频时长设置的是8秒，为什么日志我看 最大允许时长是5秒？
+
+
+modern_ui\src\views\TaskHistoryView.vue
+历史记录添加删除功能

@@ -119,6 +119,10 @@ export interface VideoApiParams {
 
 export interface DigitalForm {
   mode: 'digital' | 'customize'
+  // 批量模式
+  batch_mode: boolean
+  batch_topics: string
+  batch_goods_assets: string[]  // 批量模式：每个主题对应的商品图片
   character_asset: string | null
   goods_asset: string | null
   goods_title: string

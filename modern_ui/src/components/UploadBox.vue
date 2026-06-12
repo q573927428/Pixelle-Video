@@ -3,6 +3,7 @@
     <el-upload
       class="compact-upload"
       drag
+      multiple
       :auto-upload="false"
       :show-file-list="false"
       :accept="accept"

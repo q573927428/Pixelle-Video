@@ -256,6 +256,8 @@
       <div class="form-section">
       <div class="form-section-title">💫 选择生成模式</div>
       <div class="form-section-body">
+      
+      <!-- 模式选择：始终可见 -->
       <el-form-item label="模式">
         <el-radio-group v-model="form.mode">
           <el-radio-button value="customize">🧐 自定义模式</el-radio-button>
@@ -263,28 +265,103 @@
         </el-radio-group>
       </el-form-item>
 
-      <!-- 带货模式 -->
-      <div v-if="form.mode === 'digital'" class="soft-panel">
-        <el-form-item label="商品图片">
-          <div class="upload-field-container">
-            <UploadBox category="goods_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_goods')" @select-history="(c) => $emit('select-history', c)" />
-            <FilePreview v-if="form.goods_asset" :items="[form.goods_asset]" @remove="form.goods_asset = null" />
-          </div>
-        </el-form-item>
-        <el-form-item label="商品标题">
-          <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" />
-        </el-form-item>
-        <el-form-item label="口播文案（可留空自动生成）">
-          <el-input v-model="form.goods_text" type="textarea" :rows="5" placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
-        </el-form-item>
-      </div>
+      <!-- 批量模式切换 -->
+      <el-form-item label="批量模式">
+        <el-switch
+          v-model="form.batch_mode"
+          active-text="批量生成（多组数据逐个生成）"
+          inactive-text="单次生成"
+        />
+      </el-form-item>
 
-      <!-- 自定义模式 -->
-      <div v-if="form.mode === 'customize'" class="soft-panel">
-        <el-form-item label="自定义口播文案">
-          <el-input v-model="form.goods_text" type="textarea" :rows="6" placeholder="填写固定口播文案内容" />
-        </el-form-item>
-      </div>
+      <!-- ====== 批量模式：多组数据输入 ====== -->
+      <template v-if="form.batch_mode">
+        <!-- 批量-带货模式 -->
+        <template v-if="form.mode === 'digital'">
+          <el-alert
+            title="每行输入一个商品主题/标题，按顺序对应商品图片（可选）"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom:14px;"
+          />
+          <el-form-item label="商品主题列表（每行一个）">
+            <el-input
+              v-model="form.batch_topics"
+              type="textarea"
+              :rows="8"
+              placeholder="智能保温杯&#10;无线蓝牙耳机&#10;便携式咖啡机&#10;..."
+            />
+          </el-form-item>
+          <div v-if="batchTopicsCount > 0" class="soft-panel">
+            <el-tag type="success">共 {{ batchTopicsCount }} 个主题</el-tag>
+            <div class="small muted" style="margin-top:6px;">
+              商品标题使用主题名称，文案由 AI 自动生成。
+              可上传多张商品图片，按顺序与主题一一对应；少于主题数时最后一张循环使用。
+            </div>
+          </div>
+          <el-form-item label="商品图片（按顺序一一对应）">
+            <div class="upload-field-container">
+              <UploadBox category="goods_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_goods')" @select-history="(c) => $emit('select-history', c)" />
+            </div>
+            <div v-if="form.batch_goods_assets.length > 0" style="width:100%;">
+              <div class="small muted" style="margin-bottom:6px;">
+                已上传 {{ form.batch_goods_assets.length }} 张商品图片
+              </div>
+              <FilePreview :items="form.batch_goods_assets" @remove="(idx) => form.batch_goods_assets.splice(idx, 1)" />
+            </div>
+          </el-form-item>
+        </template>
+
+        <!-- 批量-自定义模式 -->
+        <template v-if="form.mode === 'customize'">
+          <el-alert
+            title="每行输入一段固定口播文案，系统逐行生成数字人视频"
+            type="warning"
+            :closable="false"
+            show-icon
+            style="margin-bottom:14px;"
+          />
+          <el-form-item label="口播文案列表（每行一段）">
+            <el-input
+              v-model="form.batch_topics"
+              type="textarea"
+              :rows="10"
+              placeholder="这件商品真的太好用了，推荐给大家。&#10;今天给大家带来一款超实用的产品，看完你就懂了。&#10;你可能不知道，这款产品还有这么多隐藏功能。&#10;..."
+            />
+          </el-form-item>
+          <div v-if="batchTopicsCount > 0" class="soft-panel">
+            <el-tag type="success">共 {{ batchTopicsCount }} 段文案</el-tag>
+            <div class="small muted" style="margin-top:6px;">每段文案对应一个口播视频</div>
+          </div>
+        </template>
+      </template>
+
+      <!-- ====== 单次模式：常规输入 ====== -->
+      <template v-if="!form.batch_mode">
+        <!-- 带货模式 -->
+        <div v-if="form.mode === 'digital'" class="soft-panel">
+          <el-form-item label="商品图片">
+            <div class="upload-field-container">
+              <UploadBox category="goods_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_goods')" @select-history="(c) => $emit('select-history', c)" />
+              <FilePreview v-if="form.goods_asset" :items="[form.goods_asset]" @remove="form.goods_asset = null" />
+            </div>
+          </el-form-item>
+          <el-form-item label="商品标题">
+            <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" />
+          </el-form-item>
+          <el-form-item label="口播文案（可留空自动生成）">
+            <el-input v-model="form.goods_text" type="textarea" :rows="5" placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
+          </el-form-item>
+        </div>
+
+        <!-- 自定义模式 -->
+        <div v-if="form.mode === 'customize'" class="soft-panel">
+          <el-form-item label="自定义口播文案">
+            <el-input v-model="form.goods_text" type="textarea" :rows="6" placeholder="填写固定口播文案内容" />
+          </el-form-item>
+        </div>
+      </template>
     </div>
       </div>
     </div>
@@ -311,6 +388,12 @@ const refAudioItems = computed<string[]>(() => {
   return props.form.ref_audio ? [props.form.ref_audio] : []
 })
 
+// 批量模式：计算主题数量
+const batchTopicsCount = computed(() => {
+  if (!props.form.batch_topics || !props.form.batch_topics.trim()) return 0
+  return props.form.batch_topics.trim().split('\n').filter(line => line.trim()).length
+})
+
 // 从 mediaWorkflows 中过滤出图片生成相关的工作流（来源为 runninghub）
 const imageWorkflows = computed<WorkflowInfo[]>(() => {
   return props.mediaWorkflows.filter(wf => {
@@ -327,10 +410,15 @@ const videoWorkflows = computed<WorkflowInfo[]>(() => {
   })
 })
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'upload', file: File, category: string, target: string): void
   (e: 'select-history', category: string): void
 }>()
+
+// 批量模式下不强制切换模式，两种模式都支持
+function onBatchModeChange(val: boolean) {
+  // 不需要额外操作，保持当前 mode 不变
+}
 
 const videoApiParamsActiveNames = ref<string[]>([])
 const asrLoading = ref(false)
