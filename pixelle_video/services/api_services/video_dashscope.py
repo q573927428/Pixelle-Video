@@ -124,6 +124,65 @@ class DashscopeVideoClient:
         )
         return any(marker in message for marker in retry_markers)
 
+    def _truncate_audio_to_duration(self, audio_path: str, max_duration: int) -> str:
+        """
+        如果驱动音频文件时长超过 max_duration 秒，则裁剪到 max_duration 秒。
+        万象 wan2.7-r2v 等模型要求 driving_audio 时长不超过 10 秒。
+
+        Args:
+            audio_path: 原始音频文件路径
+            max_duration: 允许的最大时长（秒）
+
+        Returns:
+            裁剪后的音频文件路径（如果不需要裁剪则返回原始路径）
+        """
+        try:
+            # 获取音频时长
+            import subprocess
+            import json
+
+            result = subprocess.run(
+                [
+                    "ffprobe", "-v", "quiet",
+                    "-print_format", "json",
+                    "-show_streams", "-select_streams", "a:0",
+                    audio_path
+                ],
+                capture_output=True, text=True, timeout=10
+            )
+            info = json.loads(result.stdout)
+            duration = float(info.get("streams", [{}])[0].get("duration", 0))
+
+            if duration <= max_duration:
+                return audio_path
+
+            logger.warning(
+                f"DashscopeVideoClient: 驱动音频时长 {duration:.2f}s 超过最大允许时长 {max_duration}s，"
+                f"将裁剪至 {max_duration}s"
+            )
+
+            # 裁剪音频
+            base, ext = os.path.splitext(audio_path)
+            truncated_path = f"{base}_truncated{ext}"
+
+            subprocess.run(
+                [
+                    "ffmpeg", "-y", "-v", "quiet",
+                    "-i", audio_path,
+                    "-t", str(max_duration),
+                    "-c", "copy",
+                    truncated_path
+                ],
+                check=True, timeout=30
+            )
+
+            logger.info(f"DashscopeVideoClient: 音频已裁剪: {truncated_path}")
+            return truncated_path
+
+        except Exception as e:
+            logger.warning(f"DashscopeVideoClient: 音频时长裁剪失败，使用原始音频: {e}")
+            return audio_path
+
     def generate_video(
         self,
         prompt: str,
@@ -194,6 +253,11 @@ class DashscopeVideoClient:
             raise FileNotFoundError(f"参考音频不存在: {reference_audio_path}")
         if audio_path and not os.path.exists(audio_path):
             raise FileNotFoundError(f"驱动音频不存在: {audio_path}")
+
+        # 如果提供了驱动音频，确保音频时长不超过 duration（万象 API 限制）
+        # 常见模型限制：wan2.7-r2v 要求 driving_audio 最多 10s
+        if audio_path:
+            audio_path = self._truncate_audio_to_duration(audio_path, duration)
 
         logger.info(f"DashscopeVideoClient: model={model}, prompt={prompt[:60]}...")
 

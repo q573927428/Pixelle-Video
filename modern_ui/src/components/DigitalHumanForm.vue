@@ -219,7 +219,7 @@
               <el-tag type="info" style="margin-left:6px;">voice_reference</el-tag>
             </el-form-item>
             <el-form-item label="视频时长（秒）">
-              <el-input-number v-model="form.video_api_params.duration" :min="1" :max="30" :step="1" style="width:100%;" />
+              <el-input-number v-model="form.video_api_params.duration" :min="5" :max="15" :step="1" style="width:100%;" />
             </el-form-item>
             <el-form-item label="分辨率">
               <el-select v-model="form.video_api_params.resolution" filterable placeholder="选择分辨率" style="width:100%;">

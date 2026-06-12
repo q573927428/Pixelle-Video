@@ -279,7 +279,7 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
         return await pixelle_video.llm(
             prompt=(
                 f"请为商品“{request_body.goods_title}”写一段适合数字人口播短视频的中文推广文案。"
-                "要求自然、有吸引力，控制在80字以内，只输出文案正文。"
+                "要求自然、有吸引力，控制在60字以内，只输出文案正文。"
             ),
             temperature=0.7,
             max_tokens=300,
