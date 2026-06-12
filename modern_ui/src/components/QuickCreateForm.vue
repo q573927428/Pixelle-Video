@@ -241,6 +241,13 @@
       <el-form-item label="BGM 音量">
         <el-slider v-model="form.bgm_volume" :min="0" :max="1" :step="0.05" show-input />
       </el-form-item>
+      <!-- 背景音乐预览 -->
+      <div v-if="form.bgm_path" class="soft-panel" style="margin-top:8px;">
+        <div style="display:flex;gap:10px;align-items:center;">
+          <span class="small muted">🎵 音频预览：</span>
+          <audio :src="filePreviewUrl(form.bgm_path)" controls style="height:32px;flex:1;min-width:0;" />
+        </div>
+      </div>
     </div>
       </div>
     </div>
