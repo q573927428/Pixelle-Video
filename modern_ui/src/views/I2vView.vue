@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { I2vForm as I2vFormData, WorkflowInfo } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
@@ -54,7 +54,7 @@ import I2vForm from '../components/I2vForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, parseJson } = useTaskRunner()
-const { mediaWorkflows, uploads, handleUpload: uploadResource } = useResources()
+const { mediaWorkflows, uploads, handleUpload: uploadResource, loadAll } = useResources()
 
 const i2vForm = ref<I2vFormData>({
   image_asset: null, prompt_text: '', workflow_key: '', api_video_params_json: '',
@@ -117,4 +117,8 @@ async function generate() {
 function previewAsset(path: string) {
   window.open(filePreviewUrl(path), '_blank')
 }
+
+onMounted(() => {
+  loadAll()
+})
 </script>

@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { AssetForm } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
@@ -55,7 +55,7 @@ import AssetBasedForm from '../components/AssetBasedForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, cleanedPayload } = useTaskRunner()
-const { bgmFiles, ttsVoices, uploads, handleUpload: uploadResource } = useResources()
+const { bgmFiles, ttsVoices, uploads, handleUpload: uploadResource, loadAll } = useResources()
 
 const assetForm = ref<AssetForm>({
   assets: [], image_asset: null, video_asset: null,
@@ -113,4 +113,8 @@ async function generate() {
 function previewAsset(path: string) {
   window.open(filePreviewUrl(path), '_blank')
 }
+
+onMounted(() => {
+  loadAll()
+})
 </script>
