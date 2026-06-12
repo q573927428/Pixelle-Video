@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { DigitalForm } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
@@ -56,7 +56,7 @@ import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask } = useTaskRunner()
-const { mediaWorkflows, ttsWorkflows, ttsVoices, uploads, handleUpload: uploadResource, loadAll } = useResources()
+const { mediaWorkflows, ttsWorkflows, ttsVoices, uploads, handleUpload: uploadResource } = useResources()
 
 const digitalForm = ref<DigitalForm>({
   mode: 'digital', character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
@@ -154,8 +154,4 @@ async function generate() {
 function previewAsset(path: string) {
   window.open(filePreviewUrl(path), '_blank')
 }
-
-onMounted(() => {
-  loadAll()
-})
 </script>

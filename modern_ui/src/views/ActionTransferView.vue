@@ -44,7 +44,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ActionForm, WorkflowInfo } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
@@ -54,7 +54,7 @@ import ActionTransferForm from '../components/ActionTransferForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, parseJson } = useTaskRunner()
-const { mediaWorkflows, uploads, handleUpload: uploadResource, loadAll } = useResources()
+const { mediaWorkflows, uploads, handleUpload: uploadResource } = useResources()
 
 const actionForm = ref<ActionForm>({
   video_asset: null, image_asset: null, prompt_text: '', duration: 5,
@@ -124,8 +124,4 @@ async function generate() {
 function previewAsset(path: string) {
   window.open(filePreviewUrl(path), '_blank')
 }
-
-onMounted(() => {
-  loadAll()
-})
 </script>

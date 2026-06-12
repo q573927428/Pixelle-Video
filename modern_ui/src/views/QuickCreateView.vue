@@ -57,7 +57,7 @@ import QuickCreateForm from '../components/QuickCreateForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, cleanedPayload } = useTaskRunner()
-const { templates, mediaWorkflows, ttsWorkflows, bgmFiles, ttsVoices, handleUpload: uploadResource, loadAll } = useResources()
+const { templates, mediaWorkflows, ttsWorkflows, bgmFiles, ttsVoices, handleUpload: uploadResource } = useResources()
 
 const quickForm = ref<QuickForm>({
   text: '', mode: 'generate', title: '', n_scenes: 5,
@@ -83,7 +83,6 @@ const progressStatus = computed(() => {
 })
 
 onMounted(() => {
-  loadAll()
   // 设置默认模板
   if (!quickForm.value.frame_template && templates.value.length) {
     const portrait = templates.value.find((t: any) => t.orientation === 'portrait')

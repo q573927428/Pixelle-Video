@@ -3,16 +3,19 @@ import { ElMessage } from 'element-plus'
 import type { TtsVoiceInfo } from '../types'
 import { loadResources, loadTasks as apiLoadTasks, checkHealth, uploadFile as apiUpload, saveToLocalHistory, loadLocalHistory } from '../api'
 
-export function useResources() {
-  const healthOk = ref(false)
-  const templates = ref<any[]>([])
-  const mediaWorkflows = ref<any[]>([])
-  const ttsWorkflows = ref<any[]>([])
-  const bgmFiles = ref<any[]>([])
-  const ttsVoices = ref<TtsVoiceInfo[]>([])
-  const tasks = ref<any[]>([])
-  const uploads = ref<any[]>([])
+// 模块顶层单例状态 - 所有调用 useResources() 的地方共享同一组引用
+const healthOk = ref(false)
+const templates = ref<any[]>([])
+const mediaWorkflows = ref<any[]>([])
+const ttsWorkflows = ref<any[]>([])
+const bgmFiles = ref<any[]>([])
+const ttsVoices = ref<TtsVoiceInfo[]>([])
+const tasks = ref<any[]>([])
+const uploads = ref<any[]>([])
 
+let loaded = false
+
+export function useResources() {
   async function checkH() {
     healthOk.value = await checkHealth()
   }
@@ -36,6 +39,8 @@ export function useResources() {
   }
 
   async function loadAll() {
+    if (loaded) return // 防止重复加载
+    loaded = true
     await Promise.allSettled([checkH(), loadRes(), loadT()])
   }
 

@@ -92,7 +92,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { NavItem } from './types'
-import { uploadFile as apiUpload, saveToLocalHistory, loadLocalHistory, loadResources, loadTasks as apiLoadTasks } from './api'
+import { uploadFile as apiUpload, saveToLocalHistory, loadLocalHistory, loadTasks as apiLoadTasks } from './api'
+import { useResources } from './composables/useResources'
 import UploadBox from './components/UploadBox.vue'
 import UploadList from './components/UploadList.vue'
 import ResourceCard from './components/ResourceCard.vue'
@@ -117,12 +118,7 @@ const uploadAccept = computed(() => {
   return acceptMap[uploadCategory.value] || undefined
 })
 
-const templates = ref<any[]>([])
-const mediaWorkflows = ref<any[]>([])
-const ttsWorkflows = ref<any[]>([])
-const bgmFiles = ref<any[]>([])
-const tasks = ref<any[]>([])
-const uploads = ref<any[]>([])
+const { templates, mediaWorkflows, ttsWorkflows, bgmFiles, tasks, uploads, loadAll } = useResources()
 
 const historyVisible = ref(false)
 const historyLoading = ref(false)
@@ -141,25 +137,13 @@ const navItems: NavItem[] = [
 ]
 
 onMounted(() => {
-  loadResourcesData()
-  loadTasks()
+  loadAll()
 })
 
 function switchView(key: string) {
   activeView.value = key
 }
 
-async function loadResourcesData() {
-  try {
-    const res = await loadResources()
-    templates.value = res.templates
-    mediaWorkflows.value = res.mediaWorkflows
-    ttsWorkflows.value = res.ttsWorkflows
-    bgmFiles.value = res.bgmFiles
-  } catch (e: any) {
-    ElMessage.error(`资源加载失败：${e.message}`)
-  }
-}
 
 async function loadTasks() {
   try { tasks.value = await apiLoadTasks() }
