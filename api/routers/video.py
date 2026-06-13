@@ -17,7 +17,7 @@ Supports both synchronous and asynchronous video generation.
 """
 
 import os
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 
 from api.dependencies import PixelleVideoDep
@@ -29,6 +29,8 @@ from api.schemas.video import (
     VideoBatchGenerateResponse,
 )
 from api.tasks import task_manager, TaskType
+from api.auth.dependencies import check_daily_limit, increment_daily_usage
+from api.auth.schemas import UserInfo, UserDailyUsage
 
 router = APIRouter(prefix="/video", tags=["Video Generation"])
 
@@ -91,7 +93,8 @@ def path_to_url(request: Request, file_path: str) -> str:
 async def generate_video_sync(
     request_body: VideoGenerateRequest,
     pixelle_video: PixelleVideoDep,
-    request: Request
+    request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
     """
     Generate video synchronously
@@ -186,6 +189,9 @@ async def generate_video_sync(
         # Call video generator service
         result = await pixelle_video.generate_video(**video_params)
         
+        # Increment daily usage after successful generation
+        await increment_daily_usage(_user.id)
+        
         # Get file size
         file_size = os.path.getsize(result.video_path) if os.path.exists(result.video_path) else 0
         
@@ -207,7 +213,8 @@ async def generate_video_sync(
 async def generate_video_async(
     request_body: VideoGenerateRequest,
     pixelle_video: PixelleVideoDep,
-    request: Request
+    request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
     """
     Generate video asynchronously
@@ -226,6 +233,7 @@ async def generate_video_async(
     
     Returns task_id for tracking progress.
     """
+    user_id = _user.id
     try:
         logger.info(f"Async video generation: {request_body.text[:50]}...")
         
@@ -313,6 +321,9 @@ async def generate_video_async(
                 video_params["template_params"] = request_body.template_params
             
             result = await pixelle_video.generate_video(**video_params)
+            
+            # Increment daily usage after successful generation
+            await increment_daily_usage(user_id)
             
             # Get file size
             file_size = os.path.getsize(result.video_path) if os.path.exists(result.video_path) else 0

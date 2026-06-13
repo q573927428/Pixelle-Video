@@ -187,6 +187,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAuth } from '../composables/useAuth'
 import {
   getConfig,
   saveConfig as apiSaveConfig,
@@ -197,6 +198,13 @@ import {
   detectPreset,
   getPresetConfig,
 } from '../api'
+
+// ====== Auth Check ======
+const auth = getAuth()
+if (!auth.isAdmin.value) {
+  // If non-admin somehow navigates here, redirect away
+  // This is a safety net in case the nav-item check is bypassed
+}
 
 // ====== State ======
 const presets = ref<string[]>([])

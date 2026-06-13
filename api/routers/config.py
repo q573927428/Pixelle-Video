@@ -14,13 +14,15 @@
 Config API Router - Read/write system configuration from the modern UI
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Any
 
 from pixelle_video.config import config_manager
 from pixelle_video.llm_presets import get_preset_names, get_preset, find_preset_by_base_url_and_model
 from pixelle_video.utils.llm_util import fetch_available_models, test_llm_connection
+from api.auth.dependencies import require_admin
+from api.auth.schemas import UserInfo
 
 router = APIRouter(tags=["config"])
 
@@ -86,8 +88,8 @@ class TestConnectionResponse(BaseModel):
 
 
 @router.get("/config", response_model=FullConfigResponse)
-async def get_config():
-    """Get full system configuration"""
+async def get_config(admin: UserInfo = Depends(require_admin)):
+    """Get full system configuration (admin only)"""
     llm_cfg = config_manager.get_llm_config()
     comfyui_cfg = config_manager.get_comfyui_config()
     api_cfg = config_manager.get_api_providers_config()
@@ -111,8 +113,8 @@ async def get_config():
 
 
 @router.put("/config", response_model=dict)
-async def save_config(request: SaveConfigRequest):
-    """Save system configuration"""
+async def save_config(request: SaveConfigRequest, admin: UserInfo = Depends(require_admin)):
+    """Save system configuration (admin only)"""
     try:
         # Save LLM config
         if request.llm.api_key and request.llm.base_url and request.llm.model:
@@ -138,7 +140,6 @@ async def save_config(request: SaveConfigRequest):
             else None
         )
         if comfyui_updates:
-            # Use the set_comfyui_config method with individual params
             config_manager.set_comfyui_config(
                 comfyui_url=request.comfyui.comfyui_url or None,
                 comfyui_api_key=request.comfyui.comfyui_api_key or None,
@@ -161,8 +162,8 @@ async def save_config(request: SaveConfigRequest):
 
 
 @router.post("/config/llm/load-models", response_model=LoadModelsResponse)
-async def load_models(request: LoadModelsRequest):
-    """Load available models from LLM provider"""
+async def load_models(request: LoadModelsRequest, admin: UserInfo = Depends(require_admin)):
+    """Load available models from LLM provider (admin only)"""
     try:
         models = fetch_available_models(request.api_key, request.base_url)
         return LoadModelsResponse(models=models)
@@ -171,8 +172,8 @@ async def load_models(request: LoadModelsRequest):
 
 
 @router.get("/config/preset/{name}", response_model=dict)
-async def get_preset_config(name: str):
-    """Get preset configuration by name"""
+async def get_preset_config(name: str, admin: UserInfo = Depends(require_admin)):
+    """Get preset configuration by name (admin only)"""
     preset = get_preset(name)
     if not preset:
         raise HTTPException(status_code=404, detail=f"Preset '{name}' not found")
@@ -180,8 +181,8 @@ async def get_preset_config(name: str):
 
 
 @router.get("/config/llm/detect-preset", response_model=dict)
-async def detect_preset():
-    """Detect which preset matches current LLM configuration"""
+async def detect_preset(admin: UserInfo = Depends(require_admin)):
+    """Detect which preset matches current LLM configuration (admin only)"""
     llm_cfg = config_manager.get_llm_config()
     matched = find_preset_by_base_url_and_model(
         llm_cfg.get("base_url", ""),
@@ -191,8 +192,8 @@ async def detect_preset():
 
 
 @router.post("/config/llm/test-connection", response_model=TestConnectionResponse)
-async def test_connection(request: TestConnectionRequest):
-    """Test LLM provider connection"""
+async def test_connection(request: TestConnectionRequest, admin: UserInfo = Depends(require_admin)):
+    """Test LLM provider connection (admin only)"""
     try:
         success, message, model_count = test_llm_connection(request.api_key, request.base_url)
         return TestConnectionResponse(
@@ -209,8 +210,8 @@ async def test_connection(request: TestConnectionRequest):
 
 
 @router.post("/config/reset", response_model=dict)
-async def reset_config():
-    """Reset configuration to defaults"""
+async def reset_config(admin: UserInfo = Depends(require_admin)):
+    """Reset configuration to defaults (admin only)"""
     try:
         from pixelle_video.config.schema import PixelleVideoConfig
         config_manager.config = PixelleVideoConfig()

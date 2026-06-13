@@ -143,8 +143,19 @@ export interface FullConfig {
   presets: string[]
 }
 
+function _getAuthHeaders(): Record<string, string> {
+  try {
+    const token = localStorage.getItem('pixelle_auth_token')
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
 export async function getConfig(): Promise<FullConfig> {
-  return request<FullConfig>('/api/config')
+  return request<FullConfig>('/api/config', {
+    headers: _getAuthHeaders(),
+  })
 }
 
 export async function saveConfig(config: {
@@ -154,7 +165,7 @@ export async function saveConfig(config: {
 }): Promise<{ success: boolean; message: string }> {
   return request('/api/config', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
     body: JSON.stringify(config),
   })
 }
@@ -162,7 +173,7 @@ export async function saveConfig(config: {
 export async function loadLLMModels(apiKey: string, baseUrl: string): Promise<string[]> {
   const res = await request<{ models: string[] }>('/api/config/llm/load-models', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
     body: JSON.stringify({ api_key: apiKey, base_url: baseUrl }),
   })
   return res.models
@@ -171,7 +182,7 @@ export async function loadLLMModels(apiKey: string, baseUrl: string): Promise<st
 export async function testLLMConnection(apiKey: string, baseUrl: string): Promise<{ success: boolean; message: string; model_count: number }> {
   return request('/api/config/llm/test-connection', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
     body: JSON.stringify({ api_key: apiKey, base_url: baseUrl }),
   })
 }
@@ -186,14 +197,21 @@ export async function testComfyUIConnection(url: string): Promise<boolean> {
 }
 
 export async function resetConfig(): Promise<{ success: boolean; message: string }> {
-  return request('/api/config/reset', { method: 'POST' })
+  return request('/api/config/reset', {
+    method: 'POST',
+    headers: _getAuthHeaders(),
+  })
 }
 
 export async function detectPreset(): Promise<string> {
-  const res = await request<{ preset: string }>('/api/config/llm/detect-preset')
+  const res = await request<{ preset: string }>('/api/config/llm/detect-preset', {
+    headers: _getAuthHeaders(),
+  })
   return res.preset
 }
 
 export async function getPresetConfig(name: string): Promise<Record<string, any>> {
-  return request(`/api/config/preset/${encodeURIComponent(name)}`)
+  return request(`/api/config/preset/${encodeURIComponent(name)}`, {
+    headers: _getAuthHeaders(),
+  })
 }

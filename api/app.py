@@ -43,6 +43,7 @@ from loguru import logger
 from api.config import api_config
 from api.tasks import task_manager
 from api.dependencies import shutdown_pixelle_video
+from api.auth.database import Database
 
 # Import routers
 from api.routers import (
@@ -60,6 +61,7 @@ from api.routers import (
     pipelines_router,
     audio_router,
 )
+from api.auth.router import router as auth_router
 
 
 @asynccontextmanager
@@ -72,6 +74,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting Pixelle-Video API...")
     await task_manager.start()
+    
+    # Initialize MySQL database connection and auto-create tables
+    try:
+        await Database.get_pool()
+        await Database.init_tables()
+        logger.info("✅ MySQL database connected and tables initialized")
+    except Exception as e:
+        logger.warning(f"⚠️ MySQL database connection failed: {e}")
+        logger.warning("Auth features will be unavailable until database is configured")
+    
     logger.info("✅ Pixelle-Video API started successfully\n")
     
     yield
@@ -80,6 +92,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Shutting down Pixelle-Video API...")
     await task_manager.stop()
     await shutdown_pixelle_video()
+    await Database.close()
     logger.info("✅ Pixelle-Video API shutdown complete")
 
 
@@ -141,6 +154,9 @@ app.include_router(resources_router, prefix=api_config.api_prefix)
 app.include_router(frame_router, prefix=api_config.api_prefix)
 app.include_router(pipelines_router, prefix=api_config.api_prefix)
 app.include_router(audio_router, prefix=api_config.api_prefix)
+
+# Auth router (with /api prefix)
+app.include_router(auth_router, prefix=api_config.api_prefix)
 
 # Modern UI (Vue 3 + Element Plus + TypeScript) built by Vite.
 _modern_ui_dir = _project_root / "modern_ui"

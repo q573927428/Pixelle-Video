@@ -43,6 +43,22 @@ class APIConfig(BaseModel):
     docs_url: Optional[str] = "/docs"
     redoc_url: Optional[str] = "/redoc"
     openapi_url: Optional[str] = "/openapi.json"
+    
+    # MySQL database settings
+    database: dict = {
+        "host": "127.0.0.1",
+        "port": 3306,
+        "user": "root",
+        "password": "123456",
+        "database": "pixelle_video",
+    }
+    
+    # JWT settings
+    jwt: dict = {
+        "secret_key": "pixelle-video-jwt-secret-key-change-in-production",
+        "algorithm": "HS256",
+        "expire_minutes": 1440,  # 24 hours
+    }
 
 
 # Global config instance

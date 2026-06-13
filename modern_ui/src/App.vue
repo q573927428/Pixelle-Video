@@ -1,5 +1,9 @@
 <template>
-  <div class="shell">
+  <!-- Login Page -->
+  <LoginView v-if="showLogin" @login-success="handleLoginSuccess" />
+
+  <!-- Main App -->
+  <div class="shell" v-else>
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-logo">🎬</div>
@@ -20,6 +24,11 @@
         <span class="nav-icon">{{ item.icon }}</span>
         <span>{{ item.label }}</span>
       </button>
+
+      <!-- Spacer + User Menu at bottom -->
+      <div style="flex:1"></div>
+
+      <UserMenu @show-login="showLogin = true" @go-admin="switchView('admin')" />
     </aside>
 
     <main class="main">
@@ -34,6 +43,9 @@
 
       <!-- ====== ⚙️ 系统配置 ====== -->
       <SettingsView v-if="activeView === 'settings'" />
+
+      <!-- ====== 🔐 用户管理 (Admin) ====== -->
+      <AdminView v-if="activeView === 'admin'" />
 
       <!-- ====== 📊 任务中心 ====== -->
       <section v-if="activeView === 'tasks'">
@@ -56,10 +68,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import type { NavItem } from './types'
 import { loadTasks as apiLoadTasks } from './api'
 import { useResources } from './composables/useResources'
+import { getAuth } from './composables/useAuth'
 import QuickCreateView from './views/QuickCreateView.vue'
 import AssetBasedView from './views/AssetBasedView.vue'
 import DigitalHumanView from './views/DigitalHumanView.vue'
@@ -67,12 +80,17 @@ import I2vView from './views/I2vView.vue'
 import ActionTransferView from './views/ActionTransferView.vue'
 import TaskHistoryView from './views/TaskHistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
+import LoginView from './views/LoginView.vue'
+import AdminView from './views/AdminView.vue'
+import UserMenu from './components/UserMenu.vue'
 
+const auth = getAuth()
 const activeView = ref('digital_human')
+const showLogin = ref(!auth.isLoggedIn.value)
 
 const { tasks, loadAll } = useResources()
 
-const navItems: NavItem[] = [
+const baseNavItems: NavItem[] = [
   { key: 'digital_human', icon: '🤖', label: '数字人' },
   { key: 'quick_create', icon: '⚡', label: '快速创作' },
   // { key: 'custom_media', icon: '🎨', label: '素材创作' },
@@ -80,17 +98,30 @@ const navItems: NavItem[] = [
   // { key: 'action_transfer', icon: '💃', label: '动作迁移' },
   { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
-  { key: 'settings', icon: '⚙️', label: '系统配置' },
 ]
 
+const navItems = computed(() => {
+  const items = [...baseNavItems]
+  if (auth.isAdmin.value) {
+    items.push({ key: 'settings', icon: '⚙️', label: '系统配置' })
+  }
+  return items
+})
+
 onMounted(() => {
-  loadAll()
+  if (auth.isLoggedIn.value) {
+    loadAll()
+  }
 })
 
 function switchView(key: string) {
   activeView.value = key
 }
 
+function handleLoginSuccess() {
+  showLogin.value = false
+  loadAll()
+}
 
 async function loadTasks() {
   try { tasks.value = await apiLoadTasks() }
