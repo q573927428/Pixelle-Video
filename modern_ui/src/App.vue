@@ -4,31 +4,39 @@
 
   <!-- Main App -->
   <div class="shell" v-else>
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed: !sidebarOpen }">
       <div class="brand">
         <div class="brand-logo">🎬</div>
-        <div>
+        <div class="brand-text">
           <h1 class="brand-title">Pixelle Studio</h1>
           <p class="brand-subtitle">Full Modern UI</p>
         </div>
+        <!-- Mobile toggle button -->
+        <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" aria-label="切换菜单">
+          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
+          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
+          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
+        </button>
       </div>
 
-      <div class="nav-title">工作台</div>
-      <button
-        v-for="item in navItems"
-        :key="item.key"
-        class="nav-item"
-        :class="{ active: activeView === item.key }"
-        @click="switchView(item.key)"
-      >
-        <span class="nav-icon">{{ item.icon }}</span>
-        <span>{{ item.label }}</span>
-      </button>
+      <div class="sidebar-nav-wrapper" :class="{ collapsed: !sidebarOpen }">
+        <div class="nav-title">工作台</div>
+        <button
+          v-for="item in navItems"
+          :key="item.key"
+          class="nav-item"
+          :class="{ active: activeView === item.key }"
+          @click="switchView(item.key)"
+        >
+          <span class="nav-icon">{{ item.icon }}</span>
+          <span>{{ item.label }}</span>
+        </button>
 
-      <!-- Spacer + User Menu at bottom -->
-      <div style="flex:1"></div>
+        <!-- Spacer + User Menu at bottom -->
+        <div style="flex:1"></div>
 
-      <UserMenu @show-login="showLogin = true" @go-admin="switchView('admin')" />
+        <UserMenu @show-login="showLogin = true" @go-admin="switchView('admin')" />
+      </div>
     </aside>
 
     <main class="main">
@@ -87,6 +95,7 @@ import UserMenu from './components/UserMenu.vue'
 const auth = getAuth()
 const activeView = ref('digital_human')
 const showLogin = ref(!auth.isLoggedIn.value)
+const sidebarOpen = ref(false)
 
 const { tasks, loadAll } = useResources()
 
@@ -116,6 +125,7 @@ onMounted(() => {
 
 function switchView(key: string) {
   activeView.value = key
+  sidebarOpen.value = false
 }
 
 function handleLoginSuccess() {
