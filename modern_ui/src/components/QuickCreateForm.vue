@@ -297,12 +297,11 @@
       </div>
 
       <!-- 模板预览（默认折叠） -->
-      <div class="soft-panel" style="margin-bottom:14px;border:1px dashed rgba(125, 211, 252, 0.35);">
-        <div class="form-section-subtitle" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;" @click="previewTemplateCollapsed = !previewTemplateCollapsed">
-          <span>🔍 预览模板</span>
-          <span style="font-size:12px;color:#64748b;">{{ previewTemplateCollapsed ? '展开 ▸' : '折叠 ▾' }}</span>
-        </div>
-        <template v-if="!previewTemplateCollapsed">
+      <el-collapse v-model="previewTemplateActiveNames" style="margin-top:12px;">
+        <el-collapse-item name="preview-template">
+          <template #title>
+            <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔍 预览模板</span>
+          </template>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
             <el-form-item label="标题">
               <el-input v-model="previewTitle" placeholder="AI 改变内容创作" />
@@ -319,8 +318,8 @@
             🖼️ 预览模板
           </el-button>
           <img v-if="previewTemplateUrl" :src="previewTemplateUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
-        </template>
-      </div>
+        </el-collapse-item>
+      </el-collapse>
 
     </div>
       </div>
@@ -374,20 +373,19 @@
         </el-form-item>
 
         <!-- 预览提示词（默认折叠） -->
-        <div class="soft-panel" style="margin-bottom:10px;border:1px dashed rgba(125, 211, 252, 0.35);">
-          <div class="form-section-subtitle" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between;" @click="previewPromptCollapsed = !previewPromptCollapsed">
-            <span>🔍 预览提示词</span>
-            <span style="font-size:12px;color:#64748b;">{{ previewPromptCollapsed ? '展开 ▸' : '折叠 ▾' }}</span>
-          </div>
-          <template v-if="!previewPromptCollapsed">
+        <el-collapse v-model="previewPromptActiveNames" style="margin-top:12px;">
+          <el-collapse-item name="preview-prompt">
+            <template #title>
+              <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔍 预览提示词</span>
+            </template>
             <el-form-item>
               <el-input v-model="previewPrompt" type="textarea" :rows="2" placeholder="输入预览提示词，例如：a dog" />
             </el-form-item>
             <el-button size="small" @click="handlePreviewStyle" :loading="stylePreviewLoading" style="width:100%;">
               👁️ 生成预览风格
             </el-button>
-          </template>
-        </div>
+          </el-collapse-item>
+        </el-collapse>
         <img v-if="stylePreviewUrl" :src="stylePreviewUrl" style="width:100%;margin-top:10px;border-radius:12px;border:1px solid var(--line);" />
       </div>
 
@@ -609,8 +607,8 @@ watch(() => props.templates, (tpls) => {
 }, { immediate: true })
 
 // 折叠状态（默认折叠）
-const previewTemplateCollapsed = ref(true)
-const previewPromptCollapsed = ref(true)
+const previewTemplateActiveNames = ref<string[]>([])
+const previewPromptActiveNames = ref<string[]>([])
 
 // 模板预览
 const previewTitle = ref('AI 改变内容创作')
