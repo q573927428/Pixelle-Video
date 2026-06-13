@@ -97,11 +97,13 @@ async def require_admin(
 
 async def check_daily_limit(
     user: UserInfo = Depends(require_user),
-) -> tuple[UserInfo, UserDailyUsage]:
+) -> UserInfo:
     """
     Check if user has exceeded daily generation limit.
     VIP users (daily_limit = -1) have unlimited access.
     Raises 429 if limit exceeded.
+    
+    Returns UserInfo for the authenticated user.
     """
     from datetime import date
 
@@ -109,14 +111,14 @@ async def check_daily_limit(
 
     # VIP: unlimited
     if user.daily_limit == -1 or user.role == 'vip':
-        return user, UserDailyUsage(used_today=0, remaining=-1, is_unlimited=True)
+        return user
 
     # Get today's usage count
     usage = await Database.fetchone(
-        "SELECT count FROM daily_usage WHERE user_id = %s AND date = %s",
+        "SELECT used_count FROM daily_usage WHERE user_id = %s AND date = %s",
         (user.id, today),
     )
-    used_today = usage["count"] if usage else 0
+    used_today = usage["used_count"] if usage else 0
     remaining = max(0, user.daily_limit - used_today)
 
     if remaining <= 0:
@@ -125,11 +127,7 @@ async def check_daily_limit(
             detail=f"今日生成次数已用完（上限 {user.daily_limit} 次），请明天再试或升级为 VIP",
         )
 
-    return user, UserDailyUsage(
-        used_today=used_today,
-        remaining=remaining,
-        is_unlimited=False,
-    )
+    return user
 
 
 async def increment_daily_usage(user_id: int):
@@ -138,8 +136,8 @@ async def increment_daily_usage(user_id: int):
 
     today = date.today()
     await Database.execute(
-        """INSERT INTO daily_usage (user_id, date, count)
+        """INSERT INTO daily_usage (user_id, date, used_count)
            VALUES (%s, %s, 1)
-           ON DUPLICATE KEY UPDATE count = count + 1""",
+           ON DUPLICATE KEY UPDATE used_count = used_count + 1""",
         (user_id, today),
     )

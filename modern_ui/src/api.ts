@@ -1,7 +1,12 @@
 const BASE = ''
 
 export async function request<T = any>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(BASE + url, options)
+  // 自动注入 Authorization header
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+    ..._getAuthHeaders(),
+  }
+  const response = await fetch(BASE + url, { ...options, headers })
   if (!response.ok) {
     let detail = response.statusText
     try {
