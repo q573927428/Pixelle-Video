@@ -51,7 +51,8 @@ class HistoryManager:
         page_size: int = 20,
         status: Optional[str] = None,
         sort_by: str = "created_at",
-        sort_order: str = "desc"
+        sort_order: str = "desc",
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Get paginated task list
@@ -62,6 +63,7 @@ class HistoryManager:
             status: Filter by status (optional)
             sort_by: Sort field (created_at, completed_at, title, duration)
             sort_order: Sort order (asc, desc)
+            user_id: Filter by user ID (optional). If provided, only return tasks owned by this user.
         
         Returns:
             {
@@ -77,7 +79,8 @@ class HistoryManager:
             page_size=page_size,
             status=status,
             sort_by=sort_by,
-            sort_order=sort_order
+            sort_order=sort_order,
+            user_id=user_id,
         )
     
     async def get_task_detail(self, task_id: str) -> Optional[Dict[str, Any]]:

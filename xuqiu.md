@@ -46,13 +46,15 @@ uv run streamlit run web/app.py
 
 这个商业化有个很重要的问题，runninghub  同时最多只能2个任务，多了需要开更高级的会员。专业版 Plus  169元每月  可以5个任务。
 
+modern_ui\src\views\ActionTransferView.vue
+动作迁移流程 默认值使用
+af_scail.json - Runn inghub
 
-每个用户上传的素材（图片/视频/语音）只允许上传者自己在生成时使用，其他人也不应该看到别人的素材列表。
-每个用户上传素材的总空间大小需要限制。超过限制则不能再上传了并且提示用户空间已满，需要清理空间后才能继续上传。
 
-历史记录也只能看到自己的历史记录
+用户注册需要手机号码验证
 
 modern_ui\src\components\ActionTransferForm.vue
 modern_ui\src\components\DigitalHumanForm.vue
 modern_ui\src\components\QuickCreateForm.vue
 modern_ui\src\components\I2vForm.vue
+生成板块

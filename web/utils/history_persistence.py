@@ -38,6 +38,7 @@ async def save_web_generation_history(
     input_params: dict,
     title: str | None = None,
     n_frames: int = 1,
+    user_id: int | None = None,
 ) -> None:
     """Save a minimal history record for workflows implemented directly in Web UI."""
     if not getattr(pixelle_video, "persistence", None):
@@ -66,6 +67,7 @@ async def save_web_generation_history(
         "created_at": created_at,
         "completed_at": completed_at,
         "status": "completed",
+        "user_id": user_id,
         "input": normalized_input,
         "result": {
             "video_path": str(path),

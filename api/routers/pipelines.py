@@ -457,6 +457,7 @@ async def generate_asset_based_async(
                 title=request_body.video_title or "素材创作",
                 input_params=request_body.model_dump(),
                 n_frames=len(ctx.storyboard.frames) if getattr(ctx, "storyboard", None) else 1,
+                user_id=user_id,
             )
             return {
                 "pipeline": "custom_media",
@@ -530,6 +531,7 @@ async def generate_image_to_video_async(
                 pipeline="image_to_video",
                 title="图生视频",
                 input_params=request_body.model_dump(),
+                user_id=user_id,
             )
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
@@ -615,6 +617,7 @@ async def generate_action_transfer_async(
                 pipeline="action_transfer",
                 title="动作迁移",
                 input_params=request_body.model_dump(),
+                user_id=user_id,
             )
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
@@ -663,6 +666,7 @@ async def generate_digital_human_async(
                 pipeline="digital_human",
                 title="数字人口播",
                 input_params=request_body.model_dump(),
+                user_id=user_id,
             )
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")

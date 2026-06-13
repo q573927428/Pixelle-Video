@@ -486,6 +486,7 @@ class PersistenceService:
             "n_frames": metadata.get("result", {}).get("n_frames", 0),
             "file_size": metadata.get("result", {}).get("file_size", 0),
             "video_path": metadata.get("result", {}).get("video_path"),
+            "user_id": metadata.get("user_id"),
         }
         
         # Update or append
@@ -541,6 +542,7 @@ class PersistenceService:
                     "n_frames": metadata.get("result", {}).get("n_frames", 0),
                     "file_size": metadata.get("result", {}).get("file_size", 0),
                     "video_path": metadata.get("result", {}).get("video_path"),
+                    "user_id": metadata.get("user_id"),
                 })
         
         self._save_index(index)
@@ -556,7 +558,8 @@ class PersistenceService:
         page_size: int = 20,
         status: Optional[str] = None,
         sort_by: str = "created_at",
-        sort_order: str = "desc"
+        sort_order: str = "desc",
+        user_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         List tasks with pagination
@@ -567,6 +570,7 @@ class PersistenceService:
             status: Filter by status (optional)
             sort_by: Sort field (created_at, completed_at, title, duration)
             sort_order: Sort order (asc, desc)
+            user_id: Filter by user ID (optional). If provided, only return tasks owned by this user.
         
         Returns:
             {
@@ -583,6 +587,10 @@ class PersistenceService:
         # Filter by status
         if status:
             tasks = [t for t in tasks if t.get("status") == status]
+        
+        # Filter by user_id (only if specified)
+        if user_id is not None:
+            tasks = [t for t in tasks if t.get("user_id") == user_id]
         
         # Sort
         reverse = (sort_order == "desc")

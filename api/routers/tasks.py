@@ -5,12 +5,14 @@ Endpoints for managing async tasks (checking status, canceling, etc.)
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from loguru import logger
 
 from api.tasks import task_manager, Task, TaskStatus
 from api.dependencies import PixelleVideoDep
+from api.auth.dependencies import get_current_user
+from api.auth.schemas import UserInfo
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -54,19 +56,25 @@ async def list_task_history(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Items per page"),
     status: Optional[str] = Query(None, description="Filter by status"),
+    current_user: Optional[UserInfo] = Depends(get_current_user),
 ):
     """
     List persisted task history (survives server restarts).
     Reads from the filesystem index built by PersistenceService.
+    Each user can only see their own task history.
     """
     try:
         if not pixelle_video.history:
             return {"tasks": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
 
+        # Filter by current user if authenticated
+        user_id = current_user.id if current_user else None
+
         result = await pixelle_video.history.get_task_list(
             page=page,
             page_size=page_size,
             status=status or None,
+            user_id=user_id,
         )
         return result
 
@@ -79,13 +87,29 @@ async def list_task_history(
 async def delete_task_history(
     task_id: str,
     pixelle_video: PixelleVideoDep,
+    current_user: Optional[UserInfo] = Depends(get_current_user),
 ):
     """
     Delete a task from history permanently (removes all files).
+    Only the owner of the task can delete it.
     """
     try:
         if not pixelle_video.history:
             raise HTTPException(status_code=503, detail="History service not available")
+
+        # Get task detail to verify ownership
+        detail = await pixelle_video.history.get_task_detail(task_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+
+        # Check ownership: only task owner or admin can delete
+        task_metadata = detail.get("metadata", {})
+        task_user_id = task_metadata.get("user_id")
+        if current_user and task_user_id is not None and task_user_id != current_user.id and current_user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="您没有权限删除此任务",
+            )
 
         success = await pixelle_video.history.delete_task(task_id)
         if not success:
@@ -107,9 +131,11 @@ async def delete_task_history(
 async def get_task_history_detail(
     task_id: str,
     pixelle_video: PixelleVideoDep,
+    current_user: Optional[UserInfo] = Depends(get_current_user),
 ):
     """
     Get full detail of a persisted task including storyboard.
+    Only the owner of the task can view the detail.
     """
     try:
         if not pixelle_video.history:
@@ -118,6 +144,15 @@ async def get_task_history_detail(
         detail = await pixelle_video.history.get_task_detail(task_id)
         if not detail:
             raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+
+        # Check ownership: only task owner or admin can view detail
+        task_metadata = detail.get("metadata", {})
+        task_user_id = task_metadata.get("user_id")
+        if current_user and task_user_id is not None and task_user_id != current_user.id and current_user.role != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="您没有权限查看此任务详情",
+            )
 
         return detail
 
