@@ -108,7 +108,7 @@
         <el-form-item label="本地 TTS 引擎">
           <el-radio-group v-model="form.tts_engine">
             <el-radio-button value="edge_tts">Edge TTS（默认）</el-radio-button>
-            <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button>
+            <!-- <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button> -->
           </el-radio-group>
         </el-form-item>
 
