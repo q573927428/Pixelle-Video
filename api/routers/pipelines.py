@@ -167,7 +167,6 @@ async def _execute_comfy_video_workflow(
     workflow_params: dict[str, Any],
     final_video_path: str,
 ) -> str:
-    kit = await pixelle_video._get_or_create_comfykit()
     workflow_path = Path("workflows") / workflow_key
 
     if not workflow_path.exists():
@@ -175,7 +174,7 @@ async def _execute_comfy_video_workflow(
 
     workflow_config = json.loads(workflow_path.read_text(encoding="utf-8"))
     workflow_input = _workflow_input_from_config(workflow_path, workflow_config)
-    result = await kit.execute(workflow_input, workflow_params)
+    result = await pixelle_video.execute_with_concurrency(workflow_input, workflow_params)
 
     # If the result contains an error status, propagate the original error
     # instead of masking it with a generic "no video returned" message.
@@ -248,8 +247,7 @@ async def _run_second_digital_workflow(
 
     second_workflow_config = json.loads(second_workflow_path.read_text(encoding="utf-8"))
     workflow_input = _workflow_input_from_config(second_workflow_path, second_workflow_config)
-    kit = await pixelle_video._get_or_create_comfykit()
-    result = await kit.execute(workflow_input, {"videoimage": generated_image, "audio": audio_path})
+    result = await pixelle_video.execute_with_concurrency(workflow_input, {"videoimage": generated_image, "audio": audio_path})
 
     # If the result contains an error status, propagate the original error
     if result.status == "error":
@@ -375,7 +373,6 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
 
         workflow_config = json.loads(workflow_path.read_text(encoding="utf-8"))
         workflow_input = _workflow_input_from_config(workflow_path, workflow_config)
-        kit = await pixelle_video._get_or_create_comfykit()
         workflow_params = (
             {"firstimage": character_assets[0], "secondimage": goods_assets[0]}
             if request_body.goods_text.strip()
@@ -385,7 +382,7 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
                 "goodstype": request_body.goods_title,
             }
         )
-        image_result = await kit.execute(workflow_input, workflow_params)
+        image_result = await pixelle_video.execute_with_concurrency(workflow_input, workflow_params)
         generated_image = _extract_image_url(image_result)
         if not generated_image:
             raise RuntimeError("The image workflow did not return an image.")

@@ -359,7 +359,7 @@ class TTSService(ComfyBaseService):
                 workflow_input = workflow_info["path"]
                 logger.info(f"Executing selfhost TTS workflow: {workflow_input}")
             
-            result = await kit.execute(workflow_input, workflow_params)
+            result = await self.core.execute_with_concurrency(workflow_input, workflow_params)
             
             # 4. Handle result
             if result.status != "completed":

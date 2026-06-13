@@ -89,6 +89,12 @@ class PixelleVideoCore:
         self._comfykit: Optional[ComfyKit] = None
         self._comfykit_config_hash: Optional[str] = None
         self._comfykit_lock = asyncio.Lock()  # 保护 ComfyKit 实例的并发访问
+
+        # Global RunningHub concurrency semaphore.
+        # Limits ALL RunningHub workflow executions (pipelines, TTS, media, etc.)
+        # to the user-configured concurrent limit, preventing TASK_QUEUE_MAXED.
+        # Value is read from config_manager's runninghub_concurrent_limit.
+        self._runninghub_semaphore: Optional[asyncio.Semaphore] = None
         
         # Core services (initialized in initialize())
         self.llm: Optional[LLMService] = None
@@ -106,6 +112,90 @@ class PixelleVideoCore:
         # Default pipeline callable (for backward compatibility)
         self.generate_video = None
     
+    def _get_runninghub_concurrent_limit(self) -> int:
+        """
+        Read the RunningHub concurrent execution limit from config_manager.
+        
+        This value is configurable via the UI Settings page (runninghub_concurrent_limit).
+        """
+        try:
+            comfyui_cfg = config_manager.get_comfyui_config()
+            return int(comfyui_cfg.get("runninghub_concurrent_limit", 1))
+        except Exception:
+            return 1
+
+    def _get_runninghub_semaphore(self) -> asyncio.Semaphore:
+        """
+        Get or create the global RunningHub concurrency semaphore.
+        
+        The semaphore limits concurrent RunningHub workflow executions across
+        all entry points (pipelines, TTS, media, etc.), preventing
+        TASK_QUEUE_MAXED errors when multiple users submit tasks simultaneously.
+        Tasks exceeding the limit will be queued and executed sequentially.
+        """
+        if self._runninghub_semaphore is None:
+            max_concurrent = self._get_runninghub_concurrent_limit()
+            self._runninghub_semaphore = asyncio.Semaphore(max_concurrent)
+            logger.info(f"🔒 RunningHub concurrency semaphore created (max: {max_concurrent})")
+        return self._runninghub_semaphore
+
+    async def acquire_runninghub_slot(self) -> None:
+        """
+        Acquire a RunningHub execution slot.
+        
+        Call this before any RunningHub workflow execution to ensure
+        concurrency limits are respected. If all slots are occupied,
+        this will wait until a slot becomes available.
+        
+        Usage:
+            await pixelle_video.acquire_runninghub_slot()
+            try:
+                result = await kit.execute(workflow_id, params)
+            finally:
+                pixelle_video.release_runninghub_slot()
+        """
+        semaphore = self._get_runninghub_semaphore()
+        await semaphore.acquire()
+        logger.debug(f"RunningHub slot acquired (available: {semaphore._value})")
+
+    def release_runninghub_slot(self) -> None:
+        """
+        Release a RunningHub execution slot.
+        
+        Must be called after RunningHub workflow execution completes,
+        regardless of success or failure.
+        """
+        if self._runninghub_semaphore is not None:
+            self._runninghub_semaphore.release()
+            logger.debug(f"RunningHub slot released (available: {self._runninghub_semaphore._value + 1})")
+
+    async def execute_with_concurrency(
+        self,
+        workflow_input: str,
+        workflow_params: dict,
+    ):
+        """
+        Execute a RunningHub workflow with concurrency limiting.
+        
+        This is the central execution method that all callers should use
+        for RunningHub workflows. It ensures the global concurrency limit
+        is respected, preventing TASK_QUEUE_MAXED errors.
+        
+        Args:
+            workflow_input: RunningHub workflow ID or file path
+            workflow_params: Workflow parameters
+            
+        Returns:
+            ExecuteResult from ComfyKit
+        """
+        kit = await self._get_or_create_comfykit()
+        await self.acquire_runninghub_slot()
+        try:
+            result = await kit.execute(workflow_input, workflow_params)
+            return result
+        finally:
+            self.release_runninghub_slot()
+
     def _get_comfykit_config(self) -> dict:
         """
         Get current ComfyKit configuration from config_manager
