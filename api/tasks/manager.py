@@ -23,11 +23,22 @@ from typing import Dict, List, Optional, Callable
 from loguru import logger
 
 from api.tasks.models import Task, TaskStatus, TaskType, TaskProgress, ConfirmationData
+from pixelle_video.config import config_manager
 from api.config import api_config
 
 
 class TaskConfirmationTimeout(Exception):
     """Raised when user confirmation times out or is rejected."""
+    pass
+
+
+class TaskConcurrencyLimitError(Exception):
+    """
+    Raised when the task queue is full and a new task cannot be accepted.
+
+    This typically happens when the number of concurrent RunningHub tasks
+    has reached its maximum capacity (TASK_QUEUE_MAXED).
+    """
     pass
 
 
@@ -41,6 +52,7 @@ class TaskManager:
     - Progress tracking
     - User confirmation support (when tasks need user input)
     - Auto cleanup of old tasks
+    - Concurrent task limiting via semaphore
     """
     
     def __init__(self):
@@ -49,7 +61,26 @@ class TaskManager:
         self._confirmation_events: Dict[str, asyncio.Event] = {}
         self._cleanup_task: Optional[asyncio.Task] = None
         self._running = False
-    
+
+        # Semaphore to limit concurrent RunningHub workflow executions.
+        # This prevents TASK_QUEUE_MAXED errors when multiple users submit
+        # tasks simultaneously. Tasks exceeding the limit will be queued
+        # and executed sequentially as slots become available.
+        self._concurrency_semaphore: Optional[asyncio.Semaphore] = None
+
+    def _get_max_concurrent(self) -> int:
+        """Get the max concurrent tasks limit from the UI-configurable setting.
+        
+        Reads from config_manager's runninghub_concurrent_limit which
+        users can change via the Settings page (stored in config.yaml).
+        Falls back to 1 if not configured.
+        """
+        try:
+            comfyui_cfg = config_manager.get_comfyui_config()
+            return int(comfyui_cfg.get("runninghub_concurrent_limit", 1))
+        except Exception:
+            return 1
+
     async def start(self):
         """Start task manager and cleanup scheduler"""
         if self._running:
@@ -57,8 +88,11 @@ class TaskManager:
             return
         
         self._running = True
+        max_concurrent = self._get_max_concurrent()
+        self._concurrency_semaphore = asyncio.Semaphore(max_concurrent)
+        logger.info(f"✅ Task manager started (max concurrent tasks: {max_concurrent})")
+        
         self._cleanup_task = asyncio.create_task(self._cleanup_loop())
-        logger.info("✅ Task manager started")
     
     async def stop(self):
         """Stop task manager and cancel all tasks"""
@@ -81,8 +115,16 @@ class TaskManager:
         self._tasks.clear()
         self._task_futures.clear()
         self._confirmation_events.clear()
+        self._concurrency_semaphore = None
         logger.info("✅ Task manager stopped")
     
+    def get_concurrency_semaphore(self) -> asyncio.Semaphore:
+        """Get the concurrency semaphore, creating it if not initialized"""
+        if self._concurrency_semaphore is None:
+            max_concurrent = self._get_max_concurrent()
+            self._concurrency_semaphore = asyncio.Semaphore(max_concurrent)
+        return self._concurrency_semaphore
+
     def create_task(
         self,
         task_type: TaskType,
@@ -272,6 +314,69 @@ class TaskManager:
         # Start execution
         future = asyncio.create_task(_execute())
         self._task_futures[task_id] = future
+
+    async def execute_with_concurrency_limit(
+        self,
+        task_id: str,
+        coro_func: Callable,
+        *args,
+        **kwargs
+    ):
+        """
+        Execute task asynchronously with concurrency limiting.
+        
+        Uses a semaphore to limit the number of concurrent RunningHub
+        workflow executions. Tasks that exceed the limit will be queued
+        and executed sequentially as slots become available.
+        
+        Args:
+            task_id: Task ID
+            coro_func: Async function to execute
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+        """
+        task = self._tasks.get(task_id)
+        if not task:
+            logger.error(f"Task {task_id} not found")
+            return
+
+        semaphore = self.get_concurrency_semaphore()
+
+        async def _execute_with_semaphore():
+            try:
+                # Wait for a semaphore slot before starting execution
+                logger.info(f"Task {task_id} waiting for concurrency slot (available: {semaphore._value})")
+                async with semaphore:
+                    task.status = TaskStatus.RUNNING
+                    task.started_at = datetime.now()
+                    logger.info(f"Task {task_id} acquired concurrency slot, started")
+                    
+                    result = await coro_func(*args, **kwargs)
+                    
+                    task.status = TaskStatus.COMPLETED
+                    task.result = result
+                    task.completed_at = datetime.now()
+                    logger.info(f"Task {task_id} completed, released concurrency slot")
+                    
+            except TaskConfirmationTimeout:
+                task.status = TaskStatus.FAILED
+                task.error = "User confirmation timed out"
+                task.completed_at = datetime.now()
+                logger.error(f"Task {task_id} failed: confirmation timeout")
+                
+            except asyncio.CancelledError:
+                task.status = TaskStatus.CANCELLED
+                task.completed_at = datetime.now()
+                logger.info(f"Task {task_id} cancelled")
+                
+            except Exception as e:
+                task.status = TaskStatus.FAILED
+                task.error = str(e)
+                task.completed_at = datetime.now()
+                logger.error(f"Task {task_id} failed: {e}")
+
+        future = asyncio.create_task(_execute_with_semaphore())
+        self._task_futures[task_id] = future
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get task by ID"""
@@ -402,4 +507,3 @@ class TaskManager:
 
 # Global task manager instance
 task_manager = TaskManager()
-

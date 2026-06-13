@@ -177,6 +177,12 @@ async def _execute_comfy_video_workflow(
     workflow_input = _workflow_input_from_config(workflow_path, workflow_config)
     result = await kit.execute(workflow_input, workflow_params)
 
+    # If the result contains an error status, propagate the original error
+    # instead of masking it with a generic "no video returned" message.
+    if hasattr(result, "status") and getattr(result, "status", "") == "error":
+        error_msg = getattr(result, "msg", "Unknown workflow execution error")
+        raise RuntimeError(f"Workflow execution failed: {error_msg}")
+
     generated_video_url = _extract_video_url(result)
     if not generated_video_url:
         raise RuntimeError("The workflow did not return a video. Please check the workflow configuration.")
@@ -244,6 +250,11 @@ async def _run_second_digital_workflow(
     workflow_input = _workflow_input_from_config(second_workflow_path, second_workflow_config)
     kit = await pixelle_video._get_or_create_comfykit()
     result = await kit.execute(workflow_input, {"videoimage": generated_image, "audio": audio_path})
+
+    # If the result contains an error status, propagate the original error
+    if result.status == "error":
+        error_msg = result.msg or "Unknown workflow execution error"
+        raise RuntimeError(f"Second workflow execution failed: {error_msg}")
 
     generated_video_url = _extract_video_url(result)
     if not generated_video_url:
@@ -465,7 +476,7 @@ async def generate_asset_based_async(
                 "video_url": path_to_url(request, ctx.final_video_path),
             }
 
-        await task_manager.execute_task(task.task_id, execute)
+        await task_manager.execute_with_concurrency_limit(task.task_id, execute)
         return _task_response(task.task_id)
 
     except Exception as exc:
@@ -541,7 +552,7 @@ async def generate_image_to_video_async(
                 "video_url": path_to_url(request, final_path) if Path(final_path).exists() else final_path,
             }
 
-        await task_manager.execute_task(task.task_id, execute)
+        await task_manager.execute_with_concurrency_limit(task.task_id, execute)
         return _task_response(task.task_id)
 
     except Exception as exc:
@@ -627,7 +638,7 @@ async def generate_action_transfer_async(
                 "video_url": path_to_url(request, final_path) if Path(final_path).exists() else final_path,
             }
 
-        await task_manager.execute_task(task.task_id, execute)
+        await task_manager.execute_with_concurrency_limit(task.task_id, execute)
         return _task_response(task.task_id)
 
     except Exception as exc:
@@ -676,7 +687,7 @@ async def generate_digital_human_async(
                 "video_url": path_to_url(request, final_path) if Path(final_path).exists() else final_path,
             }
 
-        await task_manager.execute_task(task.task_id, execute)
+        await task_manager.execute_with_concurrency_limit(task.task_id, execute)
         return _task_response(task.task_id)
 
     except Exception as exc:

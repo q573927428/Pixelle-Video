@@ -31,7 +31,6 @@ class APIConfig(BaseModel):
     cors_origins: list[str] = ["*"]
     
     # Task settings
-    max_concurrent_tasks: int = 5
     task_cleanup_interval: int = 3600  # Clean completed tasks every hour
     task_retention_time: int = 86400   # Keep task results for 24 hours
     
@@ -70,4 +69,3 @@ class APIConfig(BaseModel):
 
 # Global config instance
 api_config = APIConfig()
-
