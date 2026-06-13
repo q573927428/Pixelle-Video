@@ -31,8 +31,7 @@
               {{ running ? '正在生成...' : '开始生成 - ⚡ 快速创作' }}
             </el-button>
             <div style="margin:18px 0;">
-              <el-progress :percentage="progress" :status="progressStatus" />
-              <div class="small muted" style="margin-top:8px;">{{ statusText }}</div>
+              <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
             </div>
             <video v-if="result.video_url" class="result-video" controls :src="result.video_url" />
             <div v-else class="empty-preview">
@@ -82,11 +81,6 @@ const historyLoading = ref(false)
 const historyRecords = ref<any[]>([])
 const historyFilterCategory = ref<string | undefined>(undefined)
 
-const progressStatus = computed(() => {
-  if (progress.value >= 100) return 'success' as const
-  if (statusText.value.includes('失败')) return 'exception' as const
-  return undefined
-})
 
 onMounted(() => {
   // 默认模板由 QuickCreateForm 内部处理

@@ -29,8 +29,7 @@
               {{ running ? '正在生成...' : '开始生成 - 🤖 数字人' }}
             </el-button>
             <div style="margin:18px 0;">
-              <el-progress :percentage="progress" :status="progressStatus" />
-              <div class="small muted" style="margin-top:8px;">{{ statusText }}</div>
+              <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
             </div>
 
             <!-- 批量模式结果列表 -->
@@ -111,11 +110,6 @@ const currentAssets = computed<string[]>(() => {
   return [digitalForm.value.character_asset, digitalForm.value.goods_asset, digitalForm.value.ref_audio].filter((x): x is string => !!x)
 })
 
-const progressStatus = computed(() => {
-  if (progress.value >= 100) return 'success' as const
-  if (statusText.value.includes('失败')) return 'exception' as const
-  return undefined
-})
 
 async function handleUpload(rawFile: File, category: string, target?: string) {
   const result = await uploadResource(rawFile, category, target)

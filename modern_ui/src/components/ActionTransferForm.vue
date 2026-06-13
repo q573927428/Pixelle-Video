@@ -44,14 +44,14 @@
         />
       </el-form-item>
       <el-form-item label="时长（秒）">
-        <el-slider v-model="form.duration" :min="1" :max="30" show-input />
+        <el-slider v-model="form.duration" :min="1" :max="20" show-input />
       </el-form-item>
     </div>
       </div>
     </div>
 
     <!-- ====== 第四板块：工作流选择 ====== -->
-    <div class="form-section-wrapper">
+    <!-- <div class="form-section-wrapper">
       <div class="form-section">
       <div class="form-section-title">🔄 工作流选择</div>
       <div class="form-section-body">
@@ -65,7 +65,7 @@
       </el-form-item>
     </div>
       </div>
-    </div>
+    </div> -->
   </el-form>
 </template>
 
