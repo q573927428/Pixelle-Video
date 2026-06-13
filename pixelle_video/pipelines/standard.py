@@ -73,6 +73,28 @@ class StandardPipeline(LinearVideoPipeline):
     - "fixed": Use provided script as-is (each line = one narration)
     """
     
+    # 类级别的 RunningHub 全局限量信号量（所有实例共享）
+    _global_runninghub_semaphore: Optional[asyncio.Semaphore] = None
+    _global_semaphore_limit: int = 0
+
+    @classmethod
+    def _get_global_semaphore(cls, limit: int) -> asyncio.Semaphore:
+        """
+        获取全局共享的 RunningHub 并发限制信号量。
+        所有 StandardPipeline 实例共享同一个 Semaphore，确保跨任务的并发控制。
+        
+        Args:
+            limit: 最大并发数
+        
+        Returns:
+            全局 Semaphore 实例
+        """
+        if cls._global_runninghub_semaphore is None or cls._global_semaphore_limit != limit:
+            cls._global_runninghub_semaphore = asyncio.Semaphore(limit)
+            cls._global_semaphore_limit = limit
+            logger.info(f"🌐 Created global RunningHub semaphore with limit={limit}")
+        return cls._global_runninghub_semaphore
+
     # ==================== Lifecycle Methods ====================
 
     async def setup_environment(self, ctx: PipelineContext):
@@ -317,7 +339,8 @@ class StandardPipeline(LinearVideoPipeline):
         if is_runninghub and runninghub_concurrent_limit > 1:
             logger.info(f"🚀 Using parallel processing for RunningHub workflows (max {runninghub_concurrent_limit} concurrent)")
             
-            semaphore = asyncio.Semaphore(runninghub_concurrent_limit)
+            # 使用类级别的全局限量信号量，防止多个任务压垮后端
+            semaphore = self._get_global_semaphore(runninghub_concurrent_limit)
             completed_count = 0
             
             async def process_frame_with_semaphore(i: int, frame: StoryboardFrame):

@@ -16,6 +16,7 @@ Pixelle-Video Core - Service Layer
 Provides unified access to all capabilities (LLM, TTS, Image, etc.)
 """
 
+import asyncio
 import hashlib
 import json
 from typing import Optional
@@ -87,6 +88,7 @@ class PixelleVideoCore:
         # ComfyKit lazy initialization (created on first use, recreated on config change)
         self._comfykit: Optional[ComfyKit] = None
         self._comfykit_config_hash: Optional[str] = None
+        self._comfykit_lock = asyncio.Lock()  # 保护 ComfyKit 实例的并发访问
         
         # Core services (initialized in initialize())
         self.llm: Optional[LLMService] = None
@@ -148,6 +150,8 @@ class PixelleVideoCore:
         """
         Get or create ComfyKit instance (lazy initialization with config change detection)
         
+        Thread-safe: uses asyncio.Lock to prevent concurrent initialization races.
+        
         This method:
         1. Creates ComfyKit on first use (lazy initialization)
         2. Detects configuration changes and recreates instance if needed
@@ -156,28 +160,29 @@ class PixelleVideoCore:
         Returns:
             ComfyKit instance
         """
-        current_config = self._get_comfykit_config()
-        current_hash = self._compute_comfykit_config_hash(current_config)
-        
-        # Check if we need to create or recreate ComfyKit
-        if self._comfykit is None or self._comfykit_config_hash != current_hash:
-            # Close old instance if exists
-            if self._comfykit is not None:
-                logger.info("🔄 ComfyUI configuration changed, recreating ComfyKit instance...")
-                try:
-                    await self._comfykit.close()
-                except Exception as e:
-                    logger.warning(f"Failed to close old ComfyKit instance: {e}")
-                self._comfykit = None
+        async with self._comfykit_lock:
+            current_config = self._get_comfykit_config()
+            current_hash = self._compute_comfykit_config_hash(current_config)
             
-            # Create new instance with current config
-            logger.info("✨ Creating ComfyKit instance...")
-            # Log config without sensitive fields
-            safe_config = {k: v for k, v in current_config.items() if k not in ('api_key', 'runninghub_api_key')}
-            logger.debug(f"ComfyKit config: {safe_config}")
-            self._comfykit = ComfyKit(**current_config)
-            self._comfykit_config_hash = current_hash
-            logger.info("✅ ComfyKit instance created")
+            # Check if we need to create or recreate ComfyKit
+            if self._comfykit is None or self._comfykit_config_hash != current_hash:
+                # Close old instance if exists
+                if self._comfykit is not None:
+                    logger.info("🔄 ComfyUI configuration changed, recreating ComfyKit instance...")
+                    try:
+                        await self._comfykit.close()
+                    except Exception as e:
+                        logger.warning(f"Failed to close old ComfyKit instance: {e}")
+                    self._comfykit = None
+                
+                # Create new instance with current config
+                logger.info("✨ Creating ComfyKit instance...")
+                # Log config without sensitive fields
+                safe_config = {k: v for k, v in current_config.items() if k not in ('api_key', 'runninghub_api_key')}
+                logger.debug(f"ComfyKit config: {safe_config}")
+                self._comfykit = ComfyKit(**current_config)
+                self._comfykit_config_hash = current_hash
+                logger.info("✅ ComfyKit instance created")
         
         return self._comfykit
     

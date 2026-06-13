@@ -58,6 +58,7 @@ class HTMLFrameGenerator:
     _browser = None
     _playwright = None
     _browser_loop = None
+    _browser_init_lock = asyncio.Lock()  # 浏览器初始化互斥锁
 
     def __init__(self, template_path: str):
         """
@@ -309,35 +310,36 @@ class HTMLFrameGenerator:
 
     @classmethod
     async def _ensure_browser(cls):
-        """Lazily initialize a shared Playwright browser instance"""
-        current_loop = asyncio.get_running_loop()
-        browser_usable = (
-            cls._browser is not None
-            and cls._browser_loop is current_loop
-            and cls._browser.is_connected()
-        )
-
-        if not browser_usable:
-            if cls._browser is not None and cls._browser_loop is not current_loop:
-                logger.warning(
-                    "Detected cross-loop Playwright browser reuse attempt; "
-                    "recreating browser for current event loop"
-                )
-
-            cls._browser = None
-            cls._playwright = None
-            from playwright.async_api import async_playwright
-            cls._playwright = await async_playwright().start()
-            cls._browser = await cls._playwright.chromium.launch(
-                args=[
-                    '--no-sandbox',
-                    '--disable-dev-shm-usage',
-                    '--disable-gpu',
-                    '--disable-extensions',
-                ]
+        """Lazily initialize a shared Playwright browser instance (thread-safe)"""
+        async with cls._browser_init_lock:
+            current_loop = asyncio.get_running_loop()
+            browser_usable = (
+                cls._browser is not None
+                and cls._browser_loop is current_loop
+                and cls._browser.is_connected()
             )
-            cls._browser_loop = current_loop
-            logger.debug("Initialized Playwright Chromium browser")
+
+            if not browser_usable:
+                if cls._browser is not None and cls._browser_loop is not current_loop:
+                    logger.warning(
+                        "Detected cross-loop Playwright browser reuse attempt; "
+                        "recreating browser for current event loop"
+                    )
+
+                cls._browser = None
+                cls._playwright = None
+                from playwright.async_api import async_playwright
+                cls._playwright = await async_playwright().start()
+                cls._browser = await cls._playwright.chromium.launch(
+                    args=[
+                        '--no-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu',
+                        '--disable-extensions',
+                    ]
+                )
+                cls._browser_loop = current_loop
+                logger.debug("Initialized Playwright Chromium browser")
         return cls._browser
 
     @classmethod
@@ -434,22 +436,26 @@ class HTMLFrameGenerator:
         
         logger.debug(f"Rendering HTML template to {output_path} (size: {self.width}x{self.height})")
         tmp_html_path = None
+        context = None
         page = None
         try:
             try:
                 browser = await self._ensure_browser()
-                page = await browser.new_page(
+                # 每个任务创建独立的浏览器上下文，完全隔离
+                context = await browser.new_context(
                     viewport={'width': self.width, 'height': self.height},
                     device_scale_factor=1,
                 )
+                page = await context.new_page()
             except Exception as e:
                 logger.warning(f"Playwright browser connection failed, restarting once: {e}")
                 await self._reset_browser()
                 browser = await self._ensure_browser()
-                page = await browser.new_page(
+                context = await browser.new_context(
                     viewport={'width': self.width, 'height': self.height},
                     device_scale_factor=1,
                 )
+                page = await context.new_page()
 
             try:
                 # Write HTML to a temp file and navigate via file:// URL so that
@@ -463,6 +469,8 @@ class HTMLFrameGenerator:
             finally:
                 if page:
                     await page.close()
+                if context:
+                    await context.close()
                 if tmp_html_path and os.path.exists(tmp_html_path):
                     os.unlink(tmp_html_path)
             

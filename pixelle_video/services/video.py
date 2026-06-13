@@ -24,6 +24,8 @@ Features:
 Note: Requires FFmpeg to be installed on the system.
 """
 
+import asyncio
+import functools
 import os
 import shutil
 import tempfile
@@ -104,6 +106,25 @@ class VideoService:
         if not self._ffmpeg_checked:
             check_ffmpeg()
             self._ffmpeg_checked = True
+
+    async def _run_sync(self, func, *args, **kwargs):
+        """
+        Run a synchronous FFmpeg function in a thread pool executor
+        to avoid blocking the asyncio event loop.
+        
+        Args:
+            func: Synchronous callable (e.g., self.concat_videos)
+            *args: Positional arguments
+            **kwargs: Keyword arguments
+        
+        Returns:
+            Result of the function call
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None,  # Use default ThreadPoolExecutor
+            functools.partial(func, *args, **kwargs)
+        )
 
     def concat_videos(
         self,
