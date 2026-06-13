@@ -108,7 +108,7 @@ async def check_daily_limit(
     today = date.today()
 
     # VIP: unlimited
-    if user.daily_limit == -1:
+    if user.daily_limit == -1 or user.role == 'vip':
         return user, UserDailyUsage(used_today=0, remaining=-1, is_unlimited=True)
 
     # Get today's usage count

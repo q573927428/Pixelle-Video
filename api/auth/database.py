@@ -127,22 +127,30 @@ class Database:
         """Run database migrations"""
         try:
             cursor = conn.cursor(dictionary=True)
+            db_name = conn.database
             # Check if vip_expires_at column exists
             cursor.execute(
                 "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
                 "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'vip_expires_at'",
-                (conn.database,)
+                (db_name,)
             )
             row = cursor.fetchone()
-            cursor.close()
             if row and row["cnt"] == 0:
-                cursor = conn.cursor()
                 cursor.execute(
                     "ALTER TABLE `users` ADD COLUMN `vip_expires_at` DATETIME DEFAULT NULL "
                     "COMMENT 'VIP会员到期时间' AFTER `status`"
                 )
-                cursor.close()
                 logger.info("✅ Added vip_expires_at column to users table")
+
+            # Fix: ensure existing VIP users have daily_limit = -1 (migrate old data)
+            cursor.execute(
+                "UPDATE users SET daily_limit = -1 WHERE role = 'vip' AND daily_limit != -1"
+            )
+            fixed_count = cursor.rowcount
+            if fixed_count > 0:
+                logger.info(f"✅ Fixed {fixed_count} existing VIP users: set daily_limit = -1")
+
+            cursor.close()
         except Exception as e:
             logger.warning(f"⚠️ Migration warning: {e}")
 

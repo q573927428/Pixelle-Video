@@ -79,11 +79,17 @@ import { User, Lock, Message } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
 
+const props = withDefaults(defineProps<{
+  startRegister?: boolean
+}>(), {
+  startRegister: false,
+})
+
 const emit = defineEmits<{
   (e: 'login-success'): void
 }>()
 
-const isRegister = ref(false)
+const isRegister = ref(props.startRegister)
 const loading = ref(false)
 const errorMsg = ref('')
 const formRef = ref<any>(null)

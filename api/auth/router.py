@@ -149,7 +149,7 @@ async def get_usage(user: UserInfo = Depends(require_user)):
 
     today = date.today()
 
-    if user.daily_limit == -1:
+    if user.daily_limit == -1 or user.role == 'vip':
         return UserDailyUsage(used_today=0, remaining=-1, is_unlimited=True)
 
     usage = await Database.fetchone(
@@ -219,6 +219,10 @@ async def update_user(
     if body.role is not None:
         updates.append("role = %s")
         params.append(body.role)
+        # When setting role to vip, auto-set daily_limit to -1 (unlimited)
+        if body.role == 'vip' and body.daily_limit is None:
+            updates.append("daily_limit = %s")
+            params.append(-1)
     if body.status is not None:
         updates.append("status = %s")
         params.append(body.status)

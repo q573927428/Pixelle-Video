@@ -1,6 +1,9 @@
 <template>
-  <!-- Login Page -->
-  <LoginView v-if="showLogin" @login-success="handleLoginSuccess" />
+  <!-- Landing Page -->
+  <HomePage v-if="showLanding" @show-login="handleShowLogin" @show-register="handleShowRegister" />
+
+  <!-- Login / Register Page -->
+  <LoginView v-else-if="showLogin" :startRegister="startRegister" @login-success="handleLoginSuccess" />
 
   <!-- Main App -->
   <div class="shell" v-else>
@@ -90,11 +93,14 @@ import TaskHistoryView from './views/TaskHistoryView.vue'
 import SettingsView from './views/SettingsView.vue'
 import LoginView from './views/LoginView.vue'
 import AdminView from './views/AdminView.vue'
+import HomePage from './views/HomePage.vue'
 import UserMenu from './components/UserMenu.vue'
 
 const auth = getAuth()
 const activeView = ref('digital_human')
-const showLogin = ref(!auth.isLoggedIn.value)
+const showLanding = ref(!auth.isLoggedIn.value)
+const showLogin = ref(false)
+const startRegister = ref(false)
 const sidebarOpen = ref(false)
 
 const { tasks, loadAll } = useResources()
@@ -126,6 +132,18 @@ onMounted(() => {
 function switchView(key: string) {
   activeView.value = key
   sidebarOpen.value = false
+}
+
+function handleShowLogin() {
+  showLanding.value = false
+  showLogin.value = true
+  startRegister.value = false
+}
+
+function handleShowRegister() {
+  showLanding.value = false
+  showLogin.value = true
+  startRegister.value = true
 }
 
 function handleLoginSuccess() {

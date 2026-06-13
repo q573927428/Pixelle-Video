@@ -5,12 +5,13 @@
       <div class="user-body">
         <div class="user-top">
           <span class="user-name">{{ auth.currentUser.value?.username }}</span>
+          <el-icon class="logout-icon" @click="handleLogout"><SwitchButton /></el-icon>
         </div>
         <div class="user-badges">
           <el-tag :type="roleTagType" size="small" effect="dark">
             {{ auth.roleLabel.value }}
           </el-tag>
-          <span class="usage-chip" :class="{ unlimited: usage?.is_unlimited }" v-if="usage" @click="showUsage">
+          <span class="usage-chip" :class="{ unlimited: usage?.is_unlimited }" v-if="usage">
             <el-icon style="font-size:13px; margin-right:3px"><DataAnalysis /></el-icon>
             <template v-if="usage?.is_unlimited">♾️ 无限制</template>
             <template v-else>剩余 {{ usage?.remaining ?? '--' }} 次</template>
@@ -25,7 +26,7 @@
 
     <!-- Action Buttons -->
     <div class="user-actions">
-      <div class="user-action-btn" @click="showVipDialog">
+      <div class="user-action-btn" v-if="!auth.isAdmin.value" @click="showVipDialog">
         <el-icon><StarFilled /></el-icon>
         <span>{{ auth.isVip.value ? '续费VIP' : '购买VIP' }}</span>
       </div>
@@ -33,40 +34,7 @@
         <el-icon><Setting /></el-icon>
         <span>用户管理</span>
       </div>
-      <div class="user-action-btn logout" @click="handleLogout">
-        <el-icon><SwitchButton /></el-icon>
-        <span>退出</span>
-      </div>
     </div>
-
-    <!-- Usage Dialog -->
-    <el-dialog v-model="usageDialogVisible" title="使用统计" width="360px">
-      <div v-if="usage" class="usage-info">
-        <div class="usage-item">
-          <span class="usage-label">会员类型</span>
-          <span class="usage-value">{{ auth.roleLabel.value }}</span>
-        </div>
-        <div class="usage-item">
-          <span class="usage-label">今日已生成</span>
-          <span class="usage-value">{{ usage.used_today }} 个</span>
-        </div>
-        <div class="usage-item">
-          <span class="usage-label">今日剩余</span>
-          <span class="usage-value" :class="{ unlimited: usage.is_unlimited }">
-            {{ usage.is_unlimited ? '无限制' : usage.remaining + ' 个' }}
-          </span>
-        </div>
-        <el-progress
-          v-if="!usage.is_unlimited"
-          :percentage="usagePercentage"
-          :status="usage.remaining <= 0 ? 'exception' : 'success'"
-          :stroke-width="16"
-          :format="usageFormat"
-          style="margin-top: 16px;"
-        />
-      </div>
-      <div v-else class="usage-loading">加载中...</div>
-    </el-dialog>
 
     <!-- VIP Purchase Dialog -->
     <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="420px" class="vip-dialog" append-to-body>
@@ -136,7 +104,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { DataAnalysis, Setting, SwitchButton, StarFilled, Clock, ChatLineSquare } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAuth, type UserDailyUsage } from '../composables/useAuth'
+import { getAuth } from '../composables/useAuth'
 
 const emit = defineEmits<{
   (e: 'show-login'): void
@@ -144,9 +112,7 @@ const emit = defineEmits<{
 }>()
 
 const auth = getAuth()
-const usageDialogVisible = ref(false)
 const vipDialogVisible = ref(false)
-const usage = ref<UserDailyUsage | null>(null)
 
 const roleTagType = computed(() => {
   const role = auth.currentUser.value?.role
@@ -168,37 +134,18 @@ const userVipExpiry = computed(() => {
   return null
 })
 
-const usagePercentage = computed(() => {
-  if (!usage.value || usage.value.is_unlimited) return 0
-  const total = usage.value.used_today + usage.value.remaining
-  return total > 0 ? Math.round((usage.value.used_today / total) * 100) : 0
-})
-
-const usageFormat = (percentage: number) => {
-  if (!usage.value) return ''
-  return `${usage.value.used_today} / ${usage.value.used_today + usage.value.remaining}`
-}
-
-async function loadUsage() {
-  try {
-    usage.value = await auth.fetchUsage()
-  } catch {
-    usage.value = null
+const usage = computed(() => {
+  const user = auth.currentUser.value
+  if (!user) return null
+  return {
+    remaining: user.daily_limit === -1 ? -1 : user.daily_limit,
+    is_unlimited: user.role === 'vip' || user.daily_limit === -1,
   }
-}
+})
 
 onMounted(() => {
-  loadUsage()
+  // usage info is derived from currentUser, no fetch needed
 })
-
-async function showUsage() {
-  usageDialogVisible.value = true
-  try {
-    usage.value = await auth.fetchUsage()
-  } catch (e: any) {
-    ElMessage.error(`获取使用统计失败：${e.message}`)
-  }
-}
 
 function showVipDialog() {
   vipDialogVisible.value = true
@@ -291,6 +238,18 @@ async function copyWechatId() {
   margin-top: 4px;
 }
 
+.logout-icon {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.logout-icon:hover {
+  color: #f56c6c;
+}
+
 .vip-expiry-row {
   display: flex;
   align-items: center;
@@ -311,7 +270,6 @@ async function copyWechatId() {
   padding: 3px 8px;
   border-radius: 4px;
   white-space: nowrap;
-  cursor: pointer;
   transition: background 0.2s;
 }
 
@@ -331,19 +289,21 @@ async function copyWechatId() {
 /* Action Buttons */
 .user-actions {
   display: flex;
-  gap: 6px;
-  margin-top: 10px;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
   flex-wrap: wrap;
 }
 
 .user-action-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border-radius: 8px;
+  justify-content: center;
+  gap: 5px;
+  padding: 8px 18px;
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.7);
   background: rgba(255, 255, 255, 0.06);
@@ -354,17 +314,21 @@ async function copyWechatId() {
 
 /* 购买VIP按钮 - 醒目金色渐变 */
 .user-action-btn:first-child {
-  background: linear-gradient(135deg, rgba(230, 162, 60, 0.2), rgba(245, 158, 11, 0.1));
-  border-color: rgba(230, 162, 60, 0.35);
-  color: #fbbf24;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border-color: #f59e0b;
+  color: #fff;
   font-weight: 800;
+  font-size: 14px;
+  padding: 9px 24px;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
 }
 
 .user-action-btn:first-child:hover {
-  background: linear-gradient(135deg, rgba(230, 162, 60, 0.35), rgba(245, 158, 11, 0.2));
-  border-color: rgba(230, 162, 60, 0.6);
-  color: #fcd34d;
-  box-shadow: 0 0 20px rgba(230, 162, 60, 0.2);
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  border-color: #fbbf24;
+  color: #fff;
+  box-shadow: 0 0 24px rgba(245, 158, 11, 0.4);
+  transform: translateY(-1px);
 }
 
 .user-action-btn.admin:hover {
@@ -377,40 +341,6 @@ async function copyWechatId() {
   background: rgba(245, 108, 108, 0.15);
   color: #f56c6c;
   border-color: rgba(245, 108, 108, 0.3);
-}
-
-.usage-info {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.usage-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-}
-
-.usage-label {
-  color: #666;
-  font-size: 14px;
-}
-
-.usage-value {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.usage-value.unlimited {
-  color: #e6a23c;
-}
-
-.usage-loading {
-  text-align: center;
-  color: #999;
-  padding: 24px;
 }
 
 /* VIP Dialog Styles */
