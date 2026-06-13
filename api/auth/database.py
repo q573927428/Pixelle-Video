@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `role` ENUM('normal', 'vip', 'admin') NOT NULL DEFAULT 'normal',
     `daily_limit` INT NOT NULL DEFAULT 3 COMMENT '-1 means unlimited (VIP)',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1=active, 0=disabled',
+    `vip_expires_at` DATETIME DEFAULT NULL COMMENT 'VIP会员到期时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX `idx_username` (`username`),
@@ -47,6 +48,14 @@ CREATE TABLE IF NOT EXISTS `daily_usage` (
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
 DEFAULT_ADMIN_EMAIL = "admin@pixelle.ai"
+
+
+# Migration SQL to add vip_expires_at column if missing
+MIGRATE_ADD_VIP_EXPIRES_AT = """
+ALTER TABLE `users`
+ADD COLUMN IF NOT EXISTS `vip_expires_at` DATETIME DEFAULT NULL COMMENT 'VIP会员到期时间'
+AFTER `status`;
+"""
 
 
 class Database:
@@ -106,10 +115,36 @@ class Database:
                 if stmt:
                     cursor.execute(stmt)
             cursor.close()
+            # Run migrations
+            cls._run_migrations_sync(conn)
             # Seed default admin
             cls._seed_default_admin_sync(conn)
         finally:
             conn.close()
+
+    @classmethod
+    def _run_migrations_sync(cls, conn):
+        """Run database migrations"""
+        try:
+            cursor = conn.cursor(dictionary=True)
+            # Check if vip_expires_at column exists
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'vip_expires_at'",
+                (conn.database,)
+            )
+            row = cursor.fetchone()
+            cursor.close()
+            if row and row["cnt"] == 0:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "ALTER TABLE `users` ADD COLUMN `vip_expires_at` DATETIME DEFAULT NULL "
+                    "COMMENT 'VIP会员到期时间' AFTER `status`"
+                )
+                cursor.close()
+                logger.info("✅ Added vip_expires_at column to users table")
+        except Exception as e:
+            logger.warning(f"⚠️ Migration warning: {e}")
 
     @classmethod
     def _seed_default_admin_sync(cls, conn):

@@ -971,3 +971,106 @@
       padding: 10px 20px;
       height: auto;
     }
+
+    /* ====== ElTable 深色主题适配 ====== */
+    .el-table {
+      --el-table-border-color: rgba(71, 85, 105, 0.35);
+      --el-table-bg-color: transparent;
+      --el-table-tr-bg-color: transparent;
+      --el-table-header-bg-color: rgba(15, 23, 42, 0.6);
+      --el-table-header-text-color: #94a3b8;
+      --el-table-text-color: #cbd5e1;
+      --el-table-row-hover-bg-color: rgba(124, 58, 237, 0.1);
+      --el-table-current-row-bg-color: rgba(124, 58, 237, 0.15);
+      border-radius: 14px;
+      border: 1px solid var(--el-table-border-color);
+      overflow: hidden;
+    }
+    .el-table__inner-wrapper {
+      border-radius: 14px;
+    }
+    .el-table th.el-table__cell {
+      background: rgba(15, 23, 42, 0.6) !important;
+      border-bottom: 1px solid rgba(71, 85, 105, 0.35) !important;
+      font-weight: 800;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #94a3b8 !important;
+    }
+    .el-table td.el-table__cell {
+      border-bottom: 1px solid rgba(71, 85, 105, 0.15) !important;
+      color: #cbd5e1 !important;
+    }
+    .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+      background: rgba(15, 23, 42, 0.3) !important;
+    }
+    .el-table__body tr:hover > td {
+      background: rgba(124, 58, 237, 0.08) !important;
+    }
+    .el-table__empty-text {
+      color: #64748b !important;
+    }
+    .el-table .cell {
+      line-height: 1.6;
+    }
+    .el-table__filter-icon {
+      color: #64748b !important;
+    }
+    .el-table__column-resize-proxy {
+      border-color: rgba(71, 85, 105, 0.5);
+    }
+    /* Pagination inside table or card */
+    .el-pagination {
+      --el-pagination-font-size: 13px;
+      --el-pagination-bg-color: transparent;
+      --el-pagination-button-color: #94a3b8;
+      --el-pagination-button-bg-color: transparent;
+      --el-pagination-hover-color: #e5eefb;
+      --el-pagination-disabled-color: #475569;
+      font-weight: 600;
+    }
+    .el-pagination button {
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.4) !important;
+      border: 1px solid rgba(71, 85, 105, 0.3);
+      color: #94a3b8 !important;
+      min-width: 32px;
+      height: 32px;
+    }
+    .el-pagination button:hover {
+      background: rgba(124, 58, 237, 0.2) !important;
+      color: #ddd6fe !important;
+      border-color: rgba(124, 58, 237, 0.4);
+    }
+    .el-pagination button.is-active {
+      background: rgba(124, 58, 237, 0.35) !important;
+      color: #fff !important;
+      border-color: rgba(124, 58, 237, 0.5);
+    }
+    .el-pagination .el-pager li {
+      border-radius: 8px;
+      background: transparent !important;
+      color: #94a3b8 !important;
+      min-width: 32px;
+      height: 32px;
+      font-weight: 700;
+    }
+    .el-pagination .el-pager li:hover {
+      background: rgba(124, 58, 237, 0.15) !important;
+      color: #ddd6fe !important;
+    }
+    .el-pagination .el-pager li.is-active {
+      background: rgba(124, 58, 237, 0.35) !important;
+      color: #fff !important;
+    }
+    .el-pagination .btn-prev,
+    .el-pagination .btn-next {
+      background: rgba(15, 23, 42, 0.4) !important;
+      border: 1px solid rgba(71, 85, 105, 0.3);
+      border-radius: 8px;
+    }
+    .el-pagination .el-pagination__total,
+    .el-pagination .el-pagination__jump {
+      color: #94a3b8;
+    }

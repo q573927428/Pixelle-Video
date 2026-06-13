@@ -15,6 +15,7 @@ from api.auth.schemas import (
     UserInfo,
     UserDailyUsage,
     AdminUserUpdate,
+    AdminSetVipRequest,
     UserListResponse,
 )
 from api.auth.dependencies import (
@@ -25,6 +26,23 @@ from api.auth.dependencies import (
 )
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+# Column list for user queries (include vip_expires_at)
+_USER_COLUMNS = "id, username, email, role, daily_limit, vip_expires_at, created_at"
+
+
+def _row_to_userinfo(row: dict) -> UserInfo:
+    """Convert a DB row dict to UserInfo."""
+    return UserInfo(
+        id=row["id"],
+        username=row["username"],
+        email=row.get("email"),
+        role=row["role"],
+        daily_limit=row["daily_limit"],
+        vip_expires_at=row.get("vip_expires_at"),
+        created_at=row["created_at"],
+    )
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -61,12 +79,12 @@ async def register(body: RegisterRequest):
     # Generate token
     token = create_access_token(user_id, "normal")
 
-    # Fetch created user to get created_at
+    # Fetch created user to get created_at & vip_expires_at
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, created_at FROM users WHERE id = %s",
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
     )
-    user_info = UserInfo(**row) if row else UserInfo(
+    user_info = _row_to_userinfo(row) if row else UserInfo(
         id=user_id,
         username=body.username,
         email=body.email,
@@ -83,7 +101,7 @@ async def register(body: RegisterRequest):
 async def login(body: LoginRequest):
     """Login with username and password"""
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, created_at, password_hash, status FROM users WHERE username = %s",
+        f"SELECT {_USER_COLUMNS}, password_hash, status FROM users WHERE username = %s",
         (body.username,),
     )
     if not row:
@@ -105,14 +123,7 @@ async def login(body: LoginRequest):
         )
 
     token = create_access_token(row["id"], row["role"])
-    user_info = UserInfo(
-        id=row["id"],
-        username=row["username"],
-        email=row["email"],
-        role=row["role"],
-        daily_limit=row["daily_limit"],
-        created_at=row["created_at"],
-    )
+    user_info = _row_to_userinfo(row)
 
     logger.info(f"User logged in: {body.username}")
     return TokenResponse(access_token=token, user=user_info)
@@ -121,6 +132,13 @@ async def login(body: LoginRequest):
 @router.get("/me", response_model=UserInfo)
 async def get_me(user: UserInfo = Depends(require_user)):
     """Get current user info"""
+    # Refresh from DB to get latest vip_expires_at
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (user.id,),
+    )
+    if row:
+        return _row_to_userinfo(row)
     return user
 
 
@@ -164,11 +182,11 @@ async def list_users(
     total = total_row["count"] if total_row else 0
 
     rows = await Database.fetchall(
-        "SELECT id, username, email, role, daily_limit, created_at FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
+        f"SELECT {_USER_COLUMNS} FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
         (page_size, offset),
     )
 
-    users = [UserInfo(**row) for row in rows]
+    users = [_row_to_userinfo(row) for row in rows]
     total_pages = max(1, (total + page_size - 1) // page_size)
 
     return UserListResponse(
@@ -189,7 +207,7 @@ async def update_user(
     """Update user role/status/limit (admin only)"""
     # Check user exists
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, created_at FROM users WHERE id = %s",
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
     )
     if not row:
@@ -207,6 +225,9 @@ async def update_user(
     if body.daily_limit is not None:
         updates.append("daily_limit = %s")
         params.append(body.daily_limit)
+    if body.vip_expires_at is not None:
+        updates.append("vip_expires_at = %s")
+        params.append(body.vip_expires_at)
 
     if updates:
         params.append(user_id)
@@ -218,7 +239,65 @@ async def update_user(
 
     # Return updated user
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, created_at FROM users WHERE id = %s",
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
     )
-    return UserInfo(**row)
+    return _row_to_userinfo(row)
+
+
+@router.post("/admin/set-vip", response_model=UserInfo)
+async def set_vip(
+    body: AdminSetVipRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """Set a user as VIP with expiry date (admin only)"""
+    # Find user by username
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE username = %s",
+        (body.username,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    user_id = row["id"]
+
+    # Update role to vip, set vip_expires_at and daily_limit = -1 (unlimited)
+    await Database.execute(
+        "UPDATE users SET role = 'vip', vip_expires_at = %s, daily_limit = -1 WHERE id = %s",
+        (body.vip_expires_at, user_id),
+    )
+    logger.info(f"Admin set VIP for user {body.username} (id={user_id}) until {body.vip_expires_at}")
+
+    # Return updated user
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (user_id,),
+    )
+    return _row_to_userinfo(row)
+
+
+@router.post("/admin/remove-vip/{user_id}", response_model=UserInfo)
+async def remove_vip(
+    user_id: int,
+    admin: UserInfo = Depends(require_admin),
+):
+    """Remove VIP status from a user (admin only)"""
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (user_id,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    # Reset to normal
+    await Database.execute(
+        "UPDATE users SET role = 'normal', vip_expires_at = NULL, daily_limit = 3 WHERE id = %s",
+        (user_id,),
+    )
+    logger.info(f"Admin removed VIP from user {row['username']} (id={user_id})")
+
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (user_id,),
+    )
+    return _row_to_userinfo(row)

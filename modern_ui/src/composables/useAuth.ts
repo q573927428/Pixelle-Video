@@ -7,6 +7,7 @@ export interface UserInfo {
   email: string | null
   role: 'vip' | 'normal' | 'admin'
   daily_limit: number
+  vip_expires_at: string | null
   created_at: string
 }
 

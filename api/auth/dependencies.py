@@ -3,6 +3,7 @@ Auth dependencies for FastAPI
 """
 
 from typing import Optional
+from datetime import datetime
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from loguru import logger
@@ -34,13 +35,33 @@ async def get_current_user(
         return None
 
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, created_at FROM users WHERE id = %s AND status = 1",
+        "SELECT id, username, email, role, daily_limit, vip_expires_at, created_at FROM users WHERE id = %s AND status = 1",
         (user_id,),
     )
     if not row:
         return None
 
-    return UserInfo(**row)
+    user = UserInfo(**row)
+
+    # Auto-downgrade VIP if expired
+    if user.role == 'vip' and user.vip_expires_at is not None:
+        now = datetime.now()
+        # vip_expires_at might be a string from DB, ensure it's datetime
+        expires_at = user.vip_expires_at
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at < now:
+            # VIP expired, downgrade to normal
+            await Database.execute(
+                "UPDATE users SET role = 'normal', daily_limit = 3, vip_expires_at = NULL WHERE id = %s",
+                (user_id,),
+            )
+            user.role = 'normal'
+            user.daily_limit = 3
+            user.vip_expires_at = None
+            logger.info(f"User {user.username} (id={user_id}) VIP expired, auto-downgraded to normal")
+
+    return user
 
 
 async def require_user(

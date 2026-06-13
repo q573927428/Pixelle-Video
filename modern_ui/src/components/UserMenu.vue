@@ -5,39 +5,37 @@
       <div class="user-body">
         <div class="user-top">
           <span class="user-name">{{ auth.currentUser.value?.username }}</span>
-          <el-tooltip content="退出登录" placement="top">
-            <div class="logout-btn" @click="handleLogout" title="退出登录">
-              <el-icon><SwitchButton /></el-icon>
-            </div>
-          </el-tooltip>
         </div>
         <div class="user-badges">
           <el-tag :type="roleTagType" size="small" effect="dark">
             {{ auth.roleLabel.value }}
           </el-tag>
-          <span class="usage-chip" :class="{ unlimited: usage?.is_unlimited }" @click="showDropdown = !showDropdown" v-if="usage">
+          <span class="usage-chip" :class="{ unlimited: usage?.is_unlimited }" v-if="usage" @click="showUsage">
             <el-icon style="font-size:13px; margin-right:3px"><DataAnalysis /></el-icon>
             <template v-if="usage?.is_unlimited">♾️ 无限制</template>
             <template v-else>剩余 {{ usage?.remaining ?? '--' }} 次</template>
           </span>
         </div>
+        <div v-if="userVipExpiry" class="vip-expiry-row">
+          <el-icon style="font-size:13px; margin-right:4px"><Clock /></el-icon>
+          <span>{{ userVipExpiry }}</span>
+        </div>
       </div>
     </div>
 
-    <!-- Dropdown -->
-    <div v-if="showDropdown" class="dropdown-menu" @click.stop>
-      <div class="dropdown-item" @click="showUsage">
-        <el-icon><DataAnalysis /></el-icon>
-        <span>详细统计</span>
+    <!-- Action Buttons -->
+    <div class="user-actions">
+      <div class="user-action-btn" @click="showVipDialog">
+        <el-icon><StarFilled /></el-icon>
+        <span>{{ auth.isVip.value ? '续费VIP' : '购买VIP' }}</span>
       </div>
-      <div class="dropdown-item" v-if="auth.isAdmin.value" @click="goAdmin">
+      <div class="user-action-btn admin" v-if="auth.isAdmin.value" @click="goAdmin">
         <el-icon><Setting /></el-icon>
         <span>用户管理</span>
       </div>
-      <div class="dropdown-divider" />
-      <div class="dropdown-item logout" @click="handleLogout">
+      <div class="user-action-btn logout" @click="handleLogout">
         <el-icon><SwitchButton /></el-icon>
-        <span>退出登录</span>
+        <span>退出</span>
       </div>
     </div>
 
@@ -69,6 +67,61 @@
       </div>
       <div v-else class="usage-loading">加载中...</div>
     </el-dialog>
+
+    <!-- VIP Purchase Dialog -->
+    <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="420px" class="vip-dialog" append-to-body>
+      <div class="vip-body">
+<!-- Price -->
+        <div class="vip-price-section">
+          <div class="vip-price-card original">
+            <div class="vip-label-badge">原价</div>
+            <div class="vip-price-amount">
+              <span class="vip-currency">¥</span>
+              <span class="vip-original-price">788</span>
+            </div>
+            <div class="vip-price-unit">/ 每年</div>
+          </div>
+          <div class="vip-price-arrow">→</div>
+          <div class="vip-price-card current">
+            <div class="vip-label-badge hot">限时特惠</div>
+            <div class="vip-price-amount">
+              <span class="vip-currency">¥</span>
+              <span class="vip-current-price">388</span>
+            </div>
+            <div class="vip-price-unit">/ 每年</div>
+            <div class="vip-save-tag">省 ¥400</div>
+          </div>
+        </div>
+
+        <!-- Benefits -->
+        <div class="vip-benefits">
+          <div class="vip-benefit-item">✅ 无限次数生成视频</div>
+          <div class="vip-benefit-item">✅ 优先排队处理任务</div>
+          <div class="vip-benefit-item">✅ 高清无水印导出</div>
+          <div class="vip-benefit-item">✅ 专属客服支持</div>
+        </div>
+
+        <!-- WeChat Discount -->
+        <div class="vip-wechat-tip">
+          <el-icon style="margin-right:4px"><ChatLineSquare /></el-icon>
+          🎉 <strong>添加微信优惠30元</strong>，仅需 <strong style="color:#e6a23c;">¥358</strong>
+        </div>
+
+        <!-- WeChat QR Code -->
+        <div class="vip-qr-section">
+          <img src="/wechat.png" alt="微信二维码" class="vip-qr-img" />
+          <div class="vip-wechat-info">
+            <el-icon style="margin-right:4px; color:#07c160;"><ChatLineSquare /></el-icon>
+            <span>微信号：</span>
+            <span class="vip-wechat-id" @click="copyWechatId">Pixelle_VIP</span>
+            <el-button size="small" type="success" plain style="margin-left:8px;" @click="copyWechatId">
+              复制微信号
+            </el-button>
+          </div>
+          <div class="vip-wechat-hint">长按或扫码添加微信，付款后开通 VIP</div>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 
   <!-- Login Button (when not logged in) -->
@@ -80,8 +133,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { DataAnalysis, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { ref, computed, onMounted } from 'vue'
+import { DataAnalysis, Setting, SwitchButton, StarFilled, Clock, ChatLineSquare } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAuth, type UserDailyUsage } from '../composables/useAuth'
 
@@ -91,8 +144,8 @@ const emit = defineEmits<{
 }>()
 
 const auth = getAuth()
-const showDropdown = ref(false)
 const usageDialogVisible = ref(false)
+const vipDialogVisible = ref(false)
 const usage = ref<UserDailyUsage | null>(null)
 
 const roleTagType = computed(() => {
@@ -100,6 +153,19 @@ const roleTagType = computed(() => {
   if (role === 'admin') return 'danger'
   if (role === 'vip') return 'warning'
   return 'info'
+})
+
+const userVipExpiry = computed(() => {
+  const user = auth.currentUser.value
+  if (user?.role === 'vip' && user?.vip_expires_at) {
+    try {
+      const date = new Date(user.vip_expires_at)
+      return `到期 ${date.toLocaleDateString('zh-CN')}`
+    } catch {
+      return null
+    }
+  }
+  return null
 })
 
 const usagePercentage = computed(() => {
@@ -113,11 +179,6 @@ const usageFormat = (percentage: number) => {
   return `${usage.value.used_today} / ${usage.value.used_today + usage.value.remaining}`
 }
 
-// Close dropdown when clicking outside
-function handleClickOutside() {
-  showDropdown.value = false
-}
-
 async function loadUsage() {
   try {
     usage.value = await auth.fetchUsage()
@@ -127,16 +188,10 @@ async function loadUsage() {
 }
 
 onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
   loadUsage()
 })
 
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
-
 async function showUsage() {
-  showDropdown.value = false
   usageDialogVisible.value = true
   try {
     usage.value = await auth.fetchUsage()
@@ -145,13 +200,15 @@ async function showUsage() {
   }
 }
 
+function showVipDialog() {
+  vipDialogVisible.value = true
+}
+
 function goAdmin() {
-  showDropdown.value = false
   emit('go-admin')
 }
 
 async function handleLogout() {
-  showDropdown.value = false
   try {
     await ElMessageBox.confirm('确定要退出登录吗？', '确认退出', {
       confirmButtonText: '确定',
@@ -163,6 +220,15 @@ async function handleLogout() {
     window.location.reload()
   } catch {
     // cancelled
+  }
+}
+
+async function copyWechatId() {
+  try {
+    await navigator.clipboard.writeText('Pixelle_VIP')
+    ElMessage.success('微信号已复制')
+  } catch {
+    ElMessage.warning('复制失败，请手动记下微信号：Pixelle_VIP')
   }
 }
 </script>
@@ -218,29 +284,22 @@ async function handleLogout() {
   min-width: 0;
 }
 
-.logout-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.35);
-  transition: all 0.2s;
-  flex-shrink: 0;
-}
-
-.logout-btn:hover {
-  background: rgba(245, 108, 108, 0.15);
-  color: #f56c6c;
-}
-
 .user-badges {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 4px;
+}
+
+.vip-expiry-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #e6a23c;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: rgba(230, 162, 60, 0.08);
+  border-radius: 4px;
 }
 
 .usage-chip {
@@ -269,44 +328,55 @@ async function handleLogout() {
   background: rgba(230, 162, 60, 0.2);
 }
 
-.dropdown-menu {
-  position: absolute;
-  bottom: 100%;
-  left: 12px;
-  right: 12px;
-  background: #1e1e2e;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 6px;
-  margin-bottom: 8px;
-  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-}
-
-.dropdown-item {
+/* Action Buttons */
+.user-actions {
   display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.user-action-btn {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 6px;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 14px;
-  transition: background 0.15s;
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
-.dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+/* 购买VIP按钮 - 醒目金色渐变 */
+.user-action-btn:first-child {
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.2), rgba(245, 158, 11, 0.1));
+  border-color: rgba(230, 162, 60, 0.35);
+  color: #fbbf24;
+  font-weight: 800;
 }
 
-.dropdown-item.logout:hover {
+.user-action-btn:first-child:hover {
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.35), rgba(245, 158, 11, 0.2));
+  border-color: rgba(230, 162, 60, 0.6);
+  color: #fcd34d;
+  box-shadow: 0 0 20px rgba(230, 162, 60, 0.2);
+}
+
+.user-action-btn.admin:hover {
+  background: rgba(64, 158, 255, 0.15);
+  color: #409eff;
+  border-color: rgba(64, 158, 255, 0.3);
+}
+
+.user-action-btn.logout:hover {
+  background: rgba(245, 108, 108, 0.15);
   color: #f56c6c;
-}
-
-.dropdown-divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  margin: 4px 0;
+  border-color: rgba(245, 108, 108, 0.3);
 }
 
 .usage-info {
@@ -341,5 +411,182 @@ async function handleLogout() {
   text-align: center;
   color: #999;
   padding: 24px;
+}
+
+/* VIP Dialog Styles */
+:deep(.vip-dialog .el-dialog__body) {
+  padding: 0;
+}
+
+.vip-body {
+  padding: 20px 24px;
+}
+
+.vip-price-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.08), rgba(230, 162, 60, 0.02));
+  border-radius: 12px;
+  border: 1px solid rgba(230, 162, 60, 0.15);
+}
+
+.vip-price-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 20px;
+  border-radius: 10px;
+  min-width: 110px;
+}
+
+.vip-price-card.original {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vip-price-card.current {
+  background: linear-gradient(135deg, rgba(230, 162, 60, 0.12), rgba(245, 158, 11, 0.06));
+  border: 1px solid rgba(230, 162, 60, 0.25);
+}
+
+.vip-label-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #999;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.vip-label-badge.hot {
+  color: #fbbf24;
+  background: rgba(230, 162, 60, 0.15);
+}
+
+.vip-price-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 1px;
+}
+
+.vip-currency {
+  font-size: 16px;
+  font-weight: 700;
+  color: #999;
+}
+
+.vip-price-card.current .vip-currency {
+  color: #e6a23c;
+  font-size: 18px;
+}
+
+.vip-original-price {
+  font-size: 22px;
+  font-weight: 700;
+  color: #999;
+  text-decoration: line-through;
+}
+
+.vip-current-price {
+  font-size: 30px;
+  font-weight: 800;
+  color: #e6a23c;
+  line-height: 1;
+}
+
+.vip-price-unit {
+  font-size: 11px;
+  color: #999;
+}
+
+.vip-save-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.vip-price-arrow {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 300;
+}
+
+.vip-benefits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(64, 158, 255, 0.04);
+  border-radius: 8px;
+}
+
+.vip-benefit-item {
+  font-size: 14px;
+  color: #ddd;
+}
+
+.vip-wechat-tip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: #e6a23c;
+  background: rgba(230, 162, 60, 0.08);
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px dashed rgba(230, 162, 60, 0.3);
+}
+
+.vip-qr-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.vip-qr-img {
+  width: 160px;
+  height: 160px;
+  border-radius: 8px;
+  border: 2px solid #07c160;
+}
+
+.vip-wechat-info {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  color: #ddd;
+}
+
+.vip-wechat-id {
+  color: #07c160;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.vip-wechat-id:hover {
+  background: rgba(7, 193, 96, 0.1);
+}
+
+.vip-wechat-hint {
+  font-size: 12px;
+  color: #999;
 }
 </style>

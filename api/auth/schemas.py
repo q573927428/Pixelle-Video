@@ -34,6 +34,7 @@ class UserInfo(BaseModel):
     email: Optional[str] = None
     role: str
     daily_limit: int
+    vip_expires_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
@@ -52,6 +53,13 @@ class AdminUserUpdate(BaseModel):
     role: Optional[str] = Field(None, pattern="^(vip|normal|admin)$")
     status: Optional[int] = Field(None, ge=0, le=1)
     daily_limit: Optional[int] = Field(None, ge=-1)
+    vip_expires_at: Optional[datetime] = None
+
+
+class AdminSetVipRequest(BaseModel):
+    """Admin set VIP request"""
+    username: str
+    vip_expires_at: datetime
 
 
 class UserListResponse(BaseModel):
