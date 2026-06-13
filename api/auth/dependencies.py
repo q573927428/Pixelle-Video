@@ -131,7 +131,7 @@ async def check_daily_limit(
 
 
 async def increment_daily_usage(user_id: int):
-    """Increment daily usage counter for user"""
+    """Increment daily usage counter for user (pre-deduct at submission time)"""
     from datetime import date
 
     today = date.today()
@@ -141,3 +141,17 @@ async def increment_daily_usage(user_id: int):
            ON DUPLICATE KEY UPDATE used_count = used_count + 1""",
         (user_id, today),
     )
+    logger.info(f"📊 Daily usage incremented for user_id={user_id}, date={today}")
+
+
+async def decrement_daily_usage(user_id: int):
+    """Decrement daily usage counter (refund on failure)"""
+    from datetime import date
+
+    today = date.today()
+    await Database.execute(
+        """UPDATE daily_usage SET used_count = GREATEST(used_count - 1, 0)
+           WHERE user_id = %s AND date = %s AND used_count > 0""",
+        (user_id, today),
+    )
+    logger.info(f"📊 Daily usage decremented (refund) for user_id={user_id}, date={today}")

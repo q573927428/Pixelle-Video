@@ -29,7 +29,7 @@ from api.schemas.video import (
     VideoBatchGenerateResponse,
 )
 from api.tasks import task_manager, TaskType
-from api.auth.dependencies import check_daily_limit, increment_daily_usage
+from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage
 from api.auth.schemas import UserInfo, UserDailyUsage
 
 router = APIRouter(prefix="/video", tags=["Video Generation"])
@@ -109,6 +109,9 @@ async def generate_video_sync(
     
     Returns path to generated video, duration, and file size.
     """
+    user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time
+    await increment_daily_usage(user_id)
     try:
         logger.info(f"Sync video generation: {request_body.text[:50]}...")
         
@@ -189,9 +192,6 @@ async def generate_video_sync(
         # Call video generator service
         result = await pixelle_video.generate_video(**video_params)
         
-        # Increment daily usage after successful generation
-        await increment_daily_usage(_user.id)
-        
         # Get file size
         file_size = os.path.getsize(result.video_path) if os.path.exists(result.video_path) else 0
         
@@ -205,6 +205,8 @@ async def generate_video_sync(
         )
         
     except Exception as e:
+        # Refund on unexpected errors
+        await decrement_daily_usage(user_id)
         logger.error(f"Sync video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -234,6 +236,8 @@ async def generate_video_async(
     Returns task_id for tracking progress.
     """
     user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
+    await increment_daily_usage(user_id)
     try:
         logger.info(f"Async video generation: {request_body.text[:50]}...")
         
@@ -320,10 +324,12 @@ async def generate_video_async(
             if request_body.template_params:
                 video_params["template_params"] = request_body.template_params
             
-            result = await pixelle_video.generate_video(**video_params)
-            
-            # Increment daily usage after successful generation
-            await increment_daily_usage(user_id)
+            try:
+                result = await pixelle_video.generate_video(**video_params)
+            except Exception:
+                # Generation failed, refund the deducted daily usage
+                await decrement_daily_usage(user_id)
+                raise
             
             # Get file size
             file_size = os.path.getsize(result.video_path) if os.path.exists(result.video_path) else 0
@@ -348,6 +354,8 @@ async def generate_video_async(
         )
         
     except Exception as e:
+        # Refund on unexpected errors during task creation / setup
+        await decrement_daily_usage(user_id)
         logger.error(f"Async video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -378,6 +386,7 @@ async def generate_video_batch(
     - title_prefix: Optional prefix for auto-generated titles
     - n_scenes and other shared config: Applied to all videos
     """
+    user_id = _user.id
     try:
         n_topics = len(request_body.topics)
         logger.info(f"Batch video generation: {n_topics} topics")
@@ -471,7 +480,7 @@ async def generate_video_batch(
                     logger.info(f"Batch task {idx}/{total}: {topic}")
                     
                     # Each video in batch consumes one daily quota
-                    await increment_daily_usage(_user.id)
+                    await increment_daily_usage(user_id)
                     
                     # Build per-video params
                     video_params = dict(shared_config)
@@ -505,6 +514,8 @@ async def generate_video_batch(
                     logger.info(f"Batch task {idx}/{total} completed: {result.video_path}")
                     
                 except Exception as e:
+                    # Generation failed, refund the deducted daily usage for this video
+                    await decrement_daily_usage(user_id)
                     logger.error(f"Batch task {idx}/{total} failed: {e}")
                     errors.append({
                         "index": idx,

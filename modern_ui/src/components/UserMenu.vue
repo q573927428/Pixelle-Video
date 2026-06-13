@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { DataAnalysis, Setting, SwitchButton, StarFilled, Clock, ChatLineSquare } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
@@ -134,17 +134,37 @@ const userVipExpiry = computed(() => {
   return null
 })
 
-const usage = computed(() => {
-  const user = auth.currentUser.value
-  if (!user) return null
-  return {
-    remaining: user.daily_limit === -1 ? -1 : user.daily_limit,
-    is_unlimited: user.role === 'vip' || user.daily_limit === -1,
+const usage = ref<{ remaining: number; is_unlimited: boolean } | null>(null)
+let usageTimer: ReturnType<typeof setInterval> | null = null
+
+async function refreshUsage() {
+  try {
+    const u = await auth.fetchUsage()
+    usage.value = {
+      remaining: u.is_unlimited ? -1 : u.remaining,
+      is_unlimited: u.is_unlimited,
+    }
+  } catch {
+    // fallback to daily_limit from user info
+    const user = auth.currentUser.value
+    usage.value = {
+      remaining: user?.daily_limit ?? 0,
+      is_unlimited: user?.role === 'vip' || user?.daily_limit === -1,
+    }
   }
-})
+}
 
 onMounted(() => {
-  // usage info is derived from currentUser, no fetch needed
+  // 立即刷新，之后每 5 秒自动刷新（任务完成后次数会自动更新）
+  refreshUsage()
+  usageTimer = setInterval(refreshUsage, 5000)
+})
+
+onUnmounted(() => {
+  if (usageTimer) {
+    clearInterval(usageTimer)
+    usageTimer = null
+  }
 })
 
 function showVipDialog() {

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from api.auth.dependencies import check_daily_limit, increment_daily_usage
+from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage
 from api.auth.schemas import UserInfo
 from api.dependencies import PixelleVideoDep
 from api.routers.video import path_to_url
@@ -404,7 +404,11 @@ async def generate_asset_based_async(
     request_body: AssetBasedRequest,
     pixelle_video: PixelleVideoDep,
     request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
+    user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time
+    await increment_daily_usage(user_id)
     try:
         task = task_manager.create_task(
             task_type=TaskType.VIDEO_GENERATION,
@@ -420,25 +424,31 @@ async def generate_asset_based_async(
                     event.event_type,
                 )
 
-            pipeline = AssetBasedPipeline(pixelle_video)
-            ctx = await pipeline(
-                assets=request_body.assets,
-                video_title=request_body.video_title,
-                intent=request_body.intent,
-                duration=request_body.duration,
-                source=request_body.source,
-                analysis_image_workflow=request_body.analysis_image_workflow,
-                analysis_video_workflow=request_body.analysis_video_workflow,
-                analysis_vlm_model=request_body.analysis_vlm_model,
-                bgm_path=request_body.bgm_path,
-                bgm_volume=request_body.bgm_volume,
-                bgm_mode=request_body.bgm_mode,
-                api_video_workflow=request_body.api_video_workflow,
-                api_video_params=request_body.api_video_params,
-                voice_id=request_body.voice_id,
-                tts_speed=request_body.tts_speed,
-                progress_callback=progress_callback,
-            )
+            try:
+                pipeline = AssetBasedPipeline(pixelle_video)
+                ctx = await pipeline(
+                    assets=request_body.assets,
+                    video_title=request_body.video_title,
+                    intent=request_body.intent,
+                    duration=request_body.duration,
+                    source=request_body.source,
+                    analysis_image_workflow=request_body.analysis_image_workflow,
+                    analysis_video_workflow=request_body.analysis_video_workflow,
+                    analysis_vlm_model=request_body.analysis_vlm_model,
+                    bgm_path=request_body.bgm_path,
+                    bgm_volume=request_body.bgm_volume,
+                    bgm_mode=request_body.bgm_mode,
+                    api_video_workflow=request_body.api_video_workflow,
+                    api_video_params=request_body.api_video_params,
+                    voice_id=request_body.voice_id,
+                    tts_speed=request_body.tts_speed,
+                    progress_callback=progress_callback,
+                )
+            except Exception:
+                # Generation failed, refund the deducted daily usage
+                await decrement_daily_usage(user_id)
+                raise
+
             await save_web_generation_history(
                 pixelle_video,
                 task_id=getattr(ctx, "task_id", task.task_id),
@@ -458,6 +468,8 @@ async def generate_asset_based_async(
         return _task_response(task.task_id)
 
     except Exception as exc:
+        # Refund on unexpected errors during task creation / setup
+        await decrement_daily_usage(user_id)
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -470,11 +482,12 @@ async def generate_image_to_video_async(
     _user: UserInfo = Depends(check_daily_limit),
 ):
     user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
+    await increment_daily_usage(user_id)
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
-            nonlocal user_id
             if not request_body.image_assets:
                 raise ValueError("Please upload at least one image.")
             if not request_body.prompt_text.strip():
@@ -487,23 +500,28 @@ async def generate_image_to_video_async(
 
             task_manager.update_progress(task.task_id, 10, 100, "generating")
 
-            if _is_api_workflow(request_body.workflow_key):
-                media_result = await pixelle_video.media(
-                    **request_body.api_video_params,
-                    prompt=prompt,
-                    workflow=request_body.workflow_key,
-                    media_type="video",
-                    image_path=image_path,
-                    output_path=final_video_path,
-                )
-                final_path = await _download_to_file(media_result.url, final_video_path)
-            else:
-                final_path = await _execute_comfy_video_workflow(
-                    pixelle_video,
-                    workflow_key=request_body.workflow_key,
-                    workflow_params={"image": image_path, "prompt": prompt},
-                    final_video_path=final_video_path,
-                )
+            try:
+                if _is_api_workflow(request_body.workflow_key):
+                    media_result = await pixelle_video.media(
+                        **request_body.api_video_params,
+                        prompt=prompt,
+                        workflow=request_body.workflow_key,
+                        media_type="video",
+                        image_path=image_path,
+                        output_path=final_video_path,
+                    )
+                    final_path = await _download_to_file(media_result.url, final_video_path)
+                else:
+                    final_path = await _execute_comfy_video_workflow(
+                        pixelle_video,
+                        workflow_key=request_body.workflow_key,
+                        workflow_params={"image": image_path, "prompt": prompt},
+                        final_video_path=final_video_path,
+                    )
+            except Exception:
+                # Generation failed, refund the deducted daily usage
+                await decrement_daily_usage(user_id)
+                raise
 
             await save_web_generation_history(
                 pixelle_video,
@@ -513,8 +531,6 @@ async def generate_image_to_video_async(
                 title="图生视频",
                 input_params=request_body.model_dump(),
             )
-            # Increment daily usage after successful generation
-            await increment_daily_usage(user_id)
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
@@ -527,6 +543,8 @@ async def generate_image_to_video_async(
         return _task_response(task.task_id)
 
     except Exception as exc:
+        # Refund on unexpected errors during task creation / setup
+        await decrement_daily_usage(user_id)
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -539,11 +557,12 @@ async def generate_action_transfer_async(
     _user: UserInfo = Depends(check_daily_limit),
 ):
     user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
+    await increment_daily_usage(user_id)
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
-            nonlocal user_id
             if not request_body.video_assets:
                 raise ValueError("Please upload at least one reference video.")
             if not request_body.image_assets:
@@ -559,30 +578,35 @@ async def generate_action_transfer_async(
 
             task_manager.update_progress(task.task_id, 10, 100, "generating")
 
-            if _is_api_workflow(request_body.workflow_key):
-                media_result = await pixelle_video.media(
-                    **request_body.api_video_params,
-                    prompt=prompt,
-                    workflow=request_body.workflow_key,
-                    media_type="video",
-                    output_path=final_video_path,
-                    duration=request_body.duration,
-                    first_clip_path=video_path,
-                    reference_image_path=image_path,
-                )
-                final_path = await _download_to_file(media_result.url, final_video_path)
-            else:
-                final_path = await _execute_comfy_video_workflow(
-                    pixelle_video,
-                    workflow_key=request_body.workflow_key,
-                    workflow_params={
-                        "video": video_path,
-                        "image": image_path,
-                        "prompt": prompt,
-                        "second": request_body.duration,
-                    },
-                    final_video_path=final_video_path,
-                )
+            try:
+                if _is_api_workflow(request_body.workflow_key):
+                    media_result = await pixelle_video.media(
+                        **request_body.api_video_params,
+                        prompt=prompt,
+                        workflow=request_body.workflow_key,
+                        media_type="video",
+                        output_path=final_video_path,
+                        duration=request_body.duration,
+                        first_clip_path=video_path,
+                        reference_image_path=image_path,
+                    )
+                    final_path = await _download_to_file(media_result.url, final_video_path)
+                else:
+                    final_path = await _execute_comfy_video_workflow(
+                        pixelle_video,
+                        workflow_key=request_body.workflow_key,
+                        workflow_params={
+                            "video": video_path,
+                            "image": image_path,
+                            "prompt": prompt,
+                            "second": request_body.duration,
+                        },
+                        final_video_path=final_video_path,
+                    )
+            except Exception:
+                # Generation failed, refund the deducted daily usage
+                await decrement_daily_usage(user_id)
+                raise
 
             await save_web_generation_history(
                 pixelle_video,
@@ -592,8 +616,6 @@ async def generate_action_transfer_async(
                 title="动作迁移",
                 input_params=request_body.model_dump(),
             )
-            # Increment daily usage after successful generation
-            await increment_daily_usage(user_id)
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
@@ -606,6 +628,8 @@ async def generate_action_transfer_async(
         return _task_response(task.task_id)
 
     except Exception as exc:
+        # Refund on unexpected errors during task creation / setup
+        await decrement_daily_usage(user_id)
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -618,13 +642,20 @@ async def generate_digital_human_async(
     _user: UserInfo = Depends(check_daily_limit),
 ):
     user_id = _user.id
+    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
+    await increment_daily_usage(user_id)
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
-            nonlocal user_id
             task_manager.update_progress(task.task_id, 10, 100, "preparing")
-            final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
+            try:
+                final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
+            except Exception:
+                # Generation failed, refund the deducted daily usage
+                await decrement_daily_usage(user_id)
+                raise
+
             await save_web_generation_history(
                 pixelle_video,
                 task_id=Path(final_path).parent.name if Path(final_path).exists() else task.task_id,
@@ -633,8 +664,6 @@ async def generate_digital_human_async(
                 title="数字人口播",
                 input_params=request_body.model_dump(),
             )
-            # Increment daily usage after successful generation
-            await increment_daily_usage(user_id)
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
@@ -647,5 +676,7 @@ async def generate_digital_human_async(
         return _task_response(task.task_id)
 
     except Exception as exc:
+        # Refund on unexpected errors during task creation / setup
+        await decrement_daily_usage(user_id)
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc))
