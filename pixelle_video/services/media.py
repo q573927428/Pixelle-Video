@@ -88,10 +88,10 @@ class MediaService(ComfyBaseService):
             # Get all JSON files for this source
             workflow_files = list_resource_files("workflows", source_name)
             
-            # Filter to only files matching image_, video_ or i2v_ prefix
+            # Filter to only files matching image_, video_, i2v_ or af_ prefix
             matching_files = [
                 f for f in workflow_files 
-                if (f.startswith("image_") or f.startswith("video_") or f.startswith("i2v_")) and f.endswith('.json')
+                if (f.startswith("image_") or f.startswith("video_") or f.startswith("i2v_") or f.startswith("af_")) and f.endswith('.json')
             ]
             
             for filename in matching_files:

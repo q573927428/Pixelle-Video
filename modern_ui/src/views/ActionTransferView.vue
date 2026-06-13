@@ -58,7 +58,7 @@ const { mediaWorkflows, handleUpload: uploadResource } = useResources()
 
 const actionForm = ref<ActionForm>({
   video_asset: null, image_asset: null, prompt_text: '', duration: 5,
-  workflow_key: '', api_video_params_json: '',
+  workflow_key: 'runninghub/af_scail.json', api_video_params_json: '',
 })
 
 const historyVisible = ref(false)

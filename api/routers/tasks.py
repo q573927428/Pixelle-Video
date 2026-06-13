@@ -62,13 +62,21 @@ async def list_task_history(
     List persisted task history (survives server restarts).
     Reads from the filesystem index built by PersistenceService.
     Each user can only see their own task history.
+    Unauthenticated users see nothing.
     """
     try:
         if not pixelle_video.history:
             return {"tasks": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
 
-        # Filter by current user if authenticated
-        user_id = current_user.id if current_user else None
+        # Unauthenticated users see no history
+        if current_user is None:
+            return {"tasks": [], "total": 0, "page": page, "page_size": page_size, "total_pages": 0}
+
+        # Admin can see all tasks (including legacy tasks with no user_id)
+        if current_user.role == "admin":
+            user_id = None  # No filtering, show all
+        else:
+            user_id = current_user.id  # Normal users only see their own
 
         result = await pixelle_video.history.get_task_list(
             page=page,
@@ -97,6 +105,9 @@ async def delete_task_history(
         if not pixelle_video.history:
             raise HTTPException(status_code=503, detail="History service not available")
 
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+
         # Get task detail to verify ownership
         detail = await pixelle_video.history.get_task_detail(task_id)
         if not detail:
@@ -105,7 +116,8 @@ async def delete_task_history(
         # Check ownership: only task owner or admin can delete
         task_metadata = detail.get("metadata", {})
         task_user_id = task_metadata.get("user_id")
-        if current_user and task_user_id is not None and task_user_id != current_user.id and current_user.role != "admin":
+        is_owner = task_user_id is None or (task_user_id == current_user.id)
+        if not is_owner and current_user.role != "admin":
             raise HTTPException(
                 status_code=403,
                 detail="您没有权限删除此任务",
@@ -141,6 +153,9 @@ async def get_task_history_detail(
         if not pixelle_video.history:
             raise HTTPException(status_code=503, detail="History service not available")
 
+        if current_user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+
         detail = await pixelle_video.history.get_task_detail(task_id)
         if not detail:
             raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
@@ -148,7 +163,8 @@ async def get_task_history_detail(
         # Check ownership: only task owner or admin can view detail
         task_metadata = detail.get("metadata", {})
         task_user_id = task_metadata.get("user_id")
-        if current_user and task_user_id is not None and task_user_id != current_user.id and current_user.role != "admin":
+        is_owner = task_user_id is None or (task_user_id == current_user.id)
+        if not is_owner and current_user.role != "admin":
             raise HTTPException(
                 status_code=403,
                 detail="您没有权限查看此任务详情",
