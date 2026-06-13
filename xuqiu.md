@@ -41,6 +41,4 @@ uv run streamlit run web/app.py
 
 ## 待完成
 
-modern_ui\src\App.vue
-modern_ui\src\components\UserMenu.vue
-导航移动端优化一下，折叠显示
+⚙️ 服务配置 如果正式使用需要直接给他隐藏起来。
