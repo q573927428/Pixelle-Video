@@ -172,7 +172,9 @@ class PixelleVideoCore:
             
             # Create new instance with current config
             logger.info("✨ Creating ComfyKit instance...")
-            logger.debug(f"ComfyKit config: {current_config}")
+            # Log config without sensitive fields
+            safe_config = {k: v for k, v in current_config.items() if k not in ('api_key', 'runninghub_api_key')}
+            logger.debug(f"ComfyKit config: {safe_config}")
             self._comfykit = ComfyKit(**current_config)
             self._comfykit_config_hash = current_hash
             logger.info("✅ ComfyKit instance created")

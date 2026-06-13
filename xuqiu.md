@@ -50,13 +50,6 @@ uv run streamlit run web/app.py
 每个用户上传的素材（图片/视频/语音）只允许上传者自己在生成时使用，其他人也不应该看到别人的素材列表。
 每个用户上传素材的总空间大小需要限制。超过限制则不能再上传了并且提示用户空间已满，需要清理空间后才能继续上传。
 
-我刚刚使用图生视频流程生成了一个视频成功了，为什么我的每日使用量没有扣除？
-
-
-怎么日志里面显示api_key？不要显示把
-2026-06-13 22:07:52.226 | DEBUG    | pixelle_video.service:_get_or_create_comfykit:175 - ComfyKit config: {'comfyui_url': 'http://127.0.0.1:8188', 'api_key': 'comfyui-b3bf74cdd40755f68dc1e395e4a8804acbfbcb29671f3417c85390ad25e32eee', 'runninghub_api_key': '52692e551b47412997f66ce195120f68'}
-2026-06-13 22:07:52.227 | INFO     | pixelle_video.service:_get_or_create_comfykit:178 - ✅ ComfyKit instance created
-2026-06-13 22:07:52- PM - INFO - executor.py:300 - execute - Detected RunningHub workflow ID: 2011258580393009153
 
 modern_ui\src\components\ActionTransferForm.vue
 modern_ui\src\components\DigitalHumanForm.vue
