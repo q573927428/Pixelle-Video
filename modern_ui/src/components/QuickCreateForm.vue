@@ -339,7 +339,7 @@
           <el-radio-group v-model="workflowSource" size="small">
             <el-radio-button value="runninghub">RunningHub</el-radio-button>
             <!-- <el-radio-button value="selfhost">本地 ComfyUI</el-radio-button> -->
-            <el-radio-button value="api">API 模型</el-radio-button>
+            <!-- <el-radio-button value="api">API 模型</el-radio-button> -->
           </el-radio-group>
         </el-form-item>
 

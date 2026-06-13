@@ -52,7 +52,6 @@ modern_ui\src\components\DigitalHumanForm.vue
 modern_ui\src\components\QuickCreateForm.vue
 modern_ui\src\components\I2vForm.vue
 
-已经不在需要老的ui（web目录），是否整个目录可以删除。其他哪些地方需要同步修改？
 
 生成的视频是否可以自动加字幕。
 

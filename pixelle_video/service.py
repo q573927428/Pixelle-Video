@@ -93,8 +93,10 @@ class PixelleVideoCore:
         # Global RunningHub concurrency semaphore.
         # Limits ALL RunningHub workflow executions (pipelines, TTS, media, etc.)
         # to the user-configured concurrent limit, preventing TASK_QUEUE_MAXED.
-        # Value is read from config_manager's runninghub_concurrent_limit.
+        # Supports hot-reload: detects config changes via _runninghub_semaphore_limit
+        # and recreates the semaphore without requiring a server restart.
         self._runninghub_semaphore: Optional[asyncio.Semaphore] = None
+        self._runninghub_semaphore_limit: Optional[int] = None
         
         # Core services (initialized in initialize())
         self.llm: Optional[LLMService] = None
@@ -126,17 +128,34 @@ class PixelleVideoCore:
 
     def _get_runninghub_semaphore(self) -> asyncio.Semaphore:
         """
-        Get or create the global RunningHub concurrency semaphore.
+        Get or recreate the global RunningHub concurrency semaphore.
         
-        The semaphore limits concurrent RunningHub workflow executions across
-        all entry points (pipelines, TTS, media, etc.), preventing
-        TASK_QUEUE_MAXED errors when multiple users submit tasks simultaneously.
-        Tasks exceeding the limit will be queued and executed sequentially.
+        Supports hot-reload: each call checks if the config limit has changed.
+        If so, the old semaphore is discarded and a new one is created.
+        This allows users to change the concurrency limit via the UI Settings
+        page without restarting the server.
+        
+        NOTE: In-flight tasks holding the old semaphore are not affected.
+        The new limit applies to subsequent task submissions.
         """
+        current_limit = self._get_runninghub_concurrent_limit()
+        
+        # Recreate if limit changed
+        if self._runninghub_semaphore is not None and self._runninghub_semaphore_limit != current_limit:
+            logger.info(
+                f"🔒 RunningHub concurrency limit changed from "
+                f"{self._runninghub_semaphore_limit} to {current_limit}, "
+                f"recreating semaphore (in-flight tasks unaffected)"
+            )
+            self._runninghub_semaphore = None
+            self._runninghub_semaphore_limit = None
+        
+        # Create if not exists
         if self._runninghub_semaphore is None:
-            max_concurrent = self._get_runninghub_concurrent_limit()
-            self._runninghub_semaphore = asyncio.Semaphore(max_concurrent)
-            logger.info(f"🔒 RunningHub concurrency semaphore created (max: {max_concurrent})")
+            self._runninghub_semaphore = asyncio.Semaphore(current_limit)
+            self._runninghub_semaphore_limit = current_limit
+            logger.info(f"🔒 RunningHub concurrency semaphore set to: {current_limit}")
+        
         return self._runninghub_semaphore
 
     async def acquire_runninghub_slot(self) -> None:
