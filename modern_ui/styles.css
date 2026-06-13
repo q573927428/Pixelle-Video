@@ -817,3 +817,157 @@
       .topbar { flex-direction: column; }
       .tool-grid, .metric-row { grid-template-columns: 1fr; }
     }
+
+    /* ====== ElMessageBox 深色主题适配 ====== */
+    .el-message-box {
+      --el-bg-color: #0b1220;
+      --el-border-color: rgba(71, 85, 105, 0.55);
+      --el-text-color-primary: #e5eefb;
+      --el-text-color-regular: #cbd5e1;
+      border-radius: 20px;
+      border: 1px solid rgba(71, 85, 105, 0.55);
+      background: #0b1220;
+      box-shadow: 0 22px 70px rgba(2, 6, 23, 0.65);
+      padding: 0;
+    }
+    .el-message-box .el-message-box__header {
+      padding: 20px 24px 0;
+    }
+    .el-message-box .el-message-box__headerbtn {
+      top: 20px;
+      right: 20px;
+    }
+    .el-message-box .el-message-box__headerbtn .el-message-box__close {
+      color: #64748b;
+    }
+    .el-message-box .el-message-box__headerbtn .el-message-box__close:hover {
+      color: #cbd5e1;
+    }
+    .el-message-box .el-message-box__title {
+      color: #e5eefb;
+      font-weight: 900;
+      font-size: 16px;
+    }
+    .el-message-box .el-message-box__status {
+      color: #a78bfa;
+    }
+    .el-message-box .el-message-box__status.el-icon-warning { color: #fbbf24; }
+    .el-message-box .el-message-box__status.el-icon-success { color: #4ade80; }
+    .el-message-box .el-message-box__status.el-icon-error { color: #f87171; }
+    .el-message-box .el-message-box__status.el-icon-info { color: #67e8f9; }
+    .el-message-box .el-message-box__content {
+      padding: 20px 24px;
+      color: #cbd5e1;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .el-message-box .el-message-box__container {
+      align-items: flex-start;
+    }
+    .el-message-box .el-message-box__message {
+      color: #cbd5e1;
+    }
+    .el-message-box .el-message-box__message p {
+      color: #cbd5e1;
+      line-height: 1.6;
+    }
+    .el-message-box .el-message-box__btns {
+      padding: 0 24px 20px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .el-message-box .el-message-box__btns .el-button {
+      border-radius: 12px !important;
+      font-weight: 700 !important;
+      font-size: 13px !important;
+      padding: 10px 20px !important;
+      height: auto !important;
+      --el-button-bg-color: rgba(30, 41, 59, 0.7) !important;
+      --el-button-border-color: rgba(71, 85, 105, 0.4) !important;
+      --el-button-text-color: #94a3b8 !important;
+      --el-button-hover-bg-color: rgba(30, 41, 59, 0.95) !important;
+      --el-button-hover-border-color: rgba(100, 116, 139, 0.6) !important;
+      --el-button-hover-text-color: #e5eefb !important;
+    }
+    .el-message-box .el-message-box__btns .el-button:hover {
+      background: var(--el-button-hover-bg-color) !important;
+      border-color: var(--el-button-hover-border-color) !important;
+      color: var(--el-button-hover-text-color) !important;
+    }
+    .el-message-box .el-message-box__btns .el-button--primary {
+      --el-button-bg-color: #7c3aed !important;
+      --el-button-border-color: #7c3aed !important;
+      --el-button-text-color: #fff !important;
+      --el-button-hover-bg-color: #6d28d9 !important;
+      --el-button-hover-border-color: #6d28d9 !important;
+      --el-button-hover-text-color: #fff !important;
+    }
+    .el-message-box .el-message-box__btns .el-button--primary:hover {
+      background: var(--el-button-hover-bg-color) !important;
+      border-color: var(--el-button-hover-border-color) !important;
+      color: var(--el-button-hover-text-color) !important;
+    }
+    .el-message-box .el-message-box__input {
+      padding-top: 8px;
+    }
+    .el-message-box .el-message-box__input .el-input__inner {
+      background: rgba(8, 13, 25, 0.92) !important;
+      color: #e5eefb !important;
+      border-radius: 12px !important;
+      box-shadow: 0 0 0 1px rgba(71, 85, 105, 0.45) inset !important;
+    }
+    .el-message-box .el-message-box__errormsg {
+      color: #f87171;
+      font-size: 12px;
+      padding-top: 4px;
+    }
+    .el-message-box .el-message-box__input input::placeholder {
+      color: #64748b !important;
+    }
+
+    /* ====== ElDialog 深色主题适配 ====== */
+    .el-dialog {
+      --el-dialog-bg-color: #0b1220;
+      --el-dialog-box-shadow: 0 22px 70px rgba(2, 6, 23, 0.65);
+      --el-dialog-title-font-size: 16px;
+      border-radius: 20px;
+      border: 1px solid rgba(71, 85, 105, 0.55);
+      padding: 0;
+    }
+    .el-dialog .el-dialog__header {
+      padding: 20px 24px 0;
+    }
+    .el-dialog .el-dialog__headerbtn {
+      top: 20px;
+      right: 20px;
+    }
+    .el-dialog .el-dialog__headerbtn .el-dialog__close {
+      color: #64748b;
+      font-size: 16px;
+    }
+    .el-dialog .el-dialog__headerbtn .el-dialog__close:hover {
+      color: #cbd5e1;
+    }
+    .el-dialog .el-dialog__title {
+      color: #e5eefb;
+      font-weight: 900;
+      font-size: 16px;
+    }
+    .el-dialog .el-dialog__body {
+      padding: 20px 24px;
+      color: #cbd5e1;
+      font-size: 14px;
+    }
+    .el-dialog .el-dialog__footer {
+      padding: 0 24px 20px;
+      text-align: right;
+      box-sizing: border-box;
+    }
+    .el-dialog .el-dialog__footer .el-button {
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 10px 20px;
+      height: auto;
+    }
