@@ -33,7 +33,7 @@
     </div>
 
     <!-- ====== 第三板块：工作流选择 ====== -->
-    <div class="form-section-wrapper">
+    <!-- <div class="form-section-wrapper">
       <div class="form-section">
       <div class="form-section-title">🎥 工作流选择</div>
       <div class="form-section-body">
@@ -47,7 +47,7 @@
       </el-form-item>
     </div>
       </div>
-    </div>
+    </div> -->
   </el-form>
 </template>
 

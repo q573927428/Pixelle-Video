@@ -316,6 +316,18 @@ async function generate() {
   payload.goods_text = digitalForm.value.goods_text
   payload.goods_title = digitalForm.value.goods_title
 
+  // 每日限流预检
+  try {
+    const auth = getAuth()
+    const usage = await auth.fetchUsage()
+    if (!usage.is_unlimited && usage.remaining <= 0) {
+      ElMessage.warning('今日生成次数已用完，请明天再试或升级为 VIP')
+      return
+    }
+  } catch (e: any) {
+    console.warn('查询每日使用量失败，跳过前端预检', e)
+  }
+
   await submitTask('/api/pipelines/digital-human/async', payload)
 }
 

@@ -17,10 +17,12 @@ from pathlib import Path
 from typing import Any, Literal, Optional
 
 import httpx
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
+from api.auth.dependencies import check_daily_limit, increment_daily_usage
+from api.auth.schemas import UserInfo
 from api.dependencies import PixelleVideoDep
 from api.routers.video import path_to_url
 from api.tasks import TaskType, task_manager
@@ -465,11 +467,14 @@ async def generate_image_to_video_async(
     request_body: ImageToVideoRequest,
     pixelle_video: PixelleVideoDep,
     request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
+    user_id = _user.id
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
+            nonlocal user_id
             if not request_body.image_assets:
                 raise ValueError("Please upload at least one image.")
             if not request_body.prompt_text.strip():
@@ -508,6 +513,9 @@ async def generate_image_to_video_async(
                 title="图生视频",
                 input_params=request_body.model_dump(),
             )
+            # Increment daily usage after successful generation
+            await increment_daily_usage(user_id)
+
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
                 "pipeline": "image_to_video",
@@ -528,11 +536,14 @@ async def generate_action_transfer_async(
     request_body: ActionTransferRequest,
     pixelle_video: PixelleVideoDep,
     request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
+    user_id = _user.id
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
+            nonlocal user_id
             if not request_body.video_assets:
                 raise ValueError("Please upload at least one reference video.")
             if not request_body.image_assets:
@@ -581,6 +592,9 @@ async def generate_action_transfer_async(
                 title="动作迁移",
                 input_params=request_body.model_dump(),
             )
+            # Increment daily usage after successful generation
+            await increment_daily_usage(user_id)
+
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
                 "pipeline": "action_transfer",
@@ -601,11 +615,14 @@ async def generate_digital_human_async(
     request_body: DigitalHumanRequest,
     pixelle_video: PixelleVideoDep,
     request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
+    user_id = _user.id
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
 
         async def execute():
+            nonlocal user_id
             task_manager.update_progress(task.task_id, 10, 100, "preparing")
             final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
             await save_web_generation_history(
@@ -616,6 +633,9 @@ async def generate_digital_human_async(
                 title="数字人口播",
                 input_params=request_body.model_dump(),
             )
+            # Increment daily usage after successful generation
+            await increment_daily_usage(user_id)
+
             task_manager.update_progress(task.task_id, 100, 100, "completed")
             return {
                 "pipeline": "digital_human",

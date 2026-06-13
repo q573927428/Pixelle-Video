@@ -50,6 +50,7 @@ import type { I2vForm as I2vFormData, WorkflowInfo } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
+import { getAuth } from '../composables/useAuth'
 import I2vForm from '../components/I2vForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
@@ -57,7 +58,7 @@ const { running, progress, statusText, result, submitTask, parseJson } = useTask
 const { mediaWorkflows, uploads, handleUpload: uploadResource } = useResources()
 
 const i2vForm = ref<I2vFormData>({
-  image_asset: null, prompt_text: '', workflow_key: '', api_video_params_json: '',
+  image_asset: null, prompt_text: '', workflow_key: 'runninghub/i2v_LTX2.json', api_video_params_json: '',
 })
 
 const historyVisible = ref(false)
@@ -69,7 +70,7 @@ const workflows = computed<WorkflowInfo[]>(() =>
   mediaWorkflows.value.filter(wf => {
     const key = (wf.key || wf.path || '').toLowerCase()
     const name = (wf.name || key).toLowerCase()
-    return key.startsWith('api/') || name.startsWith('i2v_') || key.includes('/i2v_')
+    return key.startsWith('api/') || name.startsWith('i2v_') || key.includes('/i2v_') || key.includes('i2v_')
   })
 )
 
@@ -110,6 +111,19 @@ async function generate() {
   if (!i2vForm.value.image_asset) { ElMessage.warning('请上传首帧图片'); return }
   if (!i2vForm.value.prompt_text.trim()) { ElMessage.warning('请输入提示词'); return }
   if (!i2vForm.value.workflow_key) { ElMessage.warning('请选择图生视频工作流'); return }
+
+  // 每日限流预检
+  try {
+    const auth = getAuth()
+    const usage = await auth.fetchUsage()
+    if (!usage.is_unlimited && usage.remaining <= 0) {
+      ElMessage.warning('今日生成次数已用完，请明天再试或升级为 VIP')
+      return
+    }
+  } catch (e: any) {
+    console.warn('查询每日使用量失败，跳过前端预检', e)
+  }
+
   await submitTask('/api/pipelines/image-to-video/async', {
     image_assets: [i2vForm.value.image_asset].filter(Boolean),
     prompt_text: i2vForm.value.prompt_text,

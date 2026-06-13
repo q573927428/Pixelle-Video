@@ -50,6 +50,7 @@ import type { ActionForm, WorkflowInfo } from '../types'
 import { filePreviewUrl, loadLocalHistory } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
+import { getAuth } from '../composables/useAuth'
 import ActionTransferForm from '../components/ActionTransferForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
@@ -115,6 +116,19 @@ async function generate() {
   if (!actionForm.value.image_asset) { ElMessage.warning('请上传目标图片'); return }
   if (!actionForm.value.prompt_text.trim()) { ElMessage.warning('请输入提示词'); return }
   if (!actionForm.value.workflow_key) { ElMessage.warning('请选择动作迁移工作流'); return }
+
+  // 每日限流预检
+  try {
+    const auth = getAuth()
+    const usage = await auth.fetchUsage()
+    if (!usage.is_unlimited && usage.remaining <= 0) {
+      ElMessage.warning('今日生成次数已用完，请明天再试或升级为 VIP')
+      return
+    }
+  } catch (e: any) {
+    console.warn('查询每日使用量失败，跳过前端预检', e)
+  }
+
   await submitTask('/api/pipelines/action-transfer/async', {
     video_assets: [actionForm.value.video_asset].filter(Boolean),
     image_assets: [actionForm.value.image_asset].filter(Boolean),
