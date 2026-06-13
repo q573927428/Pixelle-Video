@@ -421,7 +421,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { QuickForm, WorkflowInfo, TemplateInfo, BgmInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
@@ -543,7 +543,6 @@ async function loadTemplateParams(templateKey: string) {
 }
 
 // 监听模板变化
-import { watch } from 'vue'
 watch(() => props.form.frame_template, (newKey) => {
   if (newKey) loadTemplateParams(newKey)
 })

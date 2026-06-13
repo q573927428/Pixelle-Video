@@ -373,7 +373,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { DigitalForm, WorkflowInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
@@ -425,6 +425,7 @@ function onBatchModeChange(val: boolean) {
 }
 
 const videoApiParamsActiveNames = ref<string[]>([])
+
 const previewActiveNames = ref<string[]>([])
 const asrLoading = ref(false)
 

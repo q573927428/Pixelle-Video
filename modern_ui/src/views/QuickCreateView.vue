@@ -48,11 +48,12 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuickForm } from '../types'
 import { filePreviewUrl, loadLocalHistory, request } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
+import { getAuth } from '../composables/useAuth'
 import QuickCreateForm from '../components/QuickCreateForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
@@ -64,7 +65,7 @@ const quickForm = ref<QuickForm>({
   min_narration_words: 5, max_narration_words: 20,
   min_image_prompt_words: 30, max_image_prompt_words: 60,
   tts_inference_mode: 'local', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
-  tts_workflow: null, ref_audio: null, media_workflow: null, video_fps: 30,
+  tts_workflow: 'runninghub/tts_index2.json', ref_audio: null, media_workflow: null, video_fps: 30,
   frame_template: null, prompt_prefix: 'Minimalist black-and-white matchstick figure style illustration, clean lines, simple sketch style', bgm_path: null, bgm_volume: 0.3,
   tts_speed: 1.2, voxcpm_cfg: 2.0, voxcpm_normalize: false,
   voxcpm_denoise: false, voxcpm_control_instruction: '',
@@ -159,6 +160,49 @@ async function generateBatch() {
   if (topics.length === 0) { ElMessage.warning('请输入至少一个主题'); return }
   if (!quickForm.value.frame_template) { ElMessage.warning('请选择画面模板'); return }
   if (topics.length > 100) { ElMessage.warning('主题数量不能超过 100 个'); return }
+  
+  // 每日限流预检：查询用户今日剩余次数
+  try {
+    const auth = getAuth()
+    const usage = await auth.fetchUsage()
+    if (!usage.is_unlimited && usage.remaining < topics.length) {
+      try {
+        await ElMessageBox.confirm(
+          `您当前剩余可用次数为 ${usage.remaining} 次，但您设置了 ${topics.length} 个批量生成。<br>超出部分（${topics.length - usage.remaining} 个）将无法生成，是否继续？`,
+          '超出每日限制',
+          {
+            confirmButtonText: '继续生成（仅前 ' + usage.remaining + ' 个有效）',
+            cancelButtonText: '取消',
+            type: 'warning',
+            dangerouslyUseHTMLString: true,
+          }
+        )
+      } catch {
+        // 用户点击"取消"，直接返回不提交
+        ElMessage.info('已取消生成')
+        return
+      }
+      // 用户确认后，只提交剩余次数以内的主题数
+      const allowedTopics = topics.slice(0, usage.remaining)
+      if (allowedTopics.length === 0) {
+        ElMessage.warning('今日生成次数已用完，无法继续')
+        return
+      }
+      if (allowedTopics.length < topics.length) {
+        ElMessage.warning(`今日仅剩 ${usage.remaining} 次，已截取前 ${allowedTopics.length} 个主题进行生成`)
+      }
+      await doSubmitBatch(allowedTopics)
+      return
+    }
+  } catch (e: any) {
+    // 如果查询失败（如未登录），不阻塞，交给后端校验
+    console.warn('查询每日使用量失败，跳过前端预检', e)
+  }
+  
+  await doSubmitBatch(topics)
+}
+
+async function doSubmitBatch(topics: string[]) {
   
   // 重置状态
   running.value = true

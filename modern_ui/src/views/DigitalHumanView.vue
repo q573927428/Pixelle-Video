@@ -70,11 +70,12 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DigitalForm } from '../types'
 import { request, filePreviewUrl, loadLocalHistory } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
+import { getAuth } from '../composables/useAuth'
 import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
@@ -93,7 +94,7 @@ const digitalForm = ref<DigitalForm>({
     api_image_workflow: '', api_video_workflow: '', api_video_params: {},
   },
   tts_inference_mode: 'local', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
-  tts_speed: 1.2, tts_workflow: '', ref_audio: '', voxcpm_cfg: 2.0,
+  tts_speed: 1.2, tts_workflow: 'runninghub/tts_index2.json', ref_audio: '', voxcpm_cfg: 2.0,
   voxcpm_normalize: false, voxcpm_denoise: false,
   voxcpm_control_instruction: '', voxcpm_use_prompt_text: false,
   voxcpm_prompt_text: '',
@@ -200,6 +201,43 @@ async function generate() {
     if (digitalForm.value.batch_mode) {
       const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
       if (!topics.length) { ElMessage.warning('请输入商品主题列表'); return }
+      
+      // 每日限流预检：查询用户今日剩余次数
+      try {
+        const auth = getAuth()
+        const usage = await auth.fetchUsage()
+        if (!usage.is_unlimited && usage.remaining < topics.length) {
+          try {
+            await ElMessageBox.confirm(
+              `您当前剩余可用次数为 ${usage.remaining} 次，但您设置了 ${topics.length} 个批量生成。<br>超出部分（${topics.length - usage.remaining} 个）将无法生成，是否继续？`,
+              '超出每日限制',
+              {
+                confirmButtonText: '继续生成（仅前 ' + usage.remaining + ' 个有效）',
+                cancelButtonText: '取消',
+                type: 'warning',
+                dangerouslyUseHTMLString: true,
+              }
+            )
+          } catch {
+            // 用户点击"取消"，直接返回不提交
+            ElMessage.info('已取消生成')
+            return
+          }
+          // 用户确认后，只处理剩余次数以内的主题
+          const allowedTopics = topics.slice(0, usage.remaining)
+          if (allowedTopics.length === 0) {
+            ElMessage.warning('今日生成次数已用完，无法继续')
+            return
+          }
+          if (allowedTopics.length < topics.length) {
+            ElMessage.warning(`今日仅剩 ${usage.remaining} 次，已截取前 ${allowedTopics.length} 个主题进行生成`)
+          }
+          // 替换 topics 为截取后的列表
+          topics.splice(0, topics.length, ...allowedTopics)
+        }
+      } catch (e: any) {
+        console.warn('查询每日使用量失败，跳过前端预检', e)
+      }
 
     running.value = true
     progress.value = 0

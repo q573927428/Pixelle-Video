@@ -356,7 +356,8 @@ async def generate_video_async(
 async def generate_video_batch(
     request_body: VideoBatchGenerateRequest,
     pixelle_video: PixelleVideoDep,
-    request: Request
+    request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
 ):
     """
     Batch video generation (async)
@@ -468,6 +469,9 @@ async def generate_video_batch(
             for idx, topic in enumerate(request_body.topics, 1):
                 try:
                     logger.info(f"Batch task {idx}/{total}: {topic}")
+                    
+                    # Each video in batch consumes one daily quota
+                    await increment_daily_usage(_user.id)
                     
                     # Build per-video params
                     video_params = dict(shared_config)
