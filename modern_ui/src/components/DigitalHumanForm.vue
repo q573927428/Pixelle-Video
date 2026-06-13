@@ -1,5 +1,20 @@
 <template>
   <el-form label-position="top" class="form-sections">
+
+     <!-- ====== 第一板块：人物形象上传 ====== -->
+     <div class="form-section-wrapper">
+      <div class="form-section">
+      <div class="form-section-title">🧑 人物形象上传</div>
+      <div class="form-section-body">
+      <el-form-item label="角色图片">
+        <div class="upload-field-container">
+          <UploadBox category="character_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
+          <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
+        </div>
+      </el-form-item>
+    </div>
+      </div>
+    </div>
     <!-- ====== 第四板块：生成模式 ====== -->
     <div class="form-section-wrapper">
       <div class="form-section">
@@ -132,7 +147,7 @@
         <el-form-item label="本地 TTS 引擎">
           <el-radio-group v-model="form.tts_engine">
             <el-radio-button value="edge_tts">Edge TTS（默认）</el-radio-button>
-            <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button>
+            <!-- <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button> -->
           </el-radio-group>
         </el-form-item>
 
@@ -233,23 +248,8 @@
       </div>
     </div>
 
-    <!-- ====== 第一板块：人物形象上传 ====== -->
-    <div class="form-section-wrapper">
-      <div class="form-section">
-      <div class="form-section-title">🧑 人物形象上传</div>
-      <div class="form-section-body">
-      <el-form-item label="角色图片">
-        <div class="upload-field-container">
-          <UploadBox category="character_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
-          <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
-        </div>
-      </el-form-item>
-    </div>
-      </div>
-    </div>
-
     <!-- ====== 第三板块：服务配置 ====== -->
-    <div class="form-section-wrapper">
+    <div class="form-section-wrapper"  v-if="false">
       <div class="form-section">
       <div class="form-section-title">⚙️ 服务配置</div>
       <div class="form-section-body">
