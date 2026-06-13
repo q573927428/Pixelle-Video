@@ -11,7 +11,6 @@
       <div class="page-form">
         <ActionTransferForm
           :form="actionForm"
-          :uploads="uploads"
           :workflows="workflows"
           @upload="handleUpload"
           @select-history="openHistory"
@@ -47,7 +46,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { ActionForm, WorkflowInfo } from '../types'
-import { filePreviewUrl, loadLocalHistory } from '../api'
+import { filePreviewUrl, getUserUploads } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
@@ -55,7 +54,7 @@ import ActionTransferForm from '../components/ActionTransferForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, parseJson } = useTaskRunner()
-const { mediaWorkflows, uploads, handleUpload: uploadResource } = useResources()
+const { mediaWorkflows, handleUpload: uploadResource } = useResources()
 
 const actionForm = ref<ActionForm>({
   video_asset: null, image_asset: null, prompt_text: '', duration: 5,
@@ -91,14 +90,18 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   }
 }
 
-function refreshHistory() {
-  const localHistory = loadLocalHistory()
-  historyRecords.value = localHistory.slice(0, 50)
+async function refreshHistory() {
+  try {
+    const res = await getUserUploads(historyFilterCategory.value || '')
+    historyRecords.value = res.records || []
+  } catch (_) {
+    historyRecords.value = []
+  }
 }
 
-function openHistory(category: string) {
-  refreshHistory()
+async function openHistory(category: string) {
   historyFilterCategory.value = category
+  await refreshHistory()
   historyVisible.value = true
 }
 

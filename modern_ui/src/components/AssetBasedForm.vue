@@ -147,7 +147,6 @@ import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
   form: AssetForm
-  uploads: any[]
   bgmFiles: BgmInfo[]
   ttsVoices: TtsVoiceInfo[]
 }>()

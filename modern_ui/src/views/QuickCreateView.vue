@@ -50,7 +50,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuickForm } from '../types'
-import { filePreviewUrl, loadLocalHistory, request } from '../api'
+import { filePreviewUrl, getUserUploads, request } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
@@ -97,14 +97,18 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   if (result && target === 'quick_ref_audio') quickForm.value.ref_audio = result.path
 }
 
-function refreshHistory() {
-  const localHistory = loadLocalHistory()
-  historyRecords.value = localHistory.slice(0, 50)
+async function refreshHistory() {
+  try {
+    const res = await getUserUploads(historyFilterCategory.value || '')
+    historyRecords.value = res.records || []
+  } catch (_) {
+    historyRecords.value = []
+  }
 }
 
-function openHistory(category: string) {
-  refreshHistory()
+async function openHistory(category: string) {
   historyFilterCategory.value = category
+  await refreshHistory()
   historyVisible.value = true
 }
 

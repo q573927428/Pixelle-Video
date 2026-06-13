@@ -58,7 +58,6 @@ import FilePreview from './FilePreview.vue'
 
 const props = defineProps<{
   form: I2vForm
-  uploads: any[]
   workflows: WorkflowInfo[]
 }>()
 

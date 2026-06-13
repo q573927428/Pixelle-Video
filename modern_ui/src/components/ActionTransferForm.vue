@@ -76,7 +76,6 @@ import FilePreview from './FilePreview.vue'
 
 defineProps<{
   form: ActionForm
-  uploads: any[]
   workflows: WorkflowInfo[]
 }>()
 

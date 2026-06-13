@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
-import { makePreviewUrl, deleteFromLocalHistory } from '../api'
+import { makePreviewUrl, deleteUserUpload } from '../api'
 
 const props = defineProps<{
   modelValue: boolean
@@ -118,15 +118,6 @@ function getUrl(rec: any) {
   return makePreviewUrl(rec)
 }
 
-function isImg(name: string) {
-  return /\.(jpg|jpeg|png|gif|webp)$/i.test(name)
-}
-function isVideo(name: string) {
-  return /\.(mp4|mov|avi|mkv|webm)$/i.test(name)
-}
-function isAudio(name: string) {
-  return /\.(mp3|wav|flac|m4a|aac|ogg)$/i.test(name)
-}
 function onImgError(e: Event) {
   const el = e.target as HTMLElement
   if (el?.parentElement) {
@@ -151,7 +142,8 @@ async function handleDelete(rec: any, e: Event) {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    deleteFromLocalHistory(rec.id)
+    // Delete from server (user-isolated)
+    await deleteUserUpload(rec.id)
     ElMessage.success('删除成功')
     emit('delete')
   } catch (_) {

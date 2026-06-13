@@ -11,7 +11,6 @@
       <div class="page-form">
         <I2vForm
           :form="i2vForm"
-          :uploads="uploads"
           :workflows="workflows"
           @upload="handleUpload"
           @select-history="openHistory"
@@ -47,7 +46,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { I2vForm as I2vFormData, WorkflowInfo } from '../types'
-import { filePreviewUrl, loadLocalHistory } from '../api'
+import { filePreviewUrl, getUserUploads } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
@@ -55,7 +54,7 @@ import I2vForm from '../components/I2vForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, parseJson } = useTaskRunner()
-const { mediaWorkflows, uploads, handleUpload: uploadResource } = useResources()
+const { mediaWorkflows, handleUpload: uploadResource } = useResources()
 
 const i2vForm = ref<I2vFormData>({
   image_asset: null, prompt_text: '', workflow_key: 'runninghub/i2v_LTX2.json', api_video_params_json: '',
@@ -88,14 +87,18 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   }
 }
 
-function refreshHistory() {
-  const localHistory = loadLocalHistory()
-  historyRecords.value = localHistory.slice(0, 50)
+async function refreshHistory() {
+  try {
+    const res = await getUserUploads(historyFilterCategory.value || '')
+    historyRecords.value = res.records || []
+  } catch (_) {
+    historyRecords.value = []
+  }
 }
 
-function openHistory(category: string) {
-  refreshHistory()
+async function openHistory(category: string) {
   historyFilterCategory.value = category
+  await refreshHistory()
   historyVisible.value = true
 }
 

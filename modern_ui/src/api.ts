@@ -125,6 +125,29 @@ export function deleteFromLocalHistory(id: string): any[] {
   }
 }
 
+// ====== User File API (per-user isolation) ======
+
+export async function getUserUploads(category = ''): Promise<{ success: boolean; records: any[] }> {
+  const params = category ? `?category=${encodeURIComponent(category)}` : ''
+  return request(`/api/files/user/list${params}`)
+}
+
+export async function getUserStorageUsage(): Promise<{
+  success: boolean
+  used_bytes: number
+  limit_bytes: number
+  used_display: string
+  limit_display: string
+  is_unlimited: boolean
+  usage_percent: number
+}> {
+  return request('/api/files/user/usage')
+}
+
+export async function deleteUserUpload(fileId: number): Promise<{ success: boolean; message: string }> {
+  return request(`/api/files/user/delete/${fileId}`, { method: 'DELETE' })
+}
+
 // ====== Config API ======
 
 export interface LLMConfig {

@@ -42,6 +42,19 @@ CREATE TABLE IF NOT EXISTS `daily_usage` (
     FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
     INDEX `idx_user_date` (`user_id`, `date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `user_uploads` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT NOT NULL,
+    `file_path` VARCHAR(500) NOT NULL,
+    `original_name` VARCHAR(255) NOT NULL,
+    `file_size` BIGINT NOT NULL DEFAULT 0 COMMENT 'File size in bytes',
+    `category` VARCHAR(50) NOT NULL DEFAULT 'misc',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_user_category` (`user_id`, `category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """
 
 # Default admin credentials

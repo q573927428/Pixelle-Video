@@ -11,7 +11,6 @@
       <div class="page-form">
         <DigitalHumanForm
           :form="digitalForm"
-          :uploads="uploads"
           :media-workflows="mediaWorkflows"
           :tts-workflows="ttsWorkflows"
           :tts-voices="ttsVoices"
@@ -72,7 +71,7 @@
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DigitalForm } from '../types'
-import { request, filePreviewUrl, loadLocalHistory } from '../api'
+import { request, filePreviewUrl, getUserUploads } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
@@ -80,7 +79,7 @@ import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask } = useTaskRunner()
-const { mediaWorkflows, ttsWorkflows, ttsVoices, uploads, handleUpload: uploadResource } = useResources()
+const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource } = useResources()
 
 const batchResults = ref<any[]>([])
 
@@ -129,14 +128,18 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   }
 }
 
-function refreshHistory() {
-  const localHistory = loadLocalHistory()
-  historyRecords.value = localHistory.slice(0, 50)
+async function refreshHistory() {
+  try {
+    const res = await getUserUploads(historyFilterCategory.value || '')
+    historyRecords.value = res.records || []
+  } catch (_) {
+    historyRecords.value = []
+  }
 }
 
-function openHistory(category: string) {
-  refreshHistory()
+async function openHistory(category: string) {
   historyFilterCategory.value = category
+  await refreshHistory()
   historyVisible.value = true
 }
 
@@ -146,7 +149,6 @@ function onHistorySelect(record: any) {
   else if (cat === 'character_image') digitalForm.value.character_asset = record.path
   else if (cat === 'goods_image') {
     if (digitalForm.value.batch_mode) {
-      // 批量模式下追加到多图列表
       digitalForm.value.batch_goods_assets = [...digitalForm.value.batch_goods_assets, record.path]
     } else {
       digitalForm.value.goods_asset = record.path
@@ -183,7 +185,6 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
   payload.video_api_model = digitalForm.value.video_api_model
   payload.video_api_params = { ...digitalForm.value.video_api_params }
 
-  // 当选择 API 模型模式时，将选中的模型名称映射到 workflow_config 的 api 字段
   if (digitalForm.value.image_service_mode === 'api' && digitalForm.value.image_api_model) {
     payload.workflow_config.api_image_workflow = digitalForm.value.image_api_model
   }
@@ -197,12 +198,10 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
 async function generate() {
   if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
 
-    // 批量模式
     if (digitalForm.value.batch_mode) {
       const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
       if (!topics.length) { ElMessage.warning('请输入商品主题列表'); return }
       
-      // 每日限流预检：查询用户今日剩余次数
       try {
         const auth = getAuth()
         const usage = await auth.fetchUsage()
@@ -219,11 +218,9 @@ async function generate() {
               }
             )
           } catch {
-            // 用户点击"取消"，直接返回不提交
             ElMessage.info('已取消生成')
             return
           }
-          // 用户确认后，只处理剩余次数以内的主题
           const allowedTopics = topics.slice(0, usage.remaining)
           if (allowedTopics.length === 0) {
             ElMessage.warning('今日生成次数已用完，无法继续')
@@ -232,7 +229,6 @@ async function generate() {
           if (allowedTopics.length < topics.length) {
             ElMessage.warning(`今日仅剩 ${usage.remaining} 次，已截取前 ${allowedTopics.length} 个主题进行生成`)
           }
-          // 替换 topics 为截取后的列表
           topics.splice(0, topics.length, ...allowedTopics)
         }
       } catch (e: any) {
@@ -252,10 +248,7 @@ async function generate() {
       const topic = topics[i]
       statusText.value = `[${i + 1}/${topics.length}] 正在生成：${topic}`
       try {
-        // 带货模式：topic 作为商品标题，文案 AI 自动生成
-        // 自定义模式：topic 作为固定口播文案
         const isCustomize = digitalForm.value.mode === 'customize'
-        // 按顺序匹配商品图片：不足时用最后一张，没有则留空
         const bgAssets = digitalForm.value.batch_goods_assets
         const goodsImage = bgAssets.length > 0 ? bgAssets[Math.min(i, bgAssets.length - 1)] : ''
         const payload = buildPayload({
@@ -263,21 +256,18 @@ async function generate() {
           title: isCustomize ? '' : topic,
           text: isCustomize ? topic : '',
         })
-        // 覆盖 goods_assets 为当前主题对应的商品图
         payload.goods_assets = goodsImage ? [goodsImage] : []
         const data: any = await request('/api/pipelines/digital-human/async', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        // 等待任务完成
         const taskId = data.task_id
         const pollResult = await pollTaskOnce(taskId)
         if (pollResult.success) {
           completedCount++
           batchResults.value[i].success = true
           batchResults.value[i].loading = false
-          // 从已完成的任务中获取视频 URL
           try {
             const task: any = await request(`/api/tasks/${taskId}`)
             if (task.result?.video_url) {
@@ -309,14 +299,12 @@ async function generate() {
     return
   }
 
-  // 单次模式
   if (digitalForm.value.mode === 'digital' && !digitalForm.value.goods_asset) { ElMessage.warning('请上传商品图片'); return }
   const payload = buildPayload()
   payload.mode = digitalForm.value.mode
   payload.goods_text = digitalForm.value.goods_text
   payload.goods_title = digitalForm.value.goods_title
 
-  // 每日限流预检
   try {
     const auth = getAuth()
     const usage = await auth.fetchUsage()
@@ -331,10 +319,9 @@ async function generate() {
   await submitTask('/api/pipelines/digital-human/async', payload)
 }
 
-// 辅助：轮询单个任务直到完成或失败
 function pollTaskOnce(taskId: string): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
-    const maxAttempts = 120 // 最多轮询 120 次 × 3秒 = 6 分钟
+    const maxAttempts = 120
     let attempts = 0
     const tick = async () => {
       try {

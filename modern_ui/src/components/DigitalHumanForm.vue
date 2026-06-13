@@ -382,7 +382,6 @@ import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
   form: DigitalForm
-  uploads: any[]
   mediaWorkflows: WorkflowInfo[]
   ttsWorkflows: WorkflowInfo[]
   ttsVoices: TtsVoiceInfo[]
