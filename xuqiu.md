@@ -46,15 +46,14 @@ uv run streamlit run web/app.py
 
 这个商业化有个很重要的问题，runninghub  同时最多只能2个任务，多了需要开更高级的会员。专业版 Plus  169元每月  可以5个任务。
 
-modern_ui\src\views\ActionTransferView.vue
-动作迁移流程 默认值使用
-af_scail.json - Runn inghub
-
-
-用户注册需要手机号码验证
 
 modern_ui\src\components\ActionTransferForm.vue
 modern_ui\src\components\DigitalHumanForm.vue
 modern_ui\src\components\QuickCreateForm.vue
 modern_ui\src\components\I2vForm.vue
-生成板块
+
+已经不在需要老的ui（web目录），是否整个目录可以删除。其他哪些地方需要同步修改？
+
+生成的视频是否可以自动加字幕。
+
+生成好的视频，添加可以分发到其他短视频平台的功能。

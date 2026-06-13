@@ -28,7 +28,7 @@ from api.routers.video import path_to_url
 from api.tasks import TaskType, task_manager
 from pixelle_video.pipelines.asset_based import AssetBasedPipeline
 from pixelle_video.utils.os_util import create_task_output_dir
-from web.utils.history_persistence import save_web_generation_history
+from api.utils.history_persistence import save_web_generation_history
 
 router = APIRouter(prefix="/pipelines", tags=["Modern Pipelines"])
 

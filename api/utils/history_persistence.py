@@ -1,4 +1,4 @@
-"""Persistence helpers for Web-only generation workflows."""
+"""Persistence helpers for API workflow generation workflows."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def save_web_generation_history(
     n_frames: int = 1,
     user_id: int | None = None,
 ) -> None:
-    """Save a minimal history record for workflows implemented directly in Web UI."""
+    """Save a minimal history record for workflows implemented directly in API."""
     if not getattr(pixelle_video, "persistence", None):
         logger.warning("Pixelle persistence service is not initialized; skipping history save")
         return

@@ -56,7 +56,6 @@ RUN export UV_HTTP_TIMEOUT=300 && \
 
 # Copy rest of application code
 COPY api ./api
-COPY web ./web
 COPY bgm ./bgm
 COPY templates ./templates
 COPY workflows ./workflows
@@ -69,8 +68,7 @@ RUN mkdir -p /app/output /app/data /app/temp
 
 # Expose ports
 # 8000: API service
-# 8501: Web UI service
-EXPOSE 8000 8501
+EXPOSE 8000
 
 # Default command (can be overridden in docker-compose)
 CMD ["uv", "run", "python", "api/app.py"]
