@@ -6,7 +6,7 @@
       <div class="hero-content">
         <div class="hero-logo">🎬</div>
         <h1 class="hero-title">
-          <span>Pixelle Studio</span>
+          <span>ZuoSuo AI</span>
         </h1>
         <p class="hero-subtitle">
           基于 AI 的视频创作平台 · 智能生成数字人 · 快速制作精彩视频
@@ -57,15 +57,89 @@
       </div>
     </section>
 
+    <!-- ====== Video Showcase Section ====== -->
+    <section class="section showcase-section">
+      <div class="section-header">
+        <h2 class="section-title">效果展示</h2>
+        <p class="section-desc">看看 AI 生成的精彩视频效果</p>
+      </div>
+
+      <!-- Portrait Videos (竖屏 4 个) -->
+      <div class="showcase-group">
+        <h3 class="showcase-group-title">📱 竖屏视频</h3>
+        <div class="showcase-grid portrait-grid">
+          <div
+            v-for="item in portraitVideos"
+            :key="item.title"
+            class="showcase-card showcase-card-portrait"
+          >
+            <div class="showcase-card-header">
+              <span class="showcase-card-icon">{{ item.icon }}</span>
+              <span class="showcase-card-title">{{ item.title }}</span>
+            </div>
+            <div class="showcase-video-wrapper portrait-wrapper">
+              <video
+                :src="item.src"
+                :poster="item.poster"
+                class="showcase-video"
+                muted
+                loop
+                controls
+                playsinline
+                preload="metadata"
+              ></video>
+              <div class="showcase-video-overlay">
+                <el-icon class="play-icon"><VideoPlay /></el-icon>
+              </div>
+            </div>
+            <p class="showcase-card-desc">{{ item.desc }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Landscape Videos (横屏 3 个) -->
+      <div class="showcase-group">
+        <h3 class="showcase-group-title">🖥️ 横屏视频</h3>
+        <div class="showcase-grid landscape-grid">
+          <div
+            v-for="item in landscapeVideos"
+            :key="item.title"
+            class="showcase-card showcase-card-landscape"
+          >
+            <div class="showcase-card-header">
+              <span class="showcase-card-icon">{{ item.icon }}</span>
+              <span class="showcase-card-title">{{ item.title }}</span>
+            </div>
+            <div class="showcase-video-wrapper landscape-wrapper">
+              <video
+                :src="item.src"
+                :poster="item.poster"
+                class="showcase-video"
+                muted
+                loop
+                controls
+                playsinline
+                preload="metadata"
+              ></video>
+              <div class="showcase-video-overlay">
+                <el-icon class="play-icon"><VideoPlay /></el-icon>
+              </div>
+            </div>
+            <p class="showcase-card-desc">{{ item.desc }}</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ====== Plans / VIP Comparison ====== -->
     <section class="section plans-section">
       <div class="section-header">
         <h2 class="section-title">选择您的方案</h2>
-        <p class="section-desc">普通用户与 VIP 会员权益对比</p>
+        <p class="section-desc">适合各类创作者的价格方案</p>
       </div>
 
       <div class="plans-grid">
-        <!-- Free Plan -->
+        <!-- Free Plan (左列) -->
         <div class="plan-card plan-free">
           <div class="plan-badge">免费</div>
           <div class="plan-header">
@@ -84,9 +158,9 @@
           <el-button class="plan-btn" @click="$emit('show-register')">免费注册</el-button>
         </div>
 
-        <!-- VIP Plan -->
+        <!-- VIP Plan (中列 - 最突出) -->
         <div class="plan-card plan-vip">
-          <div class="plan-badge plan-badge-vip">VIP 推荐</div>
+          <div class="plan-badge plan-badge-vip">🔥 超高性价比</div>
           <div class="plan-header">
             <h3 class="plan-name">VIP 会员</h3>
             <div class="plan-price">
@@ -109,28 +183,49 @@
               <span>{{ item }}</span>
             </li>
           </ul>
-
-          <!-- WeChat Discount -->
-          <div class="vip-wechat-tip">
-            <el-icon style="margin-right:4px"><ChatLineSquare /></el-icon>
-            🎉 <strong>添加微信优惠30元</strong>，仅需 <strong style="color:#e6a23c;">¥358</strong>
-          </div>
-
-          <!-- WeChat QR Code -->
-          <div class="vip-qr-section">
-            <img src="/wechat.png" alt="微信二维码" class="vip-qr-img" />
-            <div class="vip-wechat-info">
-              <el-icon style="margin-right:4px; color:#07c160;"><ChatLineSquare /></el-icon>
-              <span>微信号：</span>
-              <span class="vip-wechat-id">Pixelle_VIP</span>
-              <el-button size="small" type="success" plain style="margin-left:8px;" @click="copyWechatId">
-                复制微信号
-              </el-button>
-            </div>
-            <div class="vip-wechat-hint">长按或扫码添加微信，付款后开通 VIP</div>
-          </div>
-
           <el-button type="primary" class="plan-btn plan-btn-vip" @click="$emit('show-login')">开通 VIP</el-button>
+        </div>
+
+        <!-- WeChat Plan (右列 - 微信联系) -->
+        <div class="plan-card plan-wechat">
+          <div class="plan-badge plan-badge-wechat">💬 联系我们</div>
+          <div class="plan-header">
+            <h3 class="plan-name">添加微信</h3>
+            <div class="plan-price">
+              <span class="price-value wechat-price">享优惠</span>
+            </div>
+            <p class="plan-desc">添加好友，获取专属服务和优惠</p>
+          </div>
+          <ul class="plan-features plan-features-wechat">
+            <li class="plan-feature-item">
+              <el-icon style="color:#07c160;"><Discount /></el-icon>
+              <span>微信专享价 <strong style="color:#e6a23c;">¥358/年</strong>（省¥30）</span>
+            </li>
+            <li class="plan-feature-item">
+              <el-icon style="color:#07c160;"><MagicStick /></el-icon>
+              <span>赠送 <strong>3天</strong> 免费体验</span>
+            </li>
+          </ul>
+
+          <!-- QR Code + WeChat ID 合并在一行 -->
+          <div class="wechat-qr-row">
+            <img src="/wechat.png" alt="微信二维码" class="wechat-qr-img" />
+            <div class="wechat-qr-right">
+              <div class="wechat-info-row">
+                <el-icon style="color:#07c160; font-size:16px;"><ChatLineSquare /></el-icon>
+                <span class="wechat-id-text">zhuxixy</span>
+                <el-button size="small" type="success" plain class="wechat-copy-btn" @click="copyWechatId">
+                  复制
+                </el-button>
+              </div>
+              <div class="wechat-qr-label">长按或扫码添加好友</div>
+            </div>
+          </div>
+
+          <div class="wechat-hint">
+            <el-icon style="margin-right:4px;"><InfoFilled /></el-icon>
+            备注"AI视频"享专属福利
+          </div>
         </div>
       </div>
     </section>
@@ -153,13 +248,13 @@
 
     <!-- ====== Footer ====== -->
     <footer class="home-footer">
-      <p>© 2026 Pixelle Studio. All rights reserved.</p>
+      <p>© 2026 ZuoSuo AI. All rights reserved.</p>
     </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Check, ChatLineSquare } from '@element-plus/icons-vue'
+import { Check, ChatLineSquare, VideoPlay, ChatDotSquare, Discount, MagicStick, Clock, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 defineEmits<{
@@ -169,20 +264,75 @@ defineEmits<{
 
 async function copyWechatId() {
   try {
-    await navigator.clipboard.writeText('Pixelle_VIP')
+    await navigator.clipboard.writeText('zhuxixy')
     ElMessage.success('微信号已复制')
   } catch {
-    ElMessage.warning('复制失败，请手动记下微信号：Pixelle_VIP')
+    ElMessage.warning('复制失败，请手动记下微信号：zhuxixy')
   }
 }
 
 const features = [
-  { icon: '🤖', title: 'AI 数字人', desc: '上传照片或视频，AI 自动生成逼真的数字人，支持口型同步与动作驱动' },
-  { icon: '⚡', title: '快速创作', desc: '通过简单的文字描述或素材上传，快速生成高质量视频内容' },
-  { icon: '🎨', title: '素材创作', desc: '强大的素材处理能力，支持图片、视频、音频等多种素材的智能编辑' },
-  { icon: '🎥', title: '图生视频', desc: '将静态图片转化为动态视频，赋予图像生命力与故事性' },
-  { icon: '💃', title: '动作迁移', desc: '将参考视频中的动作迁移到目标人物上，实现动作复制与风格转换' },
-  { icon: '📊', title: '任务管理', desc: '完善的视频任务管理系统，实时追踪生成进度，轻松管理历史记录' },
+  { icon: '🤖', title: '数字人带货', desc: '上传数字人照片或者人物照片 + 商品图片，AI 自动生成逼真的数字人带货视频，支持口型同步与动作驱动' },
+  { icon: '🎤', title: '个人IP口播', desc: '上传人物照片和10秒录音以及一段文案，AI 自动生成栩栩如生的个人IP人物克隆口播视频' },
+  { icon: '🔄', title: '动作迁移', desc: '将参考视频中的人物动作迁移到目标人物上，实现精准的动作复制与风格转换' },
+  { icon: '🎨', title: '图生视频', desc: '将静态图片转化为动态视频，赋予图像生命力与故事性' },
+]
+
+// ── 竖屏视频展示数据（9:16） ──
+const portraitVideos = [
+  {
+    icon: '👤',
+    title: '数字人带货',
+    src: '/modern/videos/shu-01.mp4',
+    poster: '',
+    desc: '数字人带货视频',
+  },
+  {
+    icon: '🎤',
+    title: '个人IP口播',
+    src: '/modern/videos/shu-05.mp4',
+    poster: '',
+    desc: '个人IP语音克隆口播视频',
+  },
+  {
+    icon: '🔄',
+    title: '动作迁移',
+    src: '/modern/videos/shu-03.mp4',
+    poster: '',
+    desc: '舞蹈动作迁移效果',
+  },
+  {
+    icon: '🎨',
+    title: '图生视频',
+    src: '/modern/videos/shu-02.mp4',
+    poster: '',
+    desc: '人像照片转动态视频',
+  },
+]
+
+// ── 横屏视频展示数据（16:9） ──
+const landscapeVideos = [
+  {
+    icon: '🎬',
+    title: '副业赚钱 - 电影模板',
+    src: '/modern/videos/heng-01.mp4',
+    poster: '',
+    desc: 'AI 副业赚钱',
+  },
+  {
+    icon: '🗣️',
+    title: '历史解说',
+    src: '/modern/videos/heng-02.mp4',
+    poster: '',
+    desc: '资治通鉴启示录',
+  },
+  {
+    icon: '📖',
+    title: '情感类书单 - 克隆音色',
+    src: '/modern/videos/heng-05.mp4',
+    poster: '',
+    desc: '冬日暖阳,情感类人物音色克隆',
+  },
 ]
 
 const freePlan = [
@@ -361,7 +511,7 @@ const vipPlan = [
 /* ====== Features ====== */
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 24px;
 }
 
@@ -408,39 +558,181 @@ const vipPlan = [
   margin: 0;
 }
 
+/* ====== Showcase Section ====== */
+.showcase-section {
+  padding-bottom: 40px;
+}
+
+.showcase-group {
+  margin-bottom: 56px;
+}
+
+.showcase-group:last-child {
+  margin-bottom: 0;
+}
+
+.showcase-group-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: #e5eefb;
+  margin: 0 0 28px;
+  letter-spacing: -0.02em;
+}
+
+.showcase-grid {
+  display: grid;
+  gap: 24px;
+}
+
+.portrait-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.landscape-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.showcase-card {
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.showcase-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(125, 211, 252, 0.35);
+  box-shadow: 0 24px 60px rgba(124, 58, 237, 0.15);
+}
+
+.showcase-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px 0;
+}
+
+.showcase-card-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.showcase-card-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #e5eefb;
+  letter-spacing: -0.02em;
+}
+
+.showcase-video-wrapper {
+  position: relative;
+  margin: 12px 12px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+
+.portrait-wrapper {
+  aspect-ratio: 9 / 16;
+}
+
+.landscape-wrapper {
+  aspect-ratio: 16 / 9;
+}
+
+.showcase-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.showcase-video-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.showcase-video-wrapper:hover .showcase-video-overlay {
+  opacity: 1;
+}
+
+.play-icon {
+  font-size: 48px;
+  color: rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.5));
+}
+
+.showcase-card-desc {
+  font-size: 13px;
+  color: var(--muted, #94a3b8);
+  margin: 0;
+  padding: 12px 20px 18px;
+  line-height: 1.5;
+}
+
 /* ====== Plans ====== */
 .plans-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
-  max-width: 900px;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  gap: 24px;
+  max-width: 1100px;
   margin: 0 auto;
+  align-items: start;
 }
 
 .plan-card {
-  padding: 48px 36px;
+  padding: 44px 32px;
   border: 1px solid rgba(148, 163, 184, 0.15);
   border-radius: 24px;
   background: rgba(15, 23, 42, 0.5);
   backdrop-filter: blur(12px);
   position: relative;
-  transition: transform 0.25s ease, border-color 0.25s ease;
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .plan-card:hover {
   transform: translateY(-4px);
 }
 
+/* ── VIP 中列最突出 ── */
 .plan-vip {
   border-color: rgba(124, 58, 237, 0.35);
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12), rgba(6, 182, 212, 0.08));
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15), rgba(6, 182, 212, 0.1));
+  transform: scale(1.05);
+  z-index: 2;
+  padding: 52px 36px;
+  box-shadow: 0 0 40px rgba(124, 58, 237, 0.15);
 }
 
 .plan-vip:hover {
+  transform: scale(1.05) translateY(-4px);
   border-color: rgba(124, 58, 237, 0.6);
-  box-shadow: 0 24px 60px rgba(124, 58, 237, 0.2);
+  box-shadow: 0 24px 60px rgba(124, 58, 237, 0.25);
 }
 
+/* ── 微信卡绿色主题 ── */
+.plan-wechat {
+  border-color: rgba(7, 193, 96, 0.25);
+  background: linear-gradient(135deg, rgba(7, 193, 96, 0.08), rgba(6, 182, 212, 0.05));
+}
+
+.plan-wechat:hover {
+  border-color: rgba(7, 193, 96, 0.5);
+  box-shadow: 0 24px 60px rgba(7, 193, 96, 0.12);
+}
+
+/* ── Badges ── */
 .plan-badge {
   display: inline-block;
   padding: 6px 16px;
@@ -459,8 +751,14 @@ const vipPlan = [
   color: #c4b5fd;
 }
 
+.plan-badge-wechat {
+  background: rgba(7, 193, 96, 0.15);
+  color: #07c160;
+}
+
+/* ── Header ── */
 .plan-header {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .plan-name {
@@ -510,6 +808,13 @@ const vipPlan = [
   line-height: 1;
 }
 
+.wechat-price {
+  font-size: 32px;
+  font-weight: 900;
+  color: #07c160;
+  letter-spacing: 0;
+}
+
 .price-period {
   font-size: 16px;
   color: var(--muted, #94a3b8);
@@ -532,6 +837,7 @@ const vipPlan = [
   line-height: 1.5;
 }
 
+/* ── Features List ── */
 .plan-features {
   list-style: none;
   padding: 0;
@@ -539,6 +845,11 @@ const vipPlan = [
   display: flex;
   flex-direction: column;
   gap: 14px;
+  flex: 1;
+}
+
+.plan-features-wechat {
+  margin-bottom: 20px;
 }
 
 .plan-feature-item {
@@ -559,12 +870,14 @@ const vipPlan = [
   color: #a78bfa;
 }
 
+/* ── Buttons ── */
 .plan-btn {
   width: 100%;
   height: 48px !important;
   font-size: 16px !important;
   font-weight: 800 !important;
   border-radius: 14px !important;
+  margin-top: auto;
 }
 
 .plan-btn-vip {
@@ -574,46 +887,49 @@ const vipPlan = [
   --el-button-hover-border-color: #6d28d9 !important;
 }
 
-.vip-wechat-tip {
+/* ── WeChat Card Specific ── */
+.wechat-qr-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  color: #e6a23c;
-  background: rgba(230, 162, 60, 0.08);
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  border: 1px dashed rgba(230, 162, 60, 0.3);
-}
-
-.vip-qr-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  gap: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  margin-bottom: 20px;
+  border: 1px solid rgba(7, 193, 96, 0.12);
+  margin-bottom: 14px;
 }
 
-.vip-qr-img {
-  width: 140px;
-  height: 140px;
+.wechat-qr-img {
+  width: 86px;
+  height: 86px;
   border-radius: 8px;
   border: 2px solid #07c160;
+  flex-shrink: 0;
 }
 
-.vip-wechat-info {
+.wechat-qr-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.wechat-qr-label {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.wechat-info-row {
   display: flex;
   align-items: center;
+  gap: 6px;
   font-size: 14px;
-  color: #ddd;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  justify-content: flex-start;
 }
 
-.vip-wechat-id {
+.wechat-id-text {
   color: #07c160;
   font-weight: 700;
   cursor: pointer;
@@ -622,13 +938,28 @@ const vipPlan = [
   transition: background 0.2s;
 }
 
-.vip-wechat-id:hover {
+.wechat-id-text:hover {
   background: rgba(7, 193, 96, 0.1);
 }
 
-.vip-wechat-hint {
+.wechat-copy-btn {
+  height: 26px !important;
+  font-size: 11px !important;
+  padding: 0 8px !important;
+  border-radius: 6px !important;
+}
+
+.wechat-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
-  color: #999;
+  color: #888;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.06);
+  margin-top: auto;
 }
 
 /* ====== CTA ====== */
@@ -712,9 +1043,26 @@ const vipPlan = [
 }
 
 /* ====== Responsive ====== */
-@media (max-width: 1024px) {
-  .features-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 1100px) {
+  .plans-grid {
+    grid-template-columns: 1fr 1fr;
+    max-width: 700px;
+    gap: 24px;
+  }
+
+  .plan-vip {
+    transform: none;
+    padding: 44px 32px;
+  }
+
+  .plan-vip:hover {
+    transform: translateY(-4px);
+  }
+
+  .plan-wechat {
+    grid-column: 1 / -1;
+    max-width: 500px;
+    margin: 0 auto;
   }
 }
 
@@ -757,6 +1105,12 @@ const vipPlan = [
 
   .plans-grid {
     grid-template-columns: 1fr;
+    max-width: 450px;
+  }
+
+  .plan-wechat {
+    grid-column: auto;
+    max-width: none;
   }
 
   .cta-card {
@@ -767,6 +1121,14 @@ const vipPlan = [
     flex-direction: column;
     align-items: center;
   }
+
+  .portrait-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .landscape-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 480px) {
@@ -776,6 +1138,10 @@ const vipPlan = [
 
   .plan-card {
     padding: 32px 24px;
+  }
+
+  .portrait-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

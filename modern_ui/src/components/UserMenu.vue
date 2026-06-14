@@ -81,7 +81,7 @@
           <div class="vip-wechat-info">
             <el-icon style="margin-right:4px; color:#07c160;"><ChatLineSquare /></el-icon>
             <span>微信号：</span>
-            <span class="vip-wechat-id" @click="copyWechatId">Pixelle_VIP</span>
+            <span class="vip-wechat-id" @click="copyWechatId">zhuxixy</span>
             <el-button size="small" type="success" plain style="margin-left:8px;" @click="copyWechatId">
               复制微信号
             </el-button>
@@ -192,10 +192,10 @@ async function handleLogout() {
 
 async function copyWechatId() {
   try {
-    await navigator.clipboard.writeText('Pixelle_VIP')
+    await navigator.clipboard.writeText('zhuxixy')
     ElMessage.success('微信号已复制')
   } catch {
-    ElMessage.warning('复制失败，请手动记下微信号：Pixelle_VIP')
+    ElMessage.warning('复制失败，请手动记下微信号：zhuxixy')
   }
 }
 </script>

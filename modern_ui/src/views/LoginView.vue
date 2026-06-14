@@ -3,7 +3,7 @@
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo">🎬</div>
-        <h2>Pixelle Studio</h2>
+        <h2>ZuoSuo AI</h2>
         <p class="login-subtitle">{{ isRegister ? '创建新账号' : '登录到您的账号' }}</p>
       </div>
 

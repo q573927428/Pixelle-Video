@@ -11,8 +11,8 @@
       <div class="brand">
         <div class="brand-logo">🎬</div>
         <div class="brand-text">
-          <h1 class="brand-title">Pixelle Studio</h1>
-          <p class="brand-subtitle">Full Modern UI</p>
+          <h1 class="brand-title">ZuoSuo AI</h1>
+          <p class="brand-subtitle">创作之所 作为之所在</p>
         </div>
         <!-- Mobile toggle button -->
         <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" aria-label="切换菜单">

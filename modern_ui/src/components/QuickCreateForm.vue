@@ -311,7 +311,7 @@
             </el-form-item>
           </div>
           <el-form-item label="文本">
-            <el-input v-model="previewTextContent" type="textarea" :rows="2" placeholder="Pixelle.AI 正在用人工智能改变内容创作的方式..." />
+            <el-input v-model="previewTextContent" type="textarea" :rows="2" placeholder="ZuoSuo AI 创作之所 - 正在用人工智能改变内容创作的方式..." />
           </el-form-item>
           <div class="small muted" style="margin-bottom:8px;">📐 模板尺寸: {{ selectedTemplateInfo ? `${selectedTemplateInfo.width} × ${selectedTemplateInfo.height}` : '-' }}</div>
           <el-button type="primary" size="small" @click="handlePreviewTemplate" :loading="previewTemplateLoading" style="width:100%;">
@@ -612,7 +612,7 @@ const previewPromptActiveNames = ref<string[]>([])
 // 模板预览
 const previewTitle = ref('AI 改变内容创作')
 const previewImage = ref('resources/example.png')
-const previewTextContent = ref('Pixelle.AI 正在用人工智能改变内容创作的方式，让每个人都能轻松制作专业级视频。')
+const previewTextContent = ref('ZuoSuo AI - 正在用人工智能改变内容创作的方式，让每个人都能轻松制作专业级视频。')
 const previewTemplateLoading = ref(false)
 const previewTemplateUrl = ref('')
 
