@@ -21,16 +21,21 @@ set "PYTHONPATH=%PROJECT_ROOT%"
 :: Set PIXELLE_VIDEO_ROOT environment variable for reliable path resolution
 set "PIXELLE_VIDEO_ROOT=%PROJECT_ROOT%"
 
-:: Start Web UI
-echo [Starting] Launching Pixelle-Video Web UI...
-echo Browser will open automatically.
+:: Start API Server
+echo [Starting] Pixelle-Video API Server...
+echo.
+echo Web UI: http://localhost:8000/modern
+echo API Docs: http://localhost:8000/docs
 echo.
 echo Note: Configure API keys and settings in the Web UI.
 echo Press Ctrl+C to stop the server
 echo ========================================
 echo.
 
-"%PYTHON_HOME%\python.exe" -m streamlit run web\app.py
+:: Open browser after server starts
+start http://localhost:8000/modern
+
+"%PYTHON_HOME%\python.exe" api/app.py --host 0.0.0.0 --port 8000
 
 if errorlevel 1 (
     echo.

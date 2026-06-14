@@ -1,6 +1,33 @@
 # Pixelle-Video Docker Image
 # Based on Python 3.11 slim for smaller image size
 
+# Stage 1: Build modern_ui frontend
+FROM node:20-slim AS frontend-build
+
+WORKDIR /app/modern_ui
+
+# Build arguments for mirror configuration
+ARG USE_CN_MIRROR=false
+
+# Replace npm registry with China mirror if needed
+RUN if [ "$USE_CN_MIRROR" = "true" ]; then \
+        npm config set registry https://registry.npmmirror.com; \
+    fi
+
+# Copy frontend source code
+COPY modern_ui/package.json modern_ui/pnpm-lock.yaml* ./
+
+# Install pnpm and dependencies
+RUN npm install -g pnpm && \
+    pnpm install --frozen-lockfile
+
+# Copy the rest of frontend source
+COPY modern_ui/ ./
+
+# Build frontend
+RUN pnpm build
+
+# Stage 2: Main Python backend
 FROM python:3.11-slim
 
 # Build arguments for mirror configuration
@@ -62,6 +89,9 @@ COPY workflows ./workflows
 COPY resources ./resources
 COPY docs/images ./docs/images
 COPY docs/FAQ*.md ./docs/
+
+# Copy built frontend from stage 1
+COPY --from=frontend-build /app/modern_ui/dist ./modern_ui/dist
 
 # Create output, data and temp directories
 RUN mkdir -p /app/output /app/data /app/temp
