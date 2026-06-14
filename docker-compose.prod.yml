@@ -1,0 +1,104 @@
+# Pixelle-Video Production Docker Compose
+# ========================================
+# This file extends docker-compose.yml for production deployment.
+# Usage:
+#   cp .env.example .env  # then edit .env with your settings
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# For SSL auto-setup on first run:
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly --webroot -w /var/www/certbot -d ${DOMAIN} --email ${SSL_EMAIL} --agree-tos --no-eff-email
+#   docker-compose -f docker-compose.yml -f docker-compose.prod.yml restart nginx
+
+version: '3.8'
+
+services:
+  # ==================== API Service Override ====================
+  api:
+    environment:
+      # MySQL connection (used in api/config.py or api/dependencies.py)
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER:-pixelle}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-pixelle}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-pixelle_video}
+      # Pass API keys via environment (overrides config.yaml values)
+      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_BASE_URL=${LLM_BASE_URL}
+      - LLM_MODEL=${LLM_MODEL}
+      - RUNNINGHUB_API_KEY=${RUNNINGHUB_API_KEY}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: always
+
+  # ==================== MySQL Database ====================
+  mysql:
+    image: mysql:8.0
+    container_name: pixelle-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pixelle_video}
+      MYSQL_USER: ${MYSQL_USER:-pixelle}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pixelle}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "127.0.0.1:3306:3306"  # Only expose locally for security
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # Auto-initialize database schema on first run
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - pixelle-network
+
+  # ==================== Nginx Reverse Proxy ====================
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: pixelle-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # SSL certificates (managed by certbot)
+      - ssl-certs:/etc/nginx/ssl:ro
+      - certbot-www:/var/www/certbot
+      # Video output files (served directly by Nginx for performance)
+      - ./output:/app/output:ro
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - pixelle-network
+
+  # ==================== Certbot (SSL Certificate Auto-Renewal) ====================
+  certbot:
+    image: certbot/certbot
+    container_name: pixelle-certbot
+    volumes:
+      - ssl-certs:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # Auto-renewal check every 12 hours
+    entrypoint: |
+      sh -c "trap exit TERM; while :; do sleep 12h & wait \$\$!; certbot renew; done"
+    networks:
+      - pixelle-network
+
+volumes:
+  mysql-data:
+    driver: local
+  ssl-certs:
+    driver: local
+  certbot-www:
+    driver: local
+
+networks:
+  pixelle-network:
+    external: false

@@ -14,47 +14,48 @@
 API Configuration
 """
 
+import os
 from typing import Optional
 from pydantic import BaseModel
 
 
 class APIConfig(BaseModel):
     """API configuration"""
-    
+
     # Server settings
     host: str = "0.0.0.0"
     port: int = 8000
     reload: bool = False
-    
+
     # CORS settings
     cors_enabled: bool = True
     cors_origins: list[str] = ["*"]
-    
+
     # Task settings
     task_cleanup_interval: int = 3600  # Clean completed tasks every hour
     task_retention_time: int = 86400   # Keep task results for 24 hours
-    
+
     # File upload settings
     max_upload_size: int = 100 * 1024 * 1024  # 100MB
-    
+
     # API settings
     api_prefix: str = "/api"
     docs_url: Optional[str] = "/docs"
     redoc_url: Optional[str] = "/redoc"
     openapi_url: Optional[str] = "/openapi.json"
-    
-    # MySQL database settings
+
+    # MySQL database settings (overridable via environment variables)
     database: dict = {
-        "host": "127.0.0.1",
-        "port": 3306,
-        "user": "root",
-        "password": "123456",
-        "database": "pixelle_video",
+        "host": os.getenv("MYSQL_HOST", "127.0.0.1"),
+        "port": int(os.getenv("MYSQL_PORT", "3306")),
+        "user": os.getenv("MYSQL_USER", "root"),
+        "password": os.getenv("MYSQL_PASSWORD", "123456"),
+        "database": os.getenv("MYSQL_DATABASE", "pixelle_video"),
     }
-    
-    # JWT settings
+
+    # JWT settings (secret key overridable via environment variable)
     jwt: dict = {
-        "secret_key": "pixelle-video-jwt-secret-key-change-in-production",
+        "secret_key": os.getenv("JWT_SECRET_KEY", "pixelle-video-jwt-secret-key-change-in-production"),
         "algorithm": "HS256",
         "expire_minutes": 1440,  # 24 hours
     }
