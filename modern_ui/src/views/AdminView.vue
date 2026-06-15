@@ -8,54 +8,33 @@
       </div>
     </div>
 
-    <!-- VIP Management Card -->
-    <div class="card" style="margin-bottom: 16px;">
-      <div class="card-header">
-        <h3 class="card-title">💎 VIP 会员设置</h3>
-      </div>
-      <div class="card-body">
-        <el-form :model="vipForm" label-width="100px" label-position="top" style="max-width: 500px;">
-          <el-form-item label="用户名">
-            <el-input v-model="vipForm.username" placeholder="输入要设置为VIP的用户名" clearable />
-          </el-form-item>
-          <el-form-item label="VIP 到期时间">
-            <el-date-picker
-              v-model="vipForm.expiresAt"
-              type="datetime"
-              placeholder="选择VIP到期时间"
-              style="width: 100%"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              :disabled-date="disabledDate"
-            />
-          </el-form-item>
-          <el-form-item>
-            <div style="display: flex; gap: 8px;">
-              <el-button type="warning" :loading="vipSetting" @click="handleSetVip">
-                <el-icon style="margin-right: 4px;"><StarFilled /></el-icon>
-                设为 VIP 会员
-              </el-button>
-              <el-button type="danger" plain :loading="vipRemoving" @click="handleRemoveVip">
-                取消 VIP
-              </el-button>
-            </div>
-            <div class="small muted" style="margin-top: 6px;">
-              设为VIP后自动获得无限生成次数，到期后自动降级为普通用户
-            </div>
-          </el-form-item>
-        </el-form>
-      </div>
-    </div>
-
     <!-- User Table -->
     <div class="card">
       <div class="card-header">
         <h3 class="card-title">用户列表</h3>
-        <el-button size="small" @click="loadUsers">刷新</el-button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索用户名或手机号"
+            clearable
+            style="width: 220px;"
+            :prefix-icon="Search"
+            @clear="handleSearch"
+            @keyup.enter="handleSearch"
+          />
+          <el-button size="small" type="primary" @click="handleSearch">搜索</el-button>
+          <el-button size="small" @click="loadUsers">刷新</el-button>
+        </div>
       </div>
       <div class="card-body">
         <el-table :data="users" v-loading="loading" stripe style="width: 100%">
           <el-table-column prop="id" label="ID" width="60" />
           <el-table-column prop="username" label="用户名" min-width="120" />
+          <el-table-column prop="phone" label="手机号" min-width="130">
+            <template #default="{ row }">
+              {{ row.phone || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="email" label="邮箱" min-width="160">
             <template #default="{ row }">
               {{ row.email || '-' }}
@@ -86,9 +65,18 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
               <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button
+                size="small"
+                :type="row.status === 0 ? 'primary' : 'danger'"
+                plain
+                v-if="row.role !== 'admin'"
+                @click="handleToggleStatus(row)"
+              >
+                {{ row.status === 0 ? '启用' : '禁用' }}
+              </el-button>
               <el-button size="small" type="danger" plain v-if="row.role === 'vip'" @click="handleRemoveVipById(row)">
                 取消VIP
               </el-button>
@@ -114,6 +102,10 @@
       <el-form v-if="editingUser" label-position="top">
         <el-form-item label="用户名">
           <el-input :model-value="editingUser.username" disabled />
+        </el-form-item>
+
+        <el-form-item label="手机号">
+          <el-input :model-value="editingUser.phone || '-'" disabled />
         </el-form-item>
 
         <el-form-item label="角色">
@@ -146,6 +138,7 @@
             :inactive-value="0"
             active-text="启用"
             inactive-text="禁用"
+            :disabled="editingUser?.role === 'admin'"
           />
         </el-form-item>
       </el-form>
@@ -161,7 +154,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { StarFilled } from '@element-plus/icons-vue'
+import { Search } from '@element-plus/icons-vue'
 import { request } from '../api'
 import { getAuth } from '../composables/useAuth'
 import type { UserInfo } from '../composables/useAuth'
@@ -179,6 +172,7 @@ const loading = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const searchQuery = ref('')
 
 const editDialogVisible = ref(false)
 const editingUser = ref<UserInfo | null>(null)
@@ -190,23 +184,24 @@ const editForm = ref<{ role: string; daily_limit: number; status: number; vip_ex
 })
 const saving = ref(false)
 
-// VIP management
-const vipForm = ref({
-  username: '',
-  expiresAt: '',
-})
-const vipSetting = ref(false)
-const vipRemoving = ref(false)
-
 onMounted(() => {
   loadUsers()
 })
+
+function handleSearch() {
+  page.value = 1
+  loadUsers()
+}
 
 async function loadUsers() {
   loading.value = true
   try {
     const auth = getAuth()
-    const res = await request<UserListResponse>(`/api/auth/admin/users?page=${page.value}&page_size=${pageSize.value}`, {
+    let url = `/api/auth/admin/users?page=${page.value}&page_size=${pageSize.value}`
+    if (searchQuery.value.trim()) {
+      url += `&search=${encodeURIComponent(searchQuery.value.trim())}`
+    }
+    const res = await request<UserListResponse>(url, {
       headers: auth._authHeaders(),
     })
     users.value = res.users
@@ -239,16 +234,12 @@ function formatDate(dateStr: string): string {
   }
 }
 
-function disabledDate(time: Date): boolean {
-  return time.getTime() <= Date.now()
-}
-
 function openEditDialog(user: UserInfo) {
   editingUser.value = user
   editForm.value = {
     role: user.role,
     daily_limit: user.daily_limit,
-    status: 1,
+    status: user.status,
     vip_expires_at: user.vip_expires_at || null,
   }
   editDialogVisible.value = true
@@ -284,75 +275,31 @@ async function handleSaveEdit() {
   }
 }
 
-async function handleSetVip() {
-  if (!vipForm.value.username.trim()) {
-    ElMessage.warning('请输入用户名')
-    return
-  }
-  if (!vipForm.value.expiresAt) {
-    ElMessage.warning('请选择VIP到期时间')
-    return
-  }
-  vipSetting.value = true
-  try {
-    const auth = getAuth()
-    await request('/api/auth/admin/set-vip', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...auth._authHeaders(),
-      },
-      body: JSON.stringify({
-        username: vipForm.value.username.trim(),
-        vip_expires_at: vipForm.value.expiresAt,
-      }),
-    })
-    ElMessage.success(`已成功将「${vipForm.value.username}」设置为 VIP 会员`)
-    vipForm.value.username = ''
-    vipForm.value.expiresAt = ''
-    loadUsers()
-  } catch (e: any) {
-    ElMessage.error(`设置失败：${e.message}`)
-  } finally {
-    vipSetting.value = false
-  }
-}
-
-async function handleRemoveVip() {
-  if (!vipForm.value.username.trim()) {
-    ElMessage.warning('请输入用户名')
-    return
-  }
+async function handleToggleStatus(user: UserInfo) {
+  const action = user.status === 0 ? '启用' : '禁用'
   try {
     await ElMessageBox.confirm(
-      `确定要取消「${vipForm.value.username}」的 VIP 资格吗？`,
-      '确认取消 VIP',
+      `确定要${action}用户「${user.username}」吗？`,
+      `确认${action}用户`,
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
   } catch {
     return
   }
-  vipRemoving.value = true
   try {
     const auth = getAuth()
-    // Find user by username first
-    const targetUser = users.value.find(u => u.username === vipForm.value.username.trim())
-    if (!targetUser) {
-      ElMessage.error('未找到该用户')
-      vipRemoving.value = false
-      return
-    }
-    await request(`/api/auth/admin/remove-vip/${targetUser.id}`, {
-      method: 'POST',
-      headers: auth._authHeaders(),
+    await request(`/api/auth/admin/users/${user.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({ status: user.status === 0 ? 1 : 0 }),
     })
-    ElMessage.success(`已取消「${vipForm.value.username}」的 VIP 资格`)
-    vipForm.value.username = ''
+    ElMessage.success(`已${action}用户「${user.username}」`)
     loadUsers()
   } catch (e: any) {
     ElMessage.error(`操作失败：${e.message}`)
-  } finally {
-    vipRemoving.value = false
   }
 }
 

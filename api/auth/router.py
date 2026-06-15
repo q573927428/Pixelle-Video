@@ -29,8 +29,8 @@ from api.auth.dependencies import (
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-# Column list for user queries (include vip_expires_at)
-_USER_COLUMNS = "id, username, email, role, daily_limit, vip_expires_at, created_at"
+# Column list for user queries (include vip_expires_at, phone)
+_USER_COLUMNS = "id, username, email, phone, role, daily_limit, vip_expires_at, status, created_at"
 
 
 def _row_to_userinfo(row: dict) -> UserInfo:
@@ -39,9 +39,11 @@ def _row_to_userinfo(row: dict) -> UserInfo:
         id=row["id"],
         username=row["username"],
         email=row.get("email"),
+        phone=row.get("phone"),
         role=row["role"],
         daily_limit=row["daily_limit"],
         vip_expires_at=row.get("vip_expires_at"),
+        status=row.get("status", 1),
         created_at=row["created_at"],
     )
 
@@ -132,6 +134,45 @@ async def login(body: LoginRequest):
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
 
 
+class LoginByPhoneRequest(BaseModel):
+    """Login by phone request"""
+    phone: str
+    password: str
+
+
+@router.post("/login-by-phone", response_model=TokenResponse)
+async def login_by_phone(body: LoginByPhoneRequest):
+    """Login with phone number and password"""
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS}, password_hash, status FROM users WHERE phone = %s",
+        (body.phone,),
+    )
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="手机号或密码错误",
+        )
+
+    if row["status"] == 0:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被禁用，请联系管理员",
+        )
+
+    if not verify_password(body.password, row["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="手机号或密码错误",
+        )
+
+    access_token = create_access_token(row["id"], row["role"])
+    refresh_token = create_refresh_token(row["id"], row["role"])
+    user_info = _row_to_userinfo(row)
+
+    logger.info(f"User logged in by phone: {body.phone} (user={row['username']})")
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
+
+
 @router.get("/me", response_model=UserInfo)
 async def get_me(user: UserInfo = Depends(require_user)):
     """Get current user info"""
@@ -213,18 +254,32 @@ async def get_usage(user: UserInfo = Depends(require_user)):
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    search: str = Query("", description="Search by username or phone"),
     admin: UserInfo = Depends(require_admin),
 ):
-    """List all users (admin only)"""
+    """List all users (admin only). Supports search by username or phone."""
     offset = (page - 1) * page_size
 
-    total_row = await Database.fetchone("SELECT COUNT(*) as count FROM users")
-    total = total_row["count"] if total_row else 0
+    if search:
+        search_param = f"%{search}%"
+        total_row = await Database.fetchone(
+            "SELECT COUNT(*) as count FROM users WHERE username LIKE %s OR phone LIKE %s",
+            (search_param, search_param),
+        )
+        total = total_row["count"] if total_row else 0
 
-    rows = await Database.fetchall(
-        f"SELECT {_USER_COLUMNS} FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
-        (page_size, offset),
-    )
+        rows = await Database.fetchall(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE username LIKE %s OR phone LIKE %s ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            (search_param, search_param, page_size, offset),
+        )
+    else:
+        total_row = await Database.fetchone("SELECT COUNT(*) as count FROM users")
+        total = total_row["count"] if total_row else 0
+
+        rows = await Database.fetchall(
+            f"SELECT {_USER_COLUMNS} FROM users ORDER BY created_at DESC LIMIT %s OFFSET %s",
+            (page_size, offset),
+        )
 
     users = [_row_to_userinfo(row) for row in rows]
     total_pages = max(1, (total + page_size - 1) // page_size)
@@ -295,11 +350,17 @@ async def set_vip(
     admin: UserInfo = Depends(require_admin),
 ):
     """Set a user as VIP with expiry date (admin only)"""
-    # Find user by username
-    row = await Database.fetchone(
-        f"SELECT {_USER_COLUMNS} FROM users WHERE username = %s",
-        (body.username,),
-    )
+    # Find user by username or phone
+    if body.phone:
+        row = await Database.fetchone(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE phone = %s",
+            (body.phone,),
+        )
+    else:
+        row = await Database.fetchone(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE username = %s",
+            (body.username,),
+        )
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
 

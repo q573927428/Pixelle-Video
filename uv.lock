@@ -152,6 +152,28 @@ wheels = [
 ]
 
 [[package]]
+name = "aliyun-python-sdk-core"
+version = "2.16.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "jmespath" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3e/09/da9f58eb38b4fdb97ba6523274fbf445ef6a06be64b433693da8307b4bec/aliyun-python-sdk-core-2.16.0.tar.gz", hash = "sha256:651caad597eb39d4fad6cf85133dffe92837d53bdf62db9d8f37dab6508bb8f9", size = 449555, upload-time = "2024-10-09T06:01:01.762Z" }
+
+[[package]]
+name = "aliyun-python-sdk-dysmsapi"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aliyun-python-sdk-core" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/4d/de/5f35f2e0fe9e1c4751aaca7da474238cff39ef124b7c821199844bea108d/aliyun-python-sdk-dysmsapi-2.1.2.tar.gz", hash = "sha256:c99b04170ba12dc18b29523547140a4751e9afc1625b6684e4fae77bb4ae2c5a", size = 5444, upload-time = "2022-01-19T11:44:32.412Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/f3/3b89c7751668e3dae330932f6db099e8229223bf39ede1b045ae3571a915/aliyun_python_sdk_dysmsapi-2.1.2-py2.py3-none-any.whl", hash = "sha256:92d086884daa7f024d24c23cf15e31aeb4ab4afdbaa23ef2cf510d43ae7e9351", size = 25866, upload-time = "2022-01-19T11:44:31.361Z" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1321,6 +1343,15 @@ wheels = [
 ]
 
 [[package]]
+name = "jmespath"
+version = "0.10.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3c/56/3f325b1eef9791759784aa5046a8f6a1aff8f7c898a2e34506771d3b99d8/jmespath-0.10.0.tar.gz", hash = "sha256:b85d0567b8666149a93172712e68920734333c0ce7e89b78b3e987f71e5ed4f9", size = 21607, upload-time = "2020-05-12T22:03:47.267Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/cb/5f001272b6faeb23c1c9e0acc04d48eaaf5c862c17709d20e3469c6e0139/jmespath-0.10.0-py2.py3-none-any.whl", hash = "sha256:cdf6525904cc597730141d61b36f2e4b8ecc257c420fa2f4549bac2c2d0cb72f", size = 24489, upload-time = "2020-05-12T22:03:45.643Z" },
+]
+
+[[package]]
 name = "jsonref"
 version = "1.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1976,6 +2007,8 @@ version = "0.1.15"
 source = { editable = "." }
 dependencies = [
     { name = "aiomysql" },
+    { name = "aliyun-python-sdk-core" },
+    { name = "aliyun-python-sdk-dysmsapi" },
     { name = "bcrypt" },
     { name = "beautifulsoup4" },
     { name = "certifi" },
@@ -1996,6 +2029,7 @@ dependencies = [
     { name = "playwright" },
     { name = "pydantic" },
     { name = "pyjwt" },
+    { name = "python-dotenv" },
     { name = "python-jose" },
     { name = "python-multipart" },
     { name = "pyyaml" },
@@ -2013,6 +2047,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiomysql", specifier = ">=0.3.0" },
+    { name = "aliyun-python-sdk-core", specifier = ">=2.16.0" },
+    { name = "aliyun-python-sdk-dysmsapi", specifier = ">=2.1.2" },
     { name = "bcrypt", specifier = ">=4.0.0" },
     { name = "beautifulsoup4", specifier = ">=4.14.2" },
     { name = "certifi", specifier = ">=2025.10.5" },
@@ -2035,6 +2071,7 @@ requires-dist = [
     { name = "pyjwt", specifier = ">=2.10.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "python-jose", specifier = ">=3.3.0" },
     { name = "python-multipart", specifier = ">=0.0.12" },
     { name = "pyyaml", specifier = ">=6.0.0" },

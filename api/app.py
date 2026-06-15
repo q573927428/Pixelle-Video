@@ -61,6 +61,7 @@ from api.routers import (
     audio_router,
 )
 from api.auth.router import router as auth_router
+from api.auth.sms_router import router as sms_router
 
 
 @asynccontextmanager
@@ -156,6 +157,7 @@ app.include_router(audio_router, prefix=api_config.api_prefix)
 
 # Auth router (with /api prefix)
 app.include_router(auth_router, prefix=api_config.api_prefix)
+app.include_router(sms_router, prefix=api_config.api_prefix)
 
 # Modern UI (Vue 3 + Element Plus + TypeScript) built by Vite.
 _modern_ui_dir = _project_root / "modern_ui"

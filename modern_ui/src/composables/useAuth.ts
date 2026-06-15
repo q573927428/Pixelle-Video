@@ -5,9 +5,11 @@ export interface UserInfo {
   id: number
   username: string
   email: string | null
+  phone: string | null
   role: 'vip' | 'normal' | 'admin'
   daily_limit: number
   vip_expires_at: string | null
+  status: number
   created_at: string
 }
 
@@ -67,17 +69,75 @@ export function useAuth() {
     return res.user
   }
 
-  async function register(username: string, password: string, email?: string): Promise<UserInfo> {
-    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register', {
+  async function loginByPhone(phone: string, password: string): Promise<UserInfo> {
+    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/login-by-phone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email }),
+      body: JSON.stringify({ phone, password }),
     })
     token.value = res.access_token
     localStorage.setItem(TOKEN_KEY, res.access_token)
     localStorage.setItem(REFRESH_TOKEN_KEY, res.refresh_token)
     _saveUser(res.user)
     return res.user
+  }
+
+  async function register(username: string, password: string, email?: string): Promise<UserInfo> {
+    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password, email }),
+    })
+    // 先清除旧 token/cache，再设置新的（避免注册后仍显示旧用户信息）
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+    // 重置单例状态
+    token.value = null
+    currentUser.value = null
+    token.value = res.access_token
+    localStorage.setItem(TOKEN_KEY, res.access_token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, res.refresh_token)
+    _saveUser(res.user)
+    return res.user
+  }
+
+  async function sendSmsCode(phone: string): Promise<void> {
+    await request('/api/auth/send-sms-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    })
+  }
+
+  async function registerByPhone(phone: string, code: string, password: string): Promise<UserInfo> {
+    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register-by-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code, password }),
+    })
+    // 先清除旧 token/cache，再设置新的（避免注册后仍显示旧用户信息）
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
+    localStorage.removeItem(USER_KEY)
+    // 重置单例状态
+    token.value = null
+    currentUser.value = null
+    token.value = res.access_token
+    localStorage.setItem(TOKEN_KEY, res.access_token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, res.refresh_token)
+    _saveUser(res.user)
+    return res.user
+  }
+
+  async function bindPhone(phone: string, code: string): Promise<UserInfo> {
+    const user = await request<UserInfo>('/api/auth/bind-phone', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ..._authHeaders() },
+      body: JSON.stringify({ phone, code }),
+    })
+    _saveUser(user)
+    return user
   }
 
   function logout() {
@@ -114,7 +174,11 @@ export function useAuth() {
     isVip,
     roleLabel,
     login,
+    loginByPhone,
     register,
+    sendSmsCode,
+    registerByPhone,
+    bindPhone,
     logout,
     fetchMe,
     fetchUsage,

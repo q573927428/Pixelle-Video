@@ -15,8 +15,15 @@ API Configuration
 """
 
 import os
+from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load .env file from project root (must precede any config reads)
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+if _env_path.exists():
+    load_dotenv(str(_env_path))
 
 
 class APIConfig(BaseModel):
@@ -58,6 +65,14 @@ class APIConfig(BaseModel):
         "secret_key": os.getenv("JWT_SECRET_KEY", "pixelle-video-jwt-secret-key-change-in-production"),
         "algorithm": "HS256",
         "expire_minutes": 1440,  # 24 hours
+    }
+
+    # Aliyun SMS settings (overridable via environment variables)
+    aliyun_sms: dict = {
+        "access_key_id": os.getenv("ALIYUN_SMS_ACCESS_KEY_ID", ""),
+        "access_key_secret": os.getenv("ALIYUN_SMS_ACCESS_KEY_SECRET", ""),
+        "sign_name": os.getenv("ALIYUN_SMS_SIGN_NAME", ""),
+        "template_code": os.getenv("ALIYUN_SMS_TEMPLATE_CODE", ""),
     }
 
     # Storage limits per role (in bytes)

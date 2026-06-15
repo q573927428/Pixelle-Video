@@ -35,7 +35,7 @@ async def get_current_user(
         return None
 
     row = await Database.fetchone(
-        "SELECT id, username, email, role, daily_limit, vip_expires_at, created_at FROM users WHERE id = %s AND status = 1",
+        "SELECT id, username, email, phone, role, daily_limit, vip_expires_at, created_at FROM users WHERE id = %s AND status = 1",
         (user_id,),
     )
     if not row:

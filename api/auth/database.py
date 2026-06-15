@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS `user_uploads` (
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_user_category` (`user_id`, `category`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sms_codes` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `phone` VARCHAR(20) NOT NULL COMMENT '手机号',
+    `code` VARCHAR(6) NOT NULL COMMENT '验证码',
+    `used` TINYINT NOT NULL DEFAULT 0 COMMENT '0=未使用, 1=已使用',
+    `expires_at` DATETIME NOT NULL COMMENT '过期时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_phone_code` (`phone`, `code`),
+    INDEX `idx_phone_created` (`phone`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """
 
 # Default admin credentials
@@ -163,6 +174,21 @@ class Database:
             if fixed_count > 0:
                 logger.info(f"✅ Fixed {fixed_count} existing VIP users: set daily_limit = -1")
 
+            # Check if phone column exists
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'phone'",
+                (db_name,)
+            )
+            row_phone = cursor.fetchone()
+            if row_phone and row_phone["cnt"] == 0:
+                cursor.execute(
+                    "ALTER TABLE `users` ADD COLUMN `phone` VARCHAR(20) DEFAULT NULL "
+                    "COMMENT '手机号' AFTER `email`,"
+                    "ADD UNIQUE INDEX `idx_phone` (`phone`)"
+                )
+                logger.info("✅ Added phone column to users table")
+
             cursor.close()
         except Exception as e:
             logger.warning(f"⚠️ Migration warning: {e}")
@@ -216,9 +242,13 @@ class Database:
         try:
             cursor = conn.cursor()
             cursor.execute(sql, params or ())
-            rowcount = cursor.rowcount
+            # For INSERT statements, return last insert id
+            if sql.strip().upper().startswith('INSERT'):
+                result = cursor.lastrowid
+            else:
+                result = cursor.rowcount
             cursor.close()
-            return rowcount
+            return result
         finally:
             conn.close()
 
