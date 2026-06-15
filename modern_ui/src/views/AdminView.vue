@@ -184,7 +184,7 @@ const editDialogVisible = ref(false)
 const editingUser = ref<UserInfo | null>(null)
 const editForm = ref<{ role: string; daily_limit: number; status: number; vip_expires_at: string | null }>({
   role: 'normal',
-  daily_limit: 3,
+  daily_limit: 1,
   status: 1,
   vip_expires_at: null,
 })

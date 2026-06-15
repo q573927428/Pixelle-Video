@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS `users` (
     `password_hash` VARCHAR(255) NOT NULL,
     `email` VARCHAR(255) DEFAULT NULL,
     `role` ENUM('normal', 'vip', 'admin') NOT NULL DEFAULT 'normal',
-    `daily_limit` INT NOT NULL DEFAULT 3 COMMENT '-1 means unlimited (VIP)',
+    `daily_limit` INT NOT NULL DEFAULT 1 COMMENT '-1 means unlimited (VIP)',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1=active, 0=disabled',
     `vip_expires_at` DATETIME DEFAULT NULL COMMENT 'VIP会员到期时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

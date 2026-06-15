@@ -53,11 +53,11 @@ async def get_current_user(
         if expires_at < now:
             # VIP expired, downgrade to normal
             await Database.execute(
-                "UPDATE users SET role = 'normal', daily_limit = 3, vip_expires_at = NULL WHERE id = %s",
+                "UPDATE users SET role = 'normal', daily_limit = 1, vip_expires_at = NULL WHERE id = %s",
                 (user_id,),
             )
             user.role = 'normal'
-            user.daily_limit = 3
+            user.daily_limit = 1
             user.vip_expires_at = None
             logger.info(f"User {user.username} (id={user_id}) VIP expired, auto-downgraded to normal")
 

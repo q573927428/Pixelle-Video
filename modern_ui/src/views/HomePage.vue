@@ -336,7 +336,7 @@ const landscapeVideos = [
 ]
 
 const freePlan = [
-  '每日 3 次视频生成',
+  '每日 1 次视频生成',
   '720P 基础画质输出',
   '基础数字人模板',
   '标准渲染队列',

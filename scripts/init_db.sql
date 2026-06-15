@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS users (
   email         VARCHAR(100) DEFAULT NULL,
   role          ENUM('vip', 'normal', 'admin') NOT NULL DEFAULT 'normal',
   status        TINYINT(1)   NOT NULL DEFAULT 1 COMMENT '1=active, 0=disabled',
-  daily_limit   INT          NOT NULL DEFAULT 3  COMMENT '-1=unlimited (VIP)',
+  daily_limit   INT          NOT NULL DEFAULT 1  COMMENT '-1=unlimited (VIP)',
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_role (role),

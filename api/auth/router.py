@@ -73,7 +73,7 @@ async def register(body: RegisterRequest):
     # Create user
     password_hash = hash_password(body.password)
     user_id = await Database.execute(
-        "INSERT INTO users (username, password_hash, email, role, daily_limit) VALUES (%s, %s, %s, 'normal', 3)",
+        "INSERT INTO users (username, password_hash, email, role, daily_limit) VALUES (%s, %s, %s, 'normal', 1)",
         (body.username, password_hash, body.email),
     )
 
@@ -91,7 +91,7 @@ async def register(body: RegisterRequest):
         username=body.username,
         email=body.email,
         role="normal",
-        daily_limit=3,
+        daily_limit=1,
         created_at=datetime.now(),
     )
 
@@ -335,7 +335,7 @@ async def remove_vip(
 
     # Reset to normal
     await Database.execute(
-        "UPDATE users SET role = 'normal', vip_expires_at = NULL, daily_limit = 3 WHERE id = %s",
+        "UPDATE users SET role = 'normal', vip_expires_at = NULL, daily_limit = 1 WHERE id = %s",
         (user_id,),
     )
     logger.info(f"Admin removed VIP from user {row['username']} (id={user_id})")
