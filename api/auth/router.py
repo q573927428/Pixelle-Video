@@ -5,6 +5,7 @@ Auth & Admin routes
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
+from pydantic import BaseModel
 
 from api.auth.database import Database
 from api.auth.utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token

@@ -1,7 +1,7 @@
 <template>
   <el-form label-position="top" class="form-sections">
 
-     <!-- ====== 第一板块：人物形象上传 ====== -->
+     <!-- ====== 第一板块：人物形象上传  ====== -->
      <div class="form-section-wrapper">
       <div class="form-section">
       <div class="form-section-title">🧑 人物形象上传</div>
