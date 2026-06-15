@@ -37,6 +37,21 @@ def create_access_token(user_id: int, role: str) -> str:
         "sub": str(user_id),
         "role": role,
         "exp": expire,
+        "type": "access"
+    }
+    token = jwt.encode(payload, cfg["secret_key"], algorithm=cfg["algorithm"])
+    return token
+
+
+def create_refresh_token(user_id: int, role: str) -> str:
+    """Create JWT refresh token (longer expiration)"""
+    cfg = api_config.jwt
+    expire = datetime.now(timezone.utc) + timedelta(days=30)  # 30 days expiration
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "exp": expire,
+        "type": "refresh"
     }
     token = jwt.encode(payload, cfg["secret_key"], algorithm=cfg["algorithm"])
     return token
@@ -47,7 +62,24 @@ def decode_access_token(token: str) -> Optional[dict]:
     cfg = api_config.jwt
     try:
         payload = jwt.decode(token, cfg["secret_key"], algorithms=[cfg["algorithm"]])
+        if payload.get("type") != "access":
+            logger.warning("JWT token is not an access token")
+            return None
         return payload
     except JWTError as e:
         logger.warning(f"JWT decode error: {e}")
+        return None
+
+
+def decode_refresh_token(token: str) -> Optional[dict]:
+    """Decode JWT refresh token"""
+    cfg = api_config.jwt
+    try:
+        payload = jwt.decode(token, cfg["secret_key"], algorithms=[cfg["algorithm"]])
+        if payload.get("type") != "refresh":
+            logger.warning("JWT token is not a refresh token")
+            return None
+        return payload
+    except JWTError as e:
+        logger.warning(f"JWT refresh token decode error: {e}")
         return None

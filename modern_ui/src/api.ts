@@ -1,12 +1,79 @@
 const BASE = ''
 
-export async function request<T = any>(url: string, options?: RequestInit): Promise<T> {
+// 防止多个请求同时刷新令牌
+let isRefreshing = false
+let refreshPromise: Promise<any> | null = null
+
+// 刷新令牌
+async function refreshToken(): Promise<any> {
+  if (isRefreshing) {
+    return refreshPromise
+  }
+  
+  isRefreshing = true
+  refreshPromise = (async () => {
+    try {
+      const refreshToken = localStorage.getItem('pixelle_refresh_token')
+      if (!refreshToken) {
+        throw new Error('No refresh token')
+      }
+      
+      const response = await fetch(BASE + '/api/auth/refresh-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      })
+      
+      if (!response.ok) {
+        throw new Error('Refresh token failed')
+      }
+      
+      const data = await response.json()
+      localStorage.setItem('pixelle_auth_token', data.access_token)
+      localStorage.setItem('pixelle_refresh_token', data.refresh_token)
+      return data
+    } catch (e) {
+      // 刷新失败，清除token跳转到登录页
+      localStorage.removeItem('pixelle_auth_token')
+      localStorage.removeItem('pixelle_refresh_token')
+      window.location.href = '/login'
+      throw e
+    } finally {
+      isRefreshing = false
+      refreshPromise = null
+    }
+  })()
+  
+  return refreshPromise
+}
+
+export async function request<T = any>(url: string, options?: RequestInit, isRetry = false): Promise<T> {
   // 自动注入 Authorization header
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string>),
     ..._getAuthHeaders(),
   }
   const response = await fetch(BASE + url, { ...options, headers })
+  
+  // 处理401未授权
+  if (response.status === 401 && !isRetry && url !== '/api/auth/login' && url !== '/api/auth/register' && url !== '/api/auth/refresh-token') {
+    try {
+      await refreshToken()
+      // 刷新成功后重试原请求
+      return request(url, options, true)
+    } catch (e) {
+      // 刷新失败，抛出错误
+      let detail = '登录已过期，请重新登录'
+      try {
+        const data = await response.json()
+        detail = data.detail || data.message || detail
+      } catch (_) {}
+      throw new Error(detail)
+    }
+  }
+  
   if (!response.ok) {
     let detail = response.statusText
     try {

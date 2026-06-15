@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 
 from api.auth.database import Database
-from api.auth.utils import hash_password, verify_password, create_access_token
+from api.auth.utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token
 from api.auth.schemas import (
     RegisterRequest,
     LoginRequest,
@@ -76,8 +76,9 @@ async def register(body: RegisterRequest):
         (body.username, password_hash, body.email),
     )
 
-    # Generate token
-    token = create_access_token(user_id, "normal")
+    # Generate tokens
+    access_token = create_access_token(user_id, "normal")
+    refresh_token = create_refresh_token(user_id, "normal")
 
     # Fetch created user to get created_at & vip_expires_at
     row = await Database.fetchone(
@@ -94,7 +95,7 @@ async def register(body: RegisterRequest):
     )
 
     logger.info(f"New user registered: {body.username} (id={user_id})")
-    return TokenResponse(access_token=token, user=user_info)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -122,11 +123,12 @@ async def login(body: LoginRequest):
             detail="用户名或密码错误",
         )
 
-    token = create_access_token(row["id"], row["role"])
+    access_token = create_access_token(row["id"], row["role"])
+    refresh_token = create_refresh_token(row["id"], row["role"])
     user_info = _row_to_userinfo(row)
 
     logger.info(f"User logged in: {body.username}")
-    return TokenResponse(access_token=token, user=user_info)
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
 
 
 @router.get("/me", response_model=UserInfo)
@@ -140,6 +142,43 @@ async def get_me(user: UserInfo = Depends(require_user)):
     if row:
         return _row_to_userinfo(row)
     return user
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/refresh-token", response_model=TokenResponse)
+async def refresh_token(body: RefreshTokenRequest):
+    """Refresh access token using refresh token"""
+    payload = decode_refresh_token(body.refresh_token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的刷新令牌，请重新登录",
+        )
+    
+    user_id = int(payload["sub"])
+    role = payload["role"]
+    
+    # Check if user still exists and is active
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS}, status FROM users WHERE id = %s",
+        (user_id,),
+    )
+    
+    if not row or row["status"] == 0:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户不存在或已被禁用，请重新登录",
+        )
+    
+    # Generate new tokens
+    new_access_token = create_access_token(user_id, role)
+    new_refresh_token = create_refresh_token(user_id, role)
+    user_info = _row_to_userinfo(row)
+    
+    return TokenResponse(access_token=new_access_token, refresh_token=new_refresh_token, user=user_info)
 
 
 @router.get("/usage", response_model=UserDailyUsage)

@@ -18,6 +18,7 @@ export interface UserDailyUsage {
 }
 
 const TOKEN_KEY = 'pixelle_auth_token'
+const REFRESH_TOKEN_KEY = 'pixelle_refresh_token'
 const USER_KEY = 'pixelle_auth_user'
 
 // Reactive state
@@ -54,25 +55,27 @@ export function useAuth() {
   })
 
   async function login(username: string, password: string): Promise<UserInfo> {
-    const res = await request<{ access_token: string; user: UserInfo }>('/api/auth/login', {
+    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     })
     token.value = res.access_token
     localStorage.setItem(TOKEN_KEY, res.access_token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, res.refresh_token)
     _saveUser(res.user)
     return res.user
   }
 
   async function register(username: string, password: string, email?: string): Promise<UserInfo> {
-    const res = await request<{ access_token: string; user: UserInfo }>('/api/auth/register', {
+    const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password, email }),
     })
     token.value = res.access_token
     localStorage.setItem(TOKEN_KEY, res.access_token)
+    localStorage.setItem(REFRESH_TOKEN_KEY, res.refresh_token)
     _saveUser(res.user)
     return res.user
   }
@@ -80,6 +83,7 @@ export function useAuth() {
   function logout() {
     token.value = null
     localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(REFRESH_TOKEN_KEY)
     _saveUser(null)
   }
 
