@@ -345,6 +345,17 @@ async function handleDelete(rec: any, e: Event) {
   .history-audio-name {
     font-size: 12px;
   }
+
+  /* ── 移动端删除按钮始终可见 ── */
+  .history-delete-btn {
+    opacity: 1;
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    line-height: 28px;
+    background: rgba(239,68,68,0.9);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
 }
 </style>
 

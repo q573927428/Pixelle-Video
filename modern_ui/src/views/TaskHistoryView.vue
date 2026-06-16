@@ -466,4 +466,32 @@ async function handleDelete(task: any) {
   max-width: 100%;
   width: 100%;
 }
+
+/* ── 移动端适配 ── */
+@media (max-width: 640px) {
+  .history-item {
+    padding: 10px;
+  }
+  .history-list {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .stats-card {
+    padding: 12px 10px;
+  }
+  .stats-value {
+    font-size: 20px;
+  }
+  .delete-btn {
+    opacity: 1;
+    min-width: 36px;
+    min-height: 36px;
+    font-size: 13px;
+    padding: 8px 16px !important;
+  }
+}
 </style>

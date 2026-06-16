@@ -225,11 +225,24 @@ async function remove(item: any) {
   }
   .upload-list-item-actions {
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
   }
   .upload-list-item-actions .el-button {
-    padding: 4px 8px !important;
-    font-size: 11px !important;
+    padding: 8px 14px !important;
+    font-size: 12px !important;
+    min-height: 36px !important;
+    border-radius: 6px !important;
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    color: rgba(255,255,255,0.9) !important;
+  }
+  .upload-list-item-actions .el-button--text.is-danger {
+    background: rgba(245,108,108,0.15) !important;
+    border-color: rgba(245,108,108,0.25) !important;
+    color: #f56c6c !important;
+  }
+  .upload-list-item-actions .el-button--text:active {
+    opacity: 0.7;
   }
   .storage-bar {
     padding: 8px 10px;

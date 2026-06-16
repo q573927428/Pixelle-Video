@@ -18,6 +18,8 @@ Each user can only view/use their own uploaded files.
 """
 
 import uuid
+import subprocess
+import tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -244,13 +246,54 @@ async def upload_file(
         upload_dir = Path("temp") / "uploads" / str(user.id) / safe_category
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_stem = "".join(
-            ch if ch.isalnum() or ch in ("-", "_") else "_"
-            for ch in Path(original_name).stem
-        ).strip("_") or "upload"
-        stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
-        stored_path = upload_dir / stored_name
-        stored_path.write_bytes(content)
+        # HEIC/HEIF images are not supported by browsers, convert to JPEG using ffmpeg
+        heic_suffixes = {".heic", ".heif"}
+        if suffix in heic_suffixes:
+            try:
+                new_suffix = ".jpg"
+                safe_stem = "".join(
+                    ch if ch.isalnum() or ch in ("-", "_") else "_"
+                    for ch in Path(original_name).stem
+                ).strip("_") or "upload"
+                stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{new_suffix}"
+                stored_path = upload_dir / stored_name
+                # Write HEIC content to temp file, then convert with ffmpeg
+                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+                    tmp.write(content)
+                    tmp_path = tmp.name
+                try:
+                    subprocess.run(
+                        ["ffmpeg", "-y", "-i", tmp_path, "-q:v", "3", str(stored_path)],
+                        capture_output=True, timeout=30, check=True
+                    )
+                    # Update content for size recalculation
+                    content = stored_path.read_bytes()
+                    file_size = len(content)
+                    logger.info(f"Converted {original_name} to JPEG: {stored_name}")
+                finally:
+                    Path(tmp_path).unlink(missing_ok=True)
+            except subprocess.CalledProcessError as convert_err:
+                logger.error(f"HEIC/HEIF ffmpeg conversion failed for {original_name}: {convert_err.stderr.decode()}")
+                # Fallback: save as-is with .jpg extension (may not display but at least stored)
+                safe_stem = "".join(
+                    ch if ch.isalnum() or ch in ("-", "_") else "_"
+                    for ch in Path(original_name).stem
+                ).strip("_") or "upload"
+                stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}.heic"
+                stored_path = upload_dir / stored_name
+                stored_path.write_bytes(content)
+                logger.warning(f"Saved HEIC as-is (fallback): {stored_name}")
+            except Exception as convert_err:
+                logger.error(f"HEIC/HEIF conversion failed for {original_name}: {convert_err}")
+                raise HTTPException(status_code=400, detail=f"HEIC/HEIF 图片转换失败: {convert_err}")
+        else:
+            safe_stem = "".join(
+                ch if ch.isalnum() or ch in ("-", "_") else "_"
+                for ch in Path(original_name).stem
+            ).strip("_") or "upload"
+            stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
+            stored_path = upload_dir / stored_name
+            stored_path.write_bytes(content)
 
         relative_path = stored_path.as_posix()
 
