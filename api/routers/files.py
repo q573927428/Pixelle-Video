@@ -206,7 +206,7 @@ async def upload_file(
         original_name = Path(file.filename or "upload.bin").name
         suffix = Path(original_name).suffix.lower()
         allowed_suffixes = {
-            ".jpg", ".jpeg", ".png", ".gif", ".webp",
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
             ".mp4", ".mov", ".avi", ".mkv", ".webm",
             ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg",
         }
@@ -357,6 +357,8 @@ async def get_file(file_path: str):
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
             '.gif': 'image/gif',
+            '.heic': 'image/heic',
+            '.heif': 'image/heif',
             '.html': 'text/html',
             '.json': 'application/json',
         }

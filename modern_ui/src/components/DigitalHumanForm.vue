@@ -8,7 +8,7 @@
       <div class="form-section-body">
       <el-form-item label="角色图片">
         <div class="upload-field-container">
-          <UploadBox category="character_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
+          <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
           <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
         </div>
       </el-form-item>
@@ -66,7 +66,7 @@
           </div>
           <el-form-item label="商品图片（按顺序一一对应）">
             <div class="upload-field-container">
-              <UploadBox category="goods_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_goods')" @select-history="(c) => $emit('select-history', c)" />
+              <UploadBox category="goods_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_goods')" @select-history="(c) => $emit('select-history', c)" />
             </div>
             <div v-if="form.batch_goods_assets.length > 0" style="width:100%;">
               <div class="small muted" style="margin-bottom:6px;">
@@ -107,7 +107,7 @@
         <div v-if="form.mode === 'digital'" class="soft-panel">
           <el-form-item label="商品图片">
             <div class="upload-field-container">
-              <UploadBox category="goods_image" accept="image/*" @upload="(f, c) => $emit('upload', f, c, 'digital_goods')" @select-history="(c) => $emit('select-history', c)" />
+              <UploadBox category="goods_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_goods')" @select-history="(c) => $emit('select-history', c)" />
               <FilePreview v-if="form.goods_asset" :items="[form.goods_asset]" @remove="form.goods_asset = null" />
             </div>
           </el-form-item>

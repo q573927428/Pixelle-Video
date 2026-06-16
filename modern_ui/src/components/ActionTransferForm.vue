@@ -22,7 +22,7 @@
       <div class="form-section-body">
       <el-form-item label="目标人物/图片">
         <div class="upload-field-container">
-          <UploadBox category="image" accept="image/*" @upload="handleImageUpload" @select-history="(c) => $emit('select-history', c)" />
+          <UploadBox category="image" accept="image/*,.heic,.heif" @upload="handleImageUpload" @select-history="(c) => $emit('select-history', c)" />
           <FilePreview v-if="form.image_asset" :items="[form.image_asset]" @remove="form.image_asset = null" />
         </div>
       </el-form-item>
