@@ -9,7 +9,7 @@ cd modern_ui; pnpm run dev
 
 net start MySQL97
 
-# 访问: http://localhost:5173/modern/
+# 访问: http://localhost:5173/
 # API 请求会自动代理到 :8000，修改代码自动热更新
 
 uv run streamlit run web/app.py

@@ -38,7 +38,7 @@ async function refreshToken(): Promise<any> {
       // 刷新失败，清除token并回到首页（状态驱动显示登录页）
       localStorage.removeItem('pixelle_auth_token')
       localStorage.removeItem('pixelle_refresh_token')
-      window.location.href = '/modern/'
+      window.location.href = '/'
       throw e
     } finally {
       isRefreshing = false

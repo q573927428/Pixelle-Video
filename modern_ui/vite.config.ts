@@ -5,7 +5,7 @@ import { fileURLToPath, URL } from 'url'
 export default defineConfig({
   plugins: [vue()],
   root: '.',
-  base: '/modern/',
+  base: '/',
   server: {
     port: 5173,
     proxy: {

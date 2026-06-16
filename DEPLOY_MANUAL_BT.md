@@ -7,12 +7,12 @@
 
 ```
 用户浏览器 ── HTTPS ──→ Nginx (宝塔Python项目自动生成) ──→ FastAPI (端口自动分配)
-                          │                                     ├── LLM API (外部)
-                          │                                     ├── RunningHub (云端)
-                          │                                     └── MySQL (宝塔自带)
-                          │
-                          └── 前端 (先通过Node项目构建好，再由FastAPI在/modern提供)
-                          └── 视频文件 (output/ 目录)
+                           │                                     ├── LLM API (外部)
+                           │                                     ├── RunningHub (云端)
+                           │                                     └── MySQL (宝塔自带)
+                           │
+                           └── 前端 (先通过Node项目构建好，再由FastAPI在根路径 / 提供)
+                           └── 视频文件 (output/ 目录)
 ```
 
 ---
@@ -244,7 +244,7 @@ MYSQL_PASSWORD=Pixelle@2024  # 改为新密码
 
 ## 五、修改 Nginx 配置（关键）
 
-宝塔 Python项目会自动生成 Nginx 配置，但本项目需要额外处理前端路径（`/modern` -> `/`）。
+宝塔 Python项目会自动生成 Nginx 配置，本项目的前端已改为 SPA 模式，直接从根路径提供。
 
 ### 5.1 找到自动生成的配置
 
@@ -301,24 +301,18 @@ server {
     proxy_send_timeout 300s;
     proxy_read_timeout 300s;
 
-    # ====== 前端页面（反向代理到 FastAPI 的 /modern 路径） ======
+    # ====== 前端页面（SPA 模式，直接反向代理到 FastAPI 根路径） ======
     location / {
-        proxy_pass http://127.0.0.1:8000/modern;
+        proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-
-        # 修复前端资源路径：将 /modern/xxx 替换为 /xxx
-        sub_filter_once off;
-        sub_filter 'href="/modern/' 'href="/';
-        sub_filter 'src="/modern/' 'src="/';
-        sub_filter 'action="/modern/' 'action="/';
     }
 
     # 前端静态资源（启用长缓存，提升性能）
     location /assets/ {
-        proxy_pass http://127.0.0.1:8000/modern/assets/;
+        proxy_pass http://127.0.0.1:8000/assets/;
         proxy_set_header Host $host;
         expires 1y;
         add_header Cache-Control "public, immutable";
@@ -383,8 +377,7 @@ server {
 
 > ⚠️ **重要**：
 > 1. **不要完全删除宝塔自动生成的 SSL 部分**，只替换 `location` 块
-> 2. 或者更简单的方式：在宝塔的 **网站 → Python项目** 设置中，找到 **反向代理** 或 **配置文件**，只修改 `location /` 部分
-> 3. 保存后，点击 **重载配置**
+> 2. 保存后，点击 **重载配置**
 
 ### 5.3 配置 SSL 证书
 
@@ -462,9 +455,8 @@ uv pip export > requirements.txt
 ### Q3: 前端页面空白或样式错乱
 
 1. 确认 `modern_ui/dist/` 目录存在且有内容
-2. 确认 Nginx 配置中的 `sub_filter` 是否正确
-3. 浏览器按 F12 打开控制台，看有无 404 错误
-4. 直接访问 `https://ai.zuosuo.com/modern/` 测试（如果这个能打开，说明是 sub_filter 问题）
+2. 浏览器按 F12 打开控制台，看有无 404 错误
+3. 确认 Nginx 配置中的 `proxy_pass` 正确指向 FastAPI
 
 ### Q4: MySQL 连接失败
 

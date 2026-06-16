@@ -24,7 +24,7 @@ set "PIXELLE_VIDEO_ROOT=%PROJECT_ROOT%"
 :: Start API Server
 echo [Starting] Pixelle-Video API Server...
 echo.
-echo Web UI: http://localhost:8000/modern
+echo Web UI: http://localhost:8000
 echo API Docs: http://localhost:8000/docs
 echo.
 echo Note: Configure API keys and settings in the Web UI.
@@ -33,7 +33,7 @@ echo ========================================
 echo.
 
 :: Open browser after server starts
-start http://localhost:8000/modern
+start http://localhost:8000
 
 "%PYTHON_HOME%\python.exe" api/app.py --host 0.0.0.0 --port 8000
 

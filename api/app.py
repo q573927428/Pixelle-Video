@@ -36,8 +36,11 @@ import argparse
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 
 from api.config import api_config
 from api.tasks import task_manager
@@ -159,45 +162,67 @@ app.include_router(audio_router, prefix=api_config.api_prefix)
 app.include_router(auth_router, prefix=api_config.api_prefix)
 app.include_router(sms_router, prefix=api_config.api_prefix)
 
-# Modern UI (Vue 3 + Element Plus + TypeScript) built by Vite.
+# Modern UI (Vue 3 + Element Plus + TypeScript) - SPA mode at root path
 _modern_ui_dir = _project_root / "modern_ui"
-# Prefer built dist/ output, fallback to source dir for legacy/development
 _modern_ui_dist = _modern_ui_dir / "dist"
-_modern_ui_serve = _modern_ui_dist if _modern_ui_dist.exists() else _modern_ui_dir
+_modern_ui_index = _modern_ui_dist / "index.html"
 
-if _modern_ui_serve.exists():
-    # Mount entire served directory under /modern with html=True so index.html is auto-served
-    # This automatically handles:
-    #   /modern/index.html, /modern/assets/*, /modern/videos/*, /modern/wechat.png, etc.
-    app.mount(
-        "/modern",
-        StaticFiles(directory=str(_modern_ui_serve), html=True),
-        name="modern-ui",
-    )
+if _modern_ui_dist.exists() and _modern_ui_index.exists():
+    # Mount static assets directory
+    _assets_dir = _modern_ui_dist / "assets"
+    if _assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="ui-assets")
 
+    # Mount other known static directories if they exist
+    for _dir_name in ["videos", "images", "fonts"]:
+        _dir_path = _modern_ui_dist / _dir_name
+        if _dir_path.exists():
+            app.mount(f"/{_dir_name}", StaticFiles(directory=str(_dir_path)), name=f"ui-{_dir_name}")
 
-@app.get("/")
-async def root():
-    """Root endpoint with API information"""
-    return {
-        "service": "Pixelle-Video API",
-        "version": "0.1.0",
-        "docs": api_config.docs_url,
-        "health": "/health",
-        "modern_ui": "/modern",
-        "api": {
-            "llm": f"{api_config.api_prefix}/llm",
-            "tts": f"{api_config.api_prefix}/tts",
-            "image": f"{api_config.api_prefix}/image",
-            "content": f"{api_config.api_prefix}/content",
-            "video": f"{api_config.api_prefix}/video",
-            "tasks": f"{api_config.api_prefix}/tasks",
-            "files": f"{api_config.api_prefix}/files",
-            "resources": f"{api_config.api_prefix}/resources",
-            "frame": f"{api_config.api_prefix}/frame",
-            "pipelines": f"{api_config.api_prefix}/pipelines",
+    # Serve frontend at root path
+    @app.get("/")
+    async def serve_frontend():
+        """Serve the frontend SPA"""
+        return FileResponse(str(_modern_ui_index))
+
+    # SPA fallback middleware: for any 404 GET request to non-API paths,
+    # serve index.html so Vue Router can handle client-side routing
+    class _SPAFallbackMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            response = await call_next(request)
+            if response.status_code == 404 and request.method == "GET":
+                path = request.url.path
+                # Don't intercept API, docs, health endpoints
+                if not path.startswith(("/api", "/docs", "/redoc", "/openapi.json", "/health")):
+                    return FileResponse(str(_modern_ui_index))
+            return response
+
+    app.add_middleware(_SPAFallbackMiddleware)
+
+    logger.info("✅ Modern UI (SPA mode) mounted at /")
+else:
+    # Frontend not built - show API info as before
+    @app.get("/")
+    async def root():
+        """Root endpoint with API information"""
+        return {
+            "service": "Pixelle-Video API",
+            "version": "0.1.0",
+            "docs": api_config.docs_url,
+            "health": "/health",
+            "api": {
+                "llm": f"{api_config.api_prefix}/llm",
+                "tts": f"{api_config.api_prefix}/tts",
+                "image": f"{api_config.api_prefix}/image",
+                "content": f"{api_config.api_prefix}/content",
+                "video": f"{api_config.api_prefix}/video",
+                "tasks": f"{api_config.api_prefix}/tasks",
+                "files": f"{api_config.api_prefix}/files",
+                "resources": f"{api_config.api_prefix}/resources",
+                "frame": f"{api_config.api_prefix}/frame",
+                "pipelines": f"{api_config.api_prefix}/pipelines",
+            }
         }
-    }
 
 
 if __name__ == "__main__":
