@@ -1,6 +1,9 @@
 # 终端1: 启动 FastAPI 后端
 uv run python api/app.py --host 0.0.0.0 --port 8000
 
+# 环境变量输入框
+UV_CACHE_DIR=/www/wwwroot/zuosuoai/Pixelle-Video/.uv_cache
+
 # 终端2: 启动 Vite 开发服务器（热加载）
 cd modern_ui; pnpm run dev
 
@@ -56,3 +59,6 @@ modern_ui\src\components\I2vForm.vue
 生成的视频是否可以自动加字幕。
 
 生成好的视频，添加可以分发到其他短视频平台的功能。
+
+
+微信二维码图片需要修改
