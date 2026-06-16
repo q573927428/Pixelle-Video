@@ -58,7 +58,7 @@ export async function request<T = any>(url: string, options?: RequestInit, isRet
   const response = await fetch(BASE + url, { ...options, headers })
   
   // 处理401未授权
-  if (response.status === 401 && !isRetry && url !== '/api/auth/login' && url !== '/api/auth/register' && url !== '/api/auth/refresh-token') {
+  if (response.status === 401 && !isRetry && url !== '/api/auth/login' && url !== '/api/auth/register' && url !== '/api/auth/login-by-phone' && url !== '/api/auth/refresh-token') {
     try {
       await refreshToken()
       // 刷新成功后重试原请求
