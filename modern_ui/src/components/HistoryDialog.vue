@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="visible" title="从历史上传选择" width="680px" :close-on-click-modal="false">
+  <el-dialog v-model="visible" title="从历史上传选择" width="680px" class="history-dialog" :close-on-click-modal="false">
     <div v-if="loading" style="text-align:center;padding:30px;">
       <el-icon class="is-loading" style="font-size:24px;"><svg viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 64a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V96a32 32 0 0 1 32-32z"/><path fill="currentColor" d="M512 736a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V768a32 32 0 0 1 32-32z"/></svg></el-icon>
       <div class="small muted" style="margin-top:12px;">加载中...</div>
@@ -319,5 +319,42 @@ async function handleDelete(rec: any, e: Event) {
 .history-audio-item,
 .history-default-item {
   position: relative;
+}
+
+/* ── 移动端适配 ── */
+@media (max-width: 640px) {
+  .history-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 8px;
+    max-height: 60vh;
+    padding: 4px 2px;
+  }
+  .history-audio-list {
+    max-height: 60vh;
+  }
+  .history-default-list {
+    max-height: 60vh;
+  }
+  .history-audio-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .history-audio-icon {
+    font-size: 22px;
+  }
+  .history-audio-name {
+    font-size: 12px;
+  }
+}
+</style>
+
+<!-- 移动端弹窗宽度覆盖（非 scoped） -->
+<style>
+@media (max-width: 640px) {
+  .el-dialog.history-dialog {
+    width: 92% !important;
+    max-width: 92% !important;
+    min-width: unset !important;
+  }
 }
 </style>

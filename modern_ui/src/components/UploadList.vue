@@ -196,4 +196,47 @@ async function remove(item: any) {
   gap: 4px;
   flex-shrink: 0;
 }
+
+/* ── 移动端适配 ── */
+@media (max-width: 640px) {
+  .upload-list {
+    padding: 8px;
+  }
+  .upload-list-items {
+    max-height: none;
+  }
+  .upload-list-item {
+    padding: 10px 8px;
+    gap: 8px;
+  }
+  .upload-list-item-icon {
+    font-size: 18px;
+  }
+  .upload-list-item-name {
+    font-size: 12px;
+  }
+  .upload-list-item-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .upload-list-item-meta .small.muted {
+    margin-left: 0 !important;
+  }
+  .upload-list-item-actions {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .upload-list-item-actions .el-button {
+    padding: 4px 8px !important;
+    font-size: 11px !important;
+  }
+  .storage-bar {
+    padding: 8px 10px;
+    margin-bottom: 12px;
+  }
+  .upload-list-header {
+    margin-bottom: 8px;
+  }
+}
 </style>
