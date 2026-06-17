@@ -604,13 +604,21 @@
 
     /* ====== Form Sections (QuickCreate, AssetBased, DigitalHuman, etc.) ====== */
     .form-sections {
-      column-count: 2;
-      column-gap: 16px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .form-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-width: 0;
     }
 
     .form-section-wrapper {
-      break-inside: avoid;
-      margin-bottom: 16px;
+      box-sizing: border-box;
     }
 
     .form-section {
@@ -801,7 +809,7 @@
         grid-column: 1;
       }
       .form-sections {
-        column-count: 1;
+        grid-template-columns: 1fr;
       }
     }
 

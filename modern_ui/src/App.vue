@@ -59,7 +59,7 @@
       <AdminView v-if="activeView === 'admin'" />
 
       <!-- ====== 📊 任务中心 ====== -->
-      <section v-if="activeView === 'tasks'">
+      <!-- <section v-if="activeView === 'tasks'">
         <div class="card">
           <div class="card-header"><h3 class="card-title">📊 任务中心</h3><el-button @click="loadTasks">刷新</el-button></div>
           <div class="card-body">
@@ -71,7 +71,7 @@
             </div>
           </div>
         </div>
-      </section>
+      </section> -->
 
     </main>
 
@@ -111,7 +111,7 @@ const baseNavItems: NavItem[] = [
   // { key: 'custom_media', icon: '🎨', label: '素材创作' },
   { key: 'image_to_video', icon: '🎥', label: '图生视频' },
   { key: 'action_transfer', icon: '💃', label: '动作迁移' },
-  { key: 'tasks', icon: '📊', label: '任务中心' },
+  // { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
 ]
 
