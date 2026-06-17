@@ -6,7 +6,13 @@
       <!-- ====== 第一板块：人物形象上传 ====== -->
       <div class="form-section-wrapper">
         <div class="form-section">
-        <div class="form-section-title">🧑 人物形象上传</div>
+        <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
+          <span>🧑 人物形象上传</span>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:13px;font-weight:400;">批量</span>
+            <el-switch v-model="form.batch_mode" />
+          </div>
+        </div>
         <div class="form-section-body">
         <template v-if="form.batch_mode">
           <el-alert
@@ -175,15 +181,6 @@
             <el-radio-button value="customize">🧐 自定义模式</el-radio-button>
             <el-radio-button value="digital">💻 带货模式</el-radio-button>
           </el-radio-group>
-        </el-form-item>
-
-        <!-- 批量模式切换 -->
-        <el-form-item label="批量模式">
-          <el-switch
-            v-model="form.batch_mode"
-            active-text="批量生成（多组数据逐个生成）"
-            inactive-text="单次生成"
-          />
         </el-form-item>
 
         <!-- ====== 批量模式：多组数据输入 ====== -->
