@@ -103,7 +103,7 @@
       <div class="form-section">
       <div class="form-section-title">🎤 配音合成 (TTS)</div>
       <div class="form-section-body">
-      <el-form-item label="TTS 模式">
+      <el-form-item>
         <el-radio-group v-model="form.tts_inference_mode">
           <el-radio-button value="local">本地</el-radio-button>
           <el-radio-button value="comfyui">克隆声音</el-radio-button>
@@ -112,12 +112,12 @@
 
       <!-- 本地模式：可切换 Edge TTS / VoxCPM API -->
       <div v-if="form.tts_inference_mode === 'local'" class="soft-panel">
-        <el-form-item label="本地 TTS 引擎">
+        <!-- <el-form-item label="本地 TTS 引擎">
           <el-radio-group v-model="form.tts_engine">
             <el-radio-button value="edge_tts">Edge TTS（默认）</el-radio-button>
-            <!-- <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button> -->
+            <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button>
           </el-radio-group>
-        </el-form-item>
+        </el-form-item> -->
 
         <!-- Edge TTS 选项 -->
         <div v-if="form.tts_engine === 'edge_tts'">
@@ -184,11 +184,11 @@
 
       <!-- ComfyUI 模式 -->
       <div v-if="form.tts_inference_mode === 'comfyui'" class="soft-panel">
-        <el-form-item label="TTS 工作流">
+        <!-- <el-form-item label="TTS 工作流">
           <el-select v-model="form.tts_workflow" filterable clearable placeholder="默认/选择 TTS 工作流" style="width:100%;">
             <el-option v-for="wf in ttsWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
           </el-select>
-        </el-form-item>
+        </el-form-item> -->
         <el-form-item label="参考音频（可选）">
           <div class="upload-field-container">
             <UploadBox category="ref_audio" accept="audio/*" @upload="(f, c) => $emit('upload', f, c, 'quick_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
