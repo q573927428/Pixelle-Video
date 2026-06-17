@@ -62,7 +62,7 @@ from api.routers import (
     frame_router,
     pipelines_router,
     audio_router,
-    douyin_router,
+    media_extract_router,
 )
 from api.auth.router import router as auth_router
 from api.auth.sms_router import router as sms_router
@@ -158,7 +158,7 @@ app.include_router(resources_router, prefix=api_config.api_prefix)
 app.include_router(frame_router, prefix=api_config.api_prefix)
 app.include_router(pipelines_router, prefix=api_config.api_prefix)
 app.include_router(audio_router, prefix=api_config.api_prefix)
-app.include_router(douyin_router, prefix=api_config.api_prefix)
+app.include_router(media_extract_router, prefix=api_config.api_prefix)
 
 # Auth router (with /api prefix)
 app.include_router(auth_router, prefix=api_config.api_prefix)

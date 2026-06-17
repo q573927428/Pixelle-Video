@@ -89,30 +89,30 @@
             <el-button v-if="form.text.trim()" type="warning" size="small" @click="handleRewrite" :loading="rewriteLoading">
               ✨ 一键改写
             </el-button>
-            <el-button type="primary" size="small" @click="douyinDialogVisible = true">
-              🎵 从抖音链接提取导入
+            <el-button type="primary" size="small" @click="mediaDialogVisible = true">
+              🎵 从短视频链接提取
             </el-button>
           </div>
         </el-form-item>
 
-        <!-- 抖音导入弹窗 -->
-        <el-dialog v-model="douyinDialogVisible" title="从抖音导入口播文案" width="480px" :close-on-click-modal="false" class="douyin-dialog">
+        <!-- 短视频导入弹窗 -->
+        <el-dialog v-model="mediaDialogVisible" title="从短视频导入口播文案" width="480px" :close-on-click-modal="false" class="media-dialog">
           <div style="margin-bottom:12px;font-size:13px;color:var(--el-text-color-secondary);">
-            粘贴抖音分享信息，系统将自动提取视频中的口播文案。
+            粘贴抖音/快手/小红书/B站等短视频分享信息，系统将自动提取视频中的口播文案。
           </div>
           <el-input
-            v-model="douyinShareText"
+            v-model="mediaShareText"
             type="textarea"
             :rows="8"
-            placeholder="粘贴抖音分享链接/信息&#10;&#10;例如：4.17 T@Y.Zz icn:/ ... https://v.douyin.com/OOgNGe6Ln20/ ..."
+            placeholder="粘贴短视频分享链接/信息&#10;&#10;支持：抖音、快手、小红书、B站&#10;例如：https://v.douyin.com/OOgNGe6Ln20/"
           />
           <template #footer>
-            <el-button @click="douyinDialogVisible = false">取消</el-button>
+            <el-button @click="mediaDialogVisible = false">取消</el-button>
             <el-button
               type="primary"
-              @click="handleDouyinParse"
-              :loading="douyinLoading"
-              :disabled="!douyinShareText.trim()"
+              @click="handleMediaParse"
+              :loading="mediaLoading"
+              :disabled="!mediaShareText.trim()"
             >
               解析并导入
             </el-button>
@@ -903,34 +903,34 @@ async function handleRewrite() {
   }
 }
 
-// ---- 抖音导入口播文案 ----
-const douyinDialogVisible = ref(false)
-const douyinShareText = ref('')
-const douyinLoading = ref(false)
+// ---- 短视频导入口播文案 ----
+const mediaDialogVisible = ref(false)
+const mediaShareText = ref('')
+const mediaLoading = ref(false)
 
-async function handleDouyinParse() {
-  if (!douyinShareText.value.trim()) {
-    ElMessage.warning('请输入抖音分享信息')
+async function handleMediaParse() {
+  if (!mediaShareText.value.trim()) {
+    ElMessage.warning('请输入短视频分享信息')
     return
   }
-  douyinLoading.value = true
+  mediaLoading.value = true
   try {
-    const res: any = await request('/api/douyin/transcribe', {
+    const res: any = await request('/api/media/transcribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ share_text: douyinShareText.value.trim() }),
+      body: JSON.stringify({ share_text: mediaShareText.value.trim() }),
     })
     if (res.success && res.text) {
       props.form.text = res.text
-      douyinDialogVisible.value = false
-      ElMessage.success('抖音口播文案导入成功')
+      mediaDialogVisible.value = false
+      ElMessage.success('口播文案导入成功')
     } else {
       ElMessage.warning(res.message || '未能提取到有效口播文案')
     }
   } catch (e: any) {
     ElMessage.error(`导入失败：${e.message}`)
   } finally {
-    douyinLoading.value = false
+    mediaLoading.value = false
   }
 }
 </script>
@@ -1010,5 +1010,11 @@ async function handleDouyinParse() {
   font-weight: 800;
   margin-bottom: 10px;
   color: #a78bfa;
+}
+/* 短视频导入弹窗：PC 固定 480px，手机自适应 90% */
+@media (max-width: 640px) {
+  .media-dialog {
+    --el-dialog-width: 90%;
+  }
 }
 </style>

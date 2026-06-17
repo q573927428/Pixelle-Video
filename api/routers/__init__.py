@@ -27,7 +27,7 @@ from api.routers.resources import router as resources_router
 from api.routers.frame import router as frame_router
 from api.routers.pipelines import router as pipelines_router
 from api.routers.audio import router as audio_router
-from api.routers.douyin import router as douyin_router
+from api.routers.media_extract import router as media_extract_router
 
 __all__ = [
     "config_router",
@@ -43,6 +43,6 @@ __all__ = [
     "frame_router",
     "pipelines_router",
     "audio_router",
-    "douyin_router",
+    "media_extract_router",
 ]
 
