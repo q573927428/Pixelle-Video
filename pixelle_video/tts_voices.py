@@ -20,56 +20,110 @@ from typing import List, Dict, Any
 
 
 # Edge TTS voice presets for local inference
+# Only includes voices verified as available (tested 2026-06-17)
 EDGE_TTS_VOICES: List[Dict[str, Any]] = [
     # Chinese voices
     {
         "id": "zh-CN-XiaoxiaoNeural",
         "label_key": "tts.voice.zh_CN_XiaoxiaoNeural",
         "locale": "zh-CN",
-        "gender": "female"
+        "gender": "female",
+        "display_name": "晓晓-女（普通话）（zh-CN）"
     },
     {
         "id": "zh-CN-XiaoyiNeural",
         "label_key": "tts.voice.zh_CN_XiaoyiNeural",
         "locale": "zh-CN",
-        "gender": "female"
+        "gender": "female",
+        "display_name": "晓伊-女（普通话）（zh-CN）"
     },
     {
         "id": "zh-CN-YunjianNeural",
         "label_key": "tts.voice.zh_CN_YunjianNeural",
         "locale": "zh-CN",
-        "gender": "male"
+        "gender": "male",
+        "display_name": "云健-男（普通话）（zh-CN）"
     },
     {
         "id": "zh-CN-YunxiNeural",
         "label_key": "tts.voice.zh_CN_YunxiNeural",
         "locale": "zh-CN",
-        "gender": "male"
+        "gender": "male",
+        "display_name": "云希-男（普通话）（zh-CN）"
     },
     {
         "id": "zh-CN-YunyangNeural",
         "label_key": "tts.voice.zh_CN_YunyangNeural",
         "locale": "zh-CN",
-        "gender": "male"
-    },
-    {
-        "id": "zh-CN-YunyeNeural",
-        "label_key": "tts.voice.zh_CN_YunyeNeural",
-        "locale": "zh-CN",
-        "gender": "male"
-    },
-    {
-        "id": "zh-CN-YunfengNeural",
-        "label_key": "tts.voice.zh_CN_YunfengNeural",
-        "locale": "zh-CN",
-        "gender": "male"
+        "gender": "male",
+        "display_name": "云扬-男（普通话）（zh-CN）"
     },
     {
         "id": "zh-CN-liaoning-XiaobeiNeural",
         "label_key": "tts.voice.zh_CN_liaoning_XiaobeiNeural",
         "locale": "zh-CN",
-        "gender": "female"
+        "gender": "female",
+        "display_name": "晓北-女（东北话）（zh-CN）"
     },
+    {
+        "id": "zh-CN-YunxiaNeural",
+        "label_key": "tts.voice.zh_CN_YunxiaNeural",
+        "locale": "zh-CN",
+        "gender": "male",
+        "display_name": "云夏-男（普通话）（zh-CN）"
+    },
+    {
+        "id": "zh-CN-shaanxi-XiaoniNeural",
+        "label_key": "tts.voice.zh_CN_shaanxi_XiaoniNeural",
+        "locale": "zh-CN",
+        "gender": "female",
+        "display_name": "晓妮-女（陕西话）（zh-CN）"
+    },
+    # Hong Kong (Cantonese) voices
+    {
+        "id": "zh-HK-HiuMaanNeural",
+        "label_key": "tts.voice.zh_HK_HiuMaanNeural",
+        "locale": "zh-HK",
+        "gender": "female",
+        "display_name": "曉曼-女（粤语）（zh-HK）"
+    },
+    {
+        "id": "zh-HK-WanLungNeural",
+        "label_key": "tts.voice.zh_HK_WanLungNeural",
+        "locale": "zh-HK",
+        "gender": "male",
+        "display_name": "雲龍-男（粤语）（zh-HK）"
+    },
+    {
+        "id": "zh-HK-HiuGaaiNeural",
+        "label_key": "tts.voice.zh_HK_HiuGaaiNeural",
+        "locale": "zh-HK",
+        "gender": "female",
+        "display_name": "曉佳-女（粤语）（zh-HK）"
+    },
+    # Taiwan (Mandarin) voices
+    {
+        "id": "zh-TW-HsiaoChenNeural",
+        "label_key": "tts.voice.zh_TW_HsiaoChenNeural",
+        "locale": "zh-TW",
+        "gender": "female",
+        "display_name": "曉臻-女（国语）（zh-TW）"
+    },
+    {
+        "id": "zh-TW-YunJheNeural",
+        "label_key": "tts.voice.zh_TW_YunJheNeural",
+        "locale": "zh-TW",
+        "gender": "male",
+        "display_name": "雲哲-男（国语）（zh-TW）"
+    },
+    {
+        "id": "zh-TW-HsiaoYuNeural",
+        "label_key": "tts.voice.zh_TW_HsiaoYuNeural",
+        "locale": "zh-TW",
+        "gender": "female",
+        "display_name": "曉雨-女（国语）（zh-TW）"
+    },
+    # English voices
     {
         "id": "en-US-AriaNeural",
         "label_key": "tts.voice.en_US_AriaNeural",
@@ -89,12 +143,6 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "gender": "male"
     },
     {
-        "id": "en-US-DavisNeural",
-        "label_key": "tts.voice.en_US_DavisNeural",
-        "locale": "en-US",
-        "gender": "male"
-    },
-    {
         "id": "en-GB-SoniaNeural",
         "label_key": "tts.voice.en_GB_SoniaNeural",
         "locale": "en-GB",
@@ -106,6 +154,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "en-GB",
         "gender": "male"
     },
+    # Korean voices
     {
         "id": "ko-KR-InJoonNeural",
         "label_key": "tts.voice.ko-KR-InJoonNeural",
@@ -118,6 +167,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "ko-KR",
         "gender": "female"
     },
+    # French voices
     {
         "id": "fr-FR-EloiseNeural",
         "label_key": "tts.voice.fr-FR-EloiseNeural",
@@ -130,6 +180,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "fr-FR",
         "gender": "male"
     },
+    # Portuguese voices
     {
         "id": "pt-PT-DuarteNeural",
         "label_key": "tts.voice.pt-PT-DuarteNeural",
@@ -142,6 +193,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "pt-PT",
         "gender": "female"
     },
+    # German voices
     {
         "id": "de-DE-AmalaNeural",
         "label_key": "tts.voice.de-DE-AmalaNeural",
@@ -154,8 +206,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "de-DE",
         "gender": "male"
     },
-    
-    # English voices
+    # Russian voices
     {
         "id": "ru-RU-DmitryNeural",
         "label_key": "tts.voice.ru-RU-DmitryNeural",
@@ -168,6 +219,7 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "ru-RU",
         "gender": "female"
     },
+    # Turkish voices
     {
         "id": "tr-TR-AhmetNeural",
         "label_key": "tts.voice.tr-TR-AhmetNeural",
@@ -180,17 +232,12 @@ EDGE_TTS_VOICES: List[Dict[str, Any]] = [
         "locale": "tr-TR",
         "gender": "female"
     },
+    # Spanish voices
     {
         "id": "es-ES-AlvaroNeural",
         "label_key": "tts.voice.es-ES-AlvaroNeural",
         "locale": "es-ES",
         "gender": "male"
-    },
-    {
-        "id": "es-ES-ElviraNeural",
-        "label_key": "tts.voice.es-ES-ElviraNeural",
-        "locale": "es-ES",
-        "gender": "female"
     },
 ]
 
@@ -205,7 +252,7 @@ def get_voice_display_name(voice_id: str, tr_func=None, locale: str = "zh_CN") -
         locale: Current locale (default: "zh_CN")
     
     Returns:
-        Display name (translated label if in Chinese, otherwise voice ID)
+        Display name (e.g., "晓晓-女（普通话）（zh-CN）")
     """
     # Find voice config
     voice_config = next((v for v in EDGE_TTS_VOICES if v["id"] == voice_id), None)
@@ -213,7 +260,12 @@ def get_voice_display_name(voice_id: str, tr_func=None, locale: str = "zh_CN") -
     if not voice_config:
         return voice_id
     
-    # If Chinese locale and translation function available, use translated label
+    # If display_name is set, use it directly (this is the preferred approach)
+    display_name = voice_config.get("display_name")
+    if display_name:
+        return display_name
+    
+    # Fallback: if Chinese locale and translation function available, use translated label
     if locale == "zh_CN" and tr_func:
         label_key = voice_config["label_key"]
         return tr_func(label_key)
@@ -240,4 +292,3 @@ def speed_to_rate(speed: float) -> str:
     percentage = int((speed - 1.0) * 100)
     sign = "+" if percentage >= 0 else ""
     return f"{sign}{percentage}%"
-

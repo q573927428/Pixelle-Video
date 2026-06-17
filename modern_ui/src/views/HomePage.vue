@@ -150,9 +150,15 @@
             <p class="plan-desc">体验基础 AI 视频创作功能</p>
           </div>
           <ul class="plan-features">
-            <li v-for="item in freePlan" :key="item" class="plan-feature-item">
+            <li v-for="item in freePlan" :key="typeof item === 'string' ? item : item.text" class="plan-feature-item">
               <el-icon><Check /></el-icon>
-              <span>{{ item }}</span>
+              <template v-if="typeof item === 'string'">
+                <span>{{ item }}</span>
+              </template>
+              <span v-else>
+                {{ item.text }}
+                <div class="plan-feature-sub">{{ item.sub }}</div>
+              </span>
             </li>
           </ul>
           <el-button class="plan-btn" @click="$emit('show-register')">免费注册</el-button>
@@ -178,9 +184,15 @@
             <p class="plan-desc">解锁全部功能，畅享无限制创作</p>
           </div>
           <ul class="plan-features">
-            <li v-for="item in vipPlan" :key="item" class="plan-feature-item plan-feature-vip">
+            <li v-for="item in vipPlan" :key="typeof item === 'string' ? item : item.text" class="plan-feature-item plan-feature-vip">
               <el-icon><Check /></el-icon>
-              <span>{{ item }}</span>
+              <template v-if="typeof item === 'string'">
+                <span>{{ item }}</span>
+              </template>
+              <span v-else>
+                {{ item.text }}
+                <div class="plan-feature-sub">{{ item.sub }}</div>
+              </span>
             </li>
           </ul>
           <el-button type="primary" class="plan-btn plan-btn-vip" @click="$emit('show-login')">开通 VIP</el-button>
@@ -337,6 +349,7 @@ const landscapeVideos = [
 
 const freePlan = [
   '每日 1 次视频生成',
+  { text: '文案最多 150 字', sub: '生成视频时长约30秒' },
   '720P 基础画质输出',
   '基础数字人模板',
   '标准渲染队列',
@@ -345,6 +358,7 @@ const freePlan = [
 
 const vipPlan = [
   '无限次视频生成',
+  { text: '文案最多 398 字', sub: '生成视频时长约80秒' },
   '1080P 超清画质输出',
   '全部数字人模板解锁',
   '优先渲染队列',
@@ -868,6 +882,13 @@ const vipPlan = [
 
 .plan-feature-vip .el-icon {
   color: #a78bfa;
+}
+
+.plan-feature-sub {
+  font-size: 12px;
+  color: #888;
+  line-height: 1.3;
+  margin-top: 1px;
 }
 
 /* ── Buttons ── */

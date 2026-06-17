@@ -224,7 +224,7 @@ async def list_tts_voices():
         voices = [
             TtsVoiceInfo(
                 id=v["id"],
-                name=v.get("name", v["id"]),
+                name=v.get("display_name", v.get("name", v["id"])),
                 locale=v["locale"],
                 gender=v.get("gender", ""),
             )

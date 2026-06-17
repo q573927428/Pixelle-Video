@@ -106,7 +106,7 @@
       <el-form-item label="TTS 模式">
         <el-radio-group v-model="form.tts_inference_mode">
           <el-radio-button value="local">本地</el-radio-button>
-          <el-radio-button value="comfyui">ComfyUI</el-radio-button>
+          <el-radio-button value="comfyui">克隆声音</el-radio-button>
         </el-radio-group>
       </el-form-item>
 
@@ -126,7 +126,7 @@
               <el-option
                 v-for="voice in ttsVoices"
                 :key="voice.id"
-                :label="`${voice.name} (${voice.locale}${voice.gender ? ' · ' + voice.gender : ''})`"
+                :label="voice.name"
                 :value="voice.id"
               />
             </el-select>
@@ -203,7 +203,7 @@
           <template #title>
             <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔊 声音预览</span>
           </template>
-          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" style="margin-bottom:8px;" />
+          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" :maxlength="30" show-word-limit style="margin-bottom:8px;" />
           <div style="display:flex;gap:10px;align-items:center;">
             <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
               ▶ 生成预览

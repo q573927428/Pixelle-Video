@@ -148,7 +148,7 @@
       <el-form-item label="TTS 模式">
         <el-radio-group v-model="form.tts_inference_mode">
           <el-radio-button value="local">本地</el-radio-button>
-          <el-radio-button value="comfyui">ComfyUI</el-radio-button>
+          <el-radio-button value="comfyui">克隆声音</el-radio-button>
         </el-radio-group>
       </el-form-item>
 
@@ -168,7 +168,7 @@
               <el-option
                 v-for="voice in ttsVoices"
                 :key="voice.id"
-                :label="`${voice.name} (${voice.locale}${voice.gender ? ' · ' + voice.gender : ''})`"
+                :label="voice.name"
                 :value="voice.id"
               />
             </el-select>
@@ -226,11 +226,11 @@
 
       <!-- ComfyUI 模式 -->
       <div v-if="form.tts_inference_mode === 'comfyui'" class="soft-panel">
-        <el-form-item label="TTS 工作流">
+        <!-- <el-form-item label="TTS 工作流">
           <el-select v-model="form.tts_workflow" filterable clearable placeholder="选择 TTS 工作流" style="width:100%;">
             <el-option v-for="wf in ttsWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
           </el-select>
-        </el-form-item>
+        </el-form-item> -->
         <el-form-item label="参考音频">
           <div class="upload-field-container">
              <UploadBox category="ref_audio" accept="audio/*" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
@@ -245,7 +245,7 @@
           <template #title>
             <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🔊 声音预览</span>
           </template>
-          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" style="margin-bottom:8px;" />
+          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" :maxlength="30" show-word-limit style="margin-bottom:8px;" />
           <div style="display:flex;gap:10px;align-items:center;">
             <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
               ▶ 生成预览

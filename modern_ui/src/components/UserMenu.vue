@@ -61,12 +61,42 @@
           </div>
         </div>
 
-        <!-- Benefits -->
-        <div class="vip-benefits">
-          <div class="vip-benefit-item">✅ 无限次数生成视频</div>
-          <div class="vip-benefit-item">✅ 优先排队处理任务</div>
-          <div class="vip-benefit-item">✅ 高清无水印导出</div>
-          <div class="vip-benefit-item">✅ 专属客服支持</div>
+        <!-- Features Comparison -->
+        <div class="vip-compare">
+          <div class="vip-compare-header">
+            <div class="vip-compare-col plan-col-free">免费用户</div>
+            <div class="vip-compare-col plan-col-vip">VIP 会员</div>
+          </div>
+          <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span> 每日 1 次</div>
+            <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 无限次</div>
+          </div>
+          <div class="vip-compare-row vip-compare-row-word">
+            <div class="vip-compare-col plan-col-free">
+              文案最多 <strong class="text-free">150</strong> 字
+              <div class="word-duration">生成视频时长约30秒</div>
+            </div>
+            <div class="vip-compare-col plan-col-vip">
+              文案最多 <strong class="text-vip">398</strong> 字
+              <div class="word-duration">生成视频时长约80秒</div>
+            </div>
+          </div>
+          <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free">720P 画质</div>
+            <div class="vip-compare-col plan-col-vip">1080P 超清</div>
+          </div>
+          <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free">基础模板</div>
+            <div class="vip-compare-col plan-col-vip">全部模板</div>
+          </div>
+          <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free">标准队列</div>
+            <div class="vip-compare-col plan-col-vip">优先队列</div>
+          </div>
+          <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span></div>
+            <div class="vip-compare-col plan-col-vip">专属客服</div>
+          </div>
         </div>
 
         <!-- WeChat Discount -->
@@ -306,6 +336,7 @@ async function copyWechatId() {
   background: rgba(230, 162, 60, 0.2);
 }
 
+
 /* Action Buttons */
 .user-actions {
   display: flex;
@@ -469,19 +500,83 @@ async function copyWechatId() {
   font-weight: 300;
 }
 
-.vip-benefits {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.vip-compare {
   margin-bottom: 16px;
-  padding: 12px 16px;
-  background: rgba(64, 158, 255, 0.04);
-  border-radius: 8px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.vip-benefit-item {
+.vip-compare-header {
+  display: flex;
+  font-weight: 800;
   font-size: 14px;
-  color: #ddd;
+}
+
+.vip-compare-header .plan-col-free {
+  color: #94a3b8;
+  padding: 10px 12px;
+  background: rgba(100, 116, 139, 0.1);
+}
+
+.vip-compare-header .plan-col-vip {
+  color: #d8b4fe;
+  padding: 10px 12px;
+  background: rgba(124, 58, 237, 0.18);
+}
+
+.vip-compare-row {
+  display: flex;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.vip-compare-col {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: #ccc;
+}
+
+.plan-col-free {
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(100, 116, 139, 0.05);
+}
+
+.plan-col-vip {
+  background: rgba(124, 58, 237, 0.14);
+}
+
+
+.cmp-check {
+  color: #22c55e;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.cmp-remove {
+  color: #ef4444;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.text-free {
+  color: #94a3b8;
+}
+
+.text-vip {
+  color: #d8b4fe;
+  font-size: 15px;
+}
+
+.vip-compare-row-word {
+  background: rgba(124, 58, 237, 0.04);
+}
+
+.word-duration {
+  font-size: 11px;
+  color: #888;
+  margin-top: 2px;
+  line-height: 1.3;
 }
 
 .vip-wechat-tip {

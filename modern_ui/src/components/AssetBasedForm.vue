@@ -93,7 +93,7 @@
           <el-option
             v-for="voice in ttsVoices"
             :key="voice.id"
-            :label="`${voice.name} (${voice.locale}${voice.gender ? ' · ' + voice.gender : ''})`"
+            :label="voice.name"
             :value="voice.id"
           />
         </el-select>
@@ -105,7 +105,7 @@
       <!-- 声音预览 -->
       <div class="soft-panel" style="margin-top:12px;border:1px dashed var(--el-color-primary);">
         <el-form-item label="🔊 声音预览">
-          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" />
+          <el-input v-model="previewText" type="textarea" :rows="2" placeholder="大家好，这是一段测试语音。" :maxlength="30" show-word-limit />
         </el-form-item>
         <div style="display:flex;gap:10px;align-items:center;">
           <el-button type="primary" @click="handlePreviewTts" :loading="previewLoading">
