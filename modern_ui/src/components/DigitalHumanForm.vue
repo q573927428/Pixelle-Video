@@ -145,7 +145,7 @@
       <div class="form-section">
       <div class="form-section-title">🎤 配音合成</div>
       <div class="form-section-body">
-      <el-form-item label="TTS 模式">
+      <el-form-item>
         <el-radio-group v-model="form.tts_inference_mode">
           <el-radio-button value="local">本地</el-radio-button>
           <el-radio-button value="comfyui">克隆声音</el-radio-button>
@@ -154,12 +154,12 @@
 
       <!-- 本地模式：可切换 Edge TTS / VoxCPM API -->
       <div v-if="form.tts_inference_mode === 'local'" class="soft-panel">
-        <el-form-item label="本地 TTS 引擎">
+        <!-- <el-form-item label="本地 TTS 引擎">
           <el-radio-group v-model="form.tts_engine">
             <el-radio-button value="edge_tts">Edge TTS（默认）</el-radio-button>
-            <!-- <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button> -->
+            <el-radio-button value="voxcpm_api">VoxCPM API（在线）</el-radio-button>
           </el-radio-group>
-        </el-form-item>
+        </el-form-item> -->
 
         <!-- Edge TTS 选项 -->
         <div v-if="form.tts_engine === 'edge_tts'">
