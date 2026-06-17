@@ -95,7 +95,7 @@
     </div>
 
     <!-- 详情对话框 -->
-    <el-dialog v-model="detailVisible" title="任务详情" width="700px" :close-on-click-modal="false" top="5vh">
+    <el-dialog v-model="detailVisible" title="任务详情" :close-on-click-modal="false" top="5vh" class="detail-dialog">
       <div v-if="detailLoading" style="text-align:center;padding:30px;">
         <el-icon class="is-loading" style="font-size:24px;"><svg viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 64a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V96a32 32 0 0 1 32-32z"/><path fill="currentColor" d="M512 736a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V768a32 32 0 0 1 32-32z"/></svg></el-icon>
         <div class="small muted" style="margin-top:12px;">加载中...</div>
@@ -150,7 +150,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { loadTaskHistory, deleteTaskHistory } from '../api'
+import { loadTaskHistory, deleteTaskHistory, getTaskHistoryDetail } from '../api'
 import { ElMessageBox } from 'element-plus'
 
 const loading = ref(false)
@@ -216,14 +216,7 @@ async function showDetail(task: any) {
   detailLoading.value = true
   detailData.value = null
   try {
-    const response = await fetch(`/api/tasks/history/${task.task_id}`)
-    if (!response.ok) {
-      const text = await response.text()
-      let detail: any
-      try { detail = JSON.parse(text) } catch { detail = { detail: text } }
-      throw new Error(detail.detail || response.statusText)
-    }
-    const data = await response.json()
+    const data = await getTaskHistoryDetail(task.task_id)
     detailData.value = data
   } catch (e: any) {
     const msg = typeof e === 'string' ? e : e?.message || '请求失败'
@@ -492,6 +485,37 @@ async function handleDelete(task: any) {
     min-height: 36px;
     font-size: 13px;
     padding: 8px 16px !important;
+  }
+}
+</style>
+
+<style>
+/* 全局 dialog 宽度控制 */
+.detail-dialog {
+  width: 700px;
+  max-width: 92vw;
+}
+.detail-dialog .el-dialog__body {
+  padding: 16px;
+  overflow-x: hidden;
+}
+
+/* 桌面端：固定宽度 700px */
+@media (min-width: 641px) {
+  .detail-dialog {
+    width: 700px !important;
+  }
+}
+
+/* 移动端：自适应宽度 */
+@media (max-width: 640px) {
+  .detail-dialog {
+    width: 92vw !important;
+    max-width: 92vw !important;
+    min-width: 0 !important;
+  }
+  .detail-dialog .el-dialog__body {
+    padding: 12px;
   }
 }
 </style>

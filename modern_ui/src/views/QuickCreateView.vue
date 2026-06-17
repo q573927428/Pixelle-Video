@@ -33,6 +33,14 @@
             <div style="margin:18px 0;">
               <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
             </div>
+            <div v-if="submitted || batchSubmitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:14px;color:var(--el-color-primary);flex:1;">
+                  ✅ 任务已提交，可以关闭网页。可在「任务中心」查看，成功后可以在「历史记录」查看。
+                </span>
+                <el-button size="small" type="danger" plain @click="cancelAllTasks">一键取消全部</el-button>
+              </div>
+            </div>
             <video v-if="result.video_url" class="result-video" controls :src="result.video_url" />
             <div v-else class="empty-preview">
               <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>生成结果将在这里预览</div></div>
@@ -49,14 +57,14 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { QuickForm } from '../types'
-import { filePreviewUrl, getUserUploads, request } from '../api'
+import { filePreviewUrl, getUserUploads, request, cancelTask } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
 import QuickCreateForm from '../components/QuickCreateForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
-const { running, progress, statusText, result, submitTask, cleanedPayload, stopPolling } = useTaskRunner()
+const { running, progress, statusText, result, submitTask, cleanedPayload, stopPolling, submitted, currentTaskId, cancelCurrentTask } = useTaskRunner()
 const { templates, mediaWorkflows, ttsWorkflows, bgmFiles, ttsVoices, handleUpload: uploadResource } = useResources()
 
 const quickForm = ref<QuickForm>({
@@ -118,6 +126,8 @@ function onHistorySelect(record: any) {
 const batchResults = ref<any[]>([])
 const batchErrors = ref<any[]>([])
 const batchTotal = ref(0)
+const batchSubmitted = ref(false)
+const batchTaskId = ref('')
 let batchPollTimer: ReturnType<typeof setInterval> | null = null
 
 function batchStopPolling() {
@@ -263,6 +273,8 @@ async function doSubmitBatch(topics: string[]) {
     })
     statusText.value = `批量任务已创建：${data.task_id} (${data.total_videos} 个视频)`
     progress.value = 8
+    batchTaskId.value = data.task_id
+    batchSubmitted.value = true
     pollBatchTask(data.task_id, data.total_videos)
   } catch (e: any) {
     running.value = false
@@ -299,18 +311,16 @@ function pollBatchTask(taskId: string, totalVideos: number) {
           result.value = { video_url: batchResults.value[0].video_url }
         }
         
-        if (failedCount > 0) {
-          ElMessage.warning(`批量生成完成: ${successCount} 成功, ${failedCount} 失败`)
-        } else {
-          ElMessage.success('批量生成全部完成')
-        }
+        batchSubmitted.value = false
+        batchTaskId.value = ''
       }
       
       if (['failed', 'cancelled'].includes(task.status)) {
         running.value = false
         statusText.value = `批量任务失败：${task.error || task.message || task.status}`
+        batchSubmitted.value = false
+        batchTaskId.value = ''
         batchStopPolling()
-        ElMessage.error(statusText.value)
       }
     } catch (e: any) {
       running.value = false
@@ -322,7 +332,22 @@ function pollBatchTask(taskId: string, totalVideos: number) {
   batchPollTimer = setInterval(tick, 3000)
 }
 
-function previewAsset(path: string) {
-  window.open(filePreviewUrl(path), '_blank')
-}
+  async function cancelAllTasks() {
+    if (batchTaskId.value) {
+      try {
+        await cancelTask(batchTaskId.value)
+        batchSubmitted.value = false
+        running.value = false
+        statusText.value = '批量任务已取消'
+        batchStopPolling()
+        batchTaskId.value = ''
+      } catch (_) {}
+    } else if (currentTaskId.value) {
+      await cancelCurrentTask()
+    }
+  }
+
+  function previewAsset(path: string) {
+    window.open(filePreviewUrl(path), '_blank')
+  }
 </script>

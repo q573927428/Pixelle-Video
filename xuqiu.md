@@ -33,6 +33,7 @@ uv run streamlit run web/app.py
 这波真的血赚！
 
 
+
 花大几万淘的中古胶片相机，就怕跨国运输震坏直接报废！
 我干日本转运12年，这种娇贵货见太多了，今天给你吃颗定心丸。
 其实只要做好两步，根本不用担心被震坏：
@@ -44,21 +45,9 @@ uv run streamlit run web/app.py
 
 ## 待完成
 
-⚙️ 服务配置 如果正式使用需要直接给他隐藏起来。
-
 
 这个商业化有个很重要的问题，runninghub  同时最多只能2个任务，多了需要开更高级的会员。专业版 Plus  169元每月  可以5个任务。
 
 
-modern_ui\src\components\ActionTransferForm.vue
-modern_ui\src\components\DigitalHumanForm.vue
-modern_ui\src\components\QuickCreateForm.vue
-modern_ui\src\components\I2vForm.vue
+生成的视频是否可以自动加字幕。生成好的视频，添加可以分发到其他短视频平台的功能。
 
-
-生成的视频是否可以自动加字幕。
-
-生成好的视频，添加可以分发到其他短视频平台的功能。
-
-
-微信二维码图片需要修改

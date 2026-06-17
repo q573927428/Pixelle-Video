@@ -31,6 +31,14 @@
             <div style="margin:18px 0;">
               <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
             </div>
+            <div v-if="submitted || batchSubmitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:14px;color:var(--el-color-primary);flex:1;">
+                  ✅ 任务已提交，可以关闭网页。可在「任务中心」查看，成功后可以在「历史记录」查看。
+                </span>
+                <el-button size="small" type="danger" plain @click="cancelAllTasks">一键取消全部</el-button>
+              </div>
+            </div>
 
             <!-- 批量模式结果列表 -->
             <template v-if="batchResults.length > 0">
@@ -46,7 +54,7 @@
                 </el-table-column>
                 <el-table-column label="预览" min-width="160">
                   <template #default="{ row }">
-                    <video v-if="row.video_url" :src="row.video_url" controls style="width:100%;height:80px;object-fit:contain;background:#000;border-radius:4px;" />
+                    <video v-if="row.video_url" :src="row.video_url" controls style="width:100%;height:150px;object-fit:contain;background:#000;border-radius:4px;" />
                     <span v-else class="small muted">暂无</span>
                   </template>
                 </el-table-column>
@@ -70,20 +78,22 @@
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DigitalForm } from '../types'
-import { request, filePreviewUrl, getUserUploads } from '../api'
+import { request, filePreviewUrl, getUserUploads, cancelTask } from '../api'
 import { useTaskRunner } from '../composables/useTaskRunner'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
 import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
-const { running, progress, statusText, result, submitTask } = useTaskRunner()
+const { running, progress, statusText, result, submitTask, currentTaskId, submitted, cancelCurrentTask } = useTaskRunner()
 const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource } = useResources()
 
 const batchResults = ref<any[]>([])
+const batchSubmitted = ref(false)
+const batchTaskIds = ref<string[]>([])
 
 const digitalForm = ref<DigitalForm>({
-  mode: 'customize', batch_mode: false, batch_topics: '', batch_goods_assets: [],
+  mode: 'customize', batch_mode: false, batch_topics: '', batch_goods_assets: [], batch_character_assets: [],
   character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',
@@ -115,6 +125,7 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   const result = await uploadResource(rawFile, category, target)
   if (result) {
     if (target === 'digital_character') digitalForm.value.character_asset = result.path
+    else if (target === 'digital_batch_character') digitalForm.value.batch_character_assets = [...digitalForm.value.batch_character_assets, result.path]
     else if (target === 'digital_goods') digitalForm.value.goods_asset = result.path
     else if (target === 'digital_batch_goods') digitalForm.value.batch_goods_assets = [...digitalForm.value.batch_goods_assets, result.path]
     else if (target === 'digital_ref_audio') digitalForm.value.ref_audio = result.path
@@ -140,7 +151,13 @@ async function openHistory(category: string) {
 function onHistorySelect(record: any) {
   const cat = historyFilterCategory.value || record.category || 'misc'
   if (cat === 'ref_audio') digitalForm.value.ref_audio = record.path
-  else if (cat === 'character_image') digitalForm.value.character_asset = record.path
+  else if (cat === 'character_image') {
+    if (digitalForm.value.batch_mode) {
+      digitalForm.value.batch_character_assets = [...digitalForm.value.batch_character_assets, record.path]
+    } else {
+      digitalForm.value.character_asset = record.path
+    }
+  }
   else if (cat === 'goods_image') {
     if (digitalForm.value.batch_mode) {
       digitalForm.value.batch_goods_assets = [...digitalForm.value.batch_goods_assets, record.path]
@@ -190,7 +207,13 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
 }
 
 async function generate() {
-  if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
+  if (digitalForm.value.batch_mode) {
+    if (!digitalForm.value.character_asset && digitalForm.value.batch_character_assets.length === 0) {
+      ElMessage.warning('请上传角色图片'); return
+    }
+  } else {
+    if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
+  }
 
     if (digitalForm.value.batch_mode) {
       const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
@@ -234,62 +257,73 @@ async function generate() {
     statusText.value = `批量生成开始：共 ${topics.length} 个主题...`
     result.value = {}
     batchResults.value = topics.map((t, i) => ({ index: i + 1, topic: t, success: false, video_url: '', loading: true }))
+    batchSubmitted.value = false
+    batchTaskIds.value = []
 
-    let completedCount = 0
-    let failedCount = 0
-
+    // Step 1: Submit ALL tasks in parallel immediately
+    const taskIds: string[] = []
     for (let i = 0; i < topics.length; i++) {
       const topic = topics[i]
-      statusText.value = `[${i + 1}/${topics.length}] 正在生成：${topic}`
+      statusText.value = `[${i + 1}/${topics.length}] 提交中：${topic}`
       try {
         const isCustomize = digitalForm.value.mode === 'customize'
         const bgAssets = digitalForm.value.batch_goods_assets
+        const charAssets = digitalForm.value.batch_character_assets
         const goodsImage = bgAssets.length > 0 ? bgAssets[Math.min(i, bgAssets.length - 1)] : ''
+        const characterImage = charAssets.length > 0 ? charAssets[Math.min(i, charAssets.length - 1)] : ''
         const payload = buildPayload({
           mode: digitalForm.value.mode,
           title: isCustomize ? '' : topic,
           text: isCustomize ? topic : '',
         })
         payload.goods_assets = goodsImage ? [goodsImage] : []
+        payload.character_assets = characterImage ? [characterImage] : (digitalForm.value.character_asset ? [digitalForm.value.character_asset] : [])
         const data: any = await request('/api/pipelines/digital-human/async', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        const taskId = data.task_id
-        const pollResult = await pollTaskOnce(taskId)
-        if (pollResult.success) {
-          completedCount++
-          batchResults.value[i].success = true
-          batchResults.value[i].loading = false
-          try {
-            const task: any = await request(`/api/tasks/${taskId}`)
-            if (task.result?.video_url) {
-              batchResults.value[i].video_url = task.result.video_url
-            }
-          } catch (_) {}
-        } else {
-          failedCount++
-          batchResults.value[i].success = false
-          batchResults.value[i].loading = false
-        }
+        taskIds[i] = data.task_id
       } catch (e: any) {
-        failedCount++
+        taskIds[i] = ''
         batchResults.value[i].success = false
         batchResults.value[i].loading = false
-        console.error(`[${i + 1}/${topics.length}] ${topic} 失败：`, e)
+        console.error(`[${i + 1}/${topics.length}] ${topic} 提交失败：`, e)
       }
-      progress.value = Math.round(((i + 1) / topics.length) * 100)
+    }
+
+    batchTaskIds.value = taskIds.filter(id => id)
+    batchSubmitted.value = true
+
+    // Step 2: Poll ALL tasks in parallel
+    statusText.value = `全部已提交（${topics.length} 个），等待执行...`
+    const pollPromises = taskIds.map((taskId, i) => pollTaskOnce(taskId))
+    const pollResults = await Promise.all(pollPromises)
+
+    let completedCount = 0
+    let failedCount = 0
+    for (let i = 0; i < topics.length; i++) {
+      batchResults.value[i].loading = false
+      if (pollResults[i]?.success) {
+        completedCount++
+        batchResults.value[i].success = true
+        try {
+          const task: any = await request(`/api/tasks/${taskIds[i]}`)
+          if (task.result?.video_url) {
+            batchResults.value[i].video_url = task.result.video_url
+          }
+        } catch (_) {}
+      } else {
+        failedCount++
+        batchResults.value[i].success = false
+      }
     }
 
     running.value = false
     progress.value = 100
     statusText.value = `批量生成完成：成功 ${completedCount} 个，失败 ${failedCount} 个，共 ${topics.length} 个`
-    if (failedCount === 0) {
-      ElMessage.success(`批量生成完成！共 ${completedCount} 个视频`)
-    } else {
-      ElMessage.warning(`批量生成完成：成功 ${completedCount} 个，失败 ${failedCount} 个`)
-    }
+    batchSubmitted.value = false
+    batchTaskIds.value = []
     return
   }
 
@@ -313,9 +347,26 @@ async function generate() {
   await submitTask('/api/pipelines/digital-human/async', payload)
 }
 
+async function cancelAllTasks() {
+  if (batchTaskIds.value.length > 0) {
+    // 批量取消：逐个取消所有子任务
+    running.value = false
+    batchSubmitted.value = false
+    for (const tid of batchTaskIds.value) {
+      try {
+        await cancelTask(tid)
+      } catch (_) {}
+    }
+    batchTaskIds.value = []
+    statusText.value = '全部任务已取消'
+  } else if (currentTaskId.value) {
+    await cancelCurrentTask()
+  }
+}
+
 function pollTaskOnce(taskId: string): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
-    const maxAttempts = 120
+    const maxAttempts = 600  // 最多等 30 分钟（600 * 3s）
     let attempts = 0
     const tick = async () => {
       try {
@@ -335,7 +386,14 @@ function pollTaskOnce(taskId: string): Promise<{ success: boolean; error?: strin
         }
         setTimeout(tick, 3000)
       } catch (e: any) {
-        resolve({ success: false, error: e.message })
+        // 网络波动等临时错误不要直接判失败，重试
+        console.warn(`[pollTaskOnce] polling error for ${taskId}:`, e.message)
+        attempts++
+        if (attempts >= maxAttempts) {
+          resolve({ success: false, error: '轮询失败过多' })
+          return
+        }
+        setTimeout(tick, 5000)  // 网络错误后等 5 秒重试
       }
     }
     tick()

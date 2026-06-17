@@ -17,6 +17,7 @@ In-memory task management for video generation jobs.
 """
 
 import asyncio
+import contextvars
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
@@ -25,6 +26,18 @@ from loguru import logger
 from api.tasks.models import Task, TaskStatus, TaskType, TaskProgress, ConfirmationData
 from pixelle_video.config import config_manager
 from api.config import api_config
+
+
+# Context variable used to propagate the *current* task_id down through async
+# call chains (FastAPI handler -> pipeline -> pixelle_video service -> ComfyKit).
+# This lets `pixelle_video.execute_with_concurrency` automatically associate
+# the RunningHub remote task_id with the local task, enabling cancellation
+# via the RunningHub /task/openapi/cancel endpoint without requiring every
+# call site to pass the task_id explicitly.
+current_task_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+    "current_task_id", default=None
+)
+
 
 
 class TaskConfirmationTimeout(Exception):
@@ -128,7 +141,8 @@ class TaskManager:
     def create_task(
         self,
         task_type: TaskType,
-        request_params: Optional[dict] = None
+        request_params: Optional[dict] = None,
+        user_id: Optional[str] = None
     ) -> Task:
         """
         Create a new task
@@ -136,6 +150,7 @@ class TaskManager:
         Args:
             task_type: Type of task
             request_params: Original request parameters
+            user_id: User ID for ownership tracking
             
         Returns:
             Created task
@@ -146,10 +161,11 @@ class TaskManager:
             task_type=task_type,
             status=TaskStatus.PENDING,
             request_params=request_params,
+            user_id=user_id,
         )
         
         self._tasks[task_id] = task
-        logger.info(f"Created task {task_id} ({task_type})")
+        logger.info(f"Created task {task_id} ({task_type}) [user={user_id}]")
         return task
     
     def add_warning(self, task_id: str, warning: str):
@@ -343,6 +359,10 @@ class TaskManager:
         semaphore = self.get_concurrency_semaphore()
 
         async def _execute_with_semaphore():
+            # Bind current task_id to the async context so downstream code
+            # (pixelle_video.execute_with_concurrency -> ComfyKit) can record
+            # the RunningHub remote task_id back onto this task automatically.
+            token = current_task_id_var.set(task_id)
             try:
                 # Wait for a semaphore slot before starting execution
                 logger.info(f"Task {task_id} waiting for concurrency slot (available: {semaphore._value})")
@@ -357,6 +377,7 @@ class TaskManager:
                     task.result = result
                     task.completed_at = datetime.now()
                     logger.info(f"Task {task_id} completed, released concurrency slot")
+
                     
             except TaskConfirmationTimeout:
                 task.status = TaskStatus.FAILED
@@ -374,9 +395,16 @@ class TaskManager:
                 task.error = str(e)
                 task.completed_at = datetime.now()
                 logger.error(f"Task {task_id} failed: {e}")
+            finally:
+                # Always reset context variable to avoid leaking to other tasks
+                try:
+                    current_task_id_var.reset(token)
+                except Exception:
+                    pass
 
         future = asyncio.create_task(_execute_with_semaphore())
         self._task_futures[task_id] = future
+
     
     def get_task(self, task_id: str) -> Optional[Task]:
         """Get task by ID"""
@@ -385,7 +413,9 @@ class TaskManager:
     def list_tasks(
         self,
         status: Optional[TaskStatus] = None,
-        limit: int = 100
+        limit: int = 100,
+        user_id: Optional[str] = None,
+        is_admin: bool = False,
     ) -> List[Task]:
         """
         List tasks with optional filtering
@@ -393,11 +423,18 @@ class TaskManager:
         Args:
             status: Filter by status
             limit: Maximum number of tasks to return
+            user_id: If set, only return tasks belonging to this user.
+                     Admin can see all tasks by passing is_admin=True.
+            is_admin: If True, user_id filtering is bypassed.
             
         Returns:
             List of tasks
         """
         tasks = list(self._tasks.values())
+        
+        # Filter by user (unless admin)
+        if user_id and not is_admin:
+            tasks = [t for t in tasks if t.user_id == user_id]
         
         if status:
             tasks = [t for t in tasks if t.status == status]
@@ -406,6 +443,21 @@ class TaskManager:
         tasks.sort(key=lambda t: t.created_at, reverse=True)
         
         return tasks[:limit]
+    
+    def set_task_runninghub_id(self, task_id: str, runninghub_task_id: str):
+        """Store RunningHub task ID for cancellation"""
+        task = self._tasks.get(task_id)
+        if task:
+            if task.request_params is None:
+                task.request_params = {}
+            task.request_params["_runninghub_task_id"] = runninghub_task_id
+    
+    def get_runninghub_task_id(self, task_id: str) -> Optional[str]:
+        """Get stored RunningHub task ID"""
+        task = self._tasks.get(task_id)
+        if task and task.request_params:
+            return task.request_params.get("_runninghub_task_id")
+        return None
     
     def update_progress(
         self,

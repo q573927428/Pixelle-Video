@@ -59,19 +59,7 @@
       <AdminView v-if="activeView === 'admin'" />
 
       <!-- ====== 📊 任务中心 ====== -->
-      <!-- <section v-if="activeView === 'tasks'">
-        <div class="card">
-          <div class="card-header"><h3 class="card-title">📊 任务中心</h3><el-button @click="loadTasks">刷新</el-button></div>
-          <div class="card-body">
-            <div v-if="!tasks.length" class="empty-preview">暂无任务</div>
-            <div v-for="task in tasks" :key="task.task_id" class="task-item">
-              <div class="task-top"><span class="mono">{{ task.task_id }}</span><el-tag :type="tagType(task.status)" effect="dark">{{ task.status }}</el-tag></div>
-              <el-progress :percentage="task.progress?.percentage ?? 0" />
-              <div class="small muted">{{ task.progress?.message || task.message || `状态：${task.status}` }}</div>
-            </div>
-          </div>
-        </div>
-      </section> -->
+      <TaskCenterView v-if="activeView === 'tasks'" />
 
     </main>
 
@@ -81,7 +69,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import type { NavItem } from './types'
-import { loadTasks as apiLoadTasks } from './api'
 import { useResources } from './composables/useResources'
 import { getAuth } from './composables/useAuth'
 import QuickCreateView from './views/QuickCreateView.vue'
@@ -90,6 +77,7 @@ import DigitalHumanView from './views/DigitalHumanView.vue'
 import I2vView from './views/I2vView.vue'
 import ActionTransferView from './views/ActionTransferView.vue'
 import TaskHistoryView from './views/TaskHistoryView.vue'
+import TaskCenterView from './views/TaskCenterView.vue'
 import SettingsView from './views/SettingsView.vue'
 import LoginView from './views/LoginView.vue'
 import AdminView from './views/AdminView.vue'
@@ -103,7 +91,7 @@ const showLogin = ref(false)
 const startRegister = ref(false)
 const sidebarOpen = ref(false)
 
-const { tasks, loadAll } = useResources()
+const { loadAll } = useResources()
 
 const baseNavItems: NavItem[] = [
   { key: 'digital_human', icon: '🤖', label: '数字人' },
@@ -111,7 +99,7 @@ const baseNavItems: NavItem[] = [
   // { key: 'custom_media', icon: '🎨', label: '素材创作' },
   { key: 'image_to_video', icon: '🎥', label: '图生视频' },
   { key: 'action_transfer', icon: '💃', label: '动作迁移' },
-  // { key: 'tasks', icon: '📊', label: '任务中心' },
+  { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
 ]
 
@@ -149,14 +137,5 @@ function handleShowRegister() {
 function handleLoginSuccess() {
   showLogin.value = false
   loadAll()
-}
-
-async function loadTasks() {
-  try { tasks.value = await apiLoadTasks() }
-  catch { tasks.value = [] }
-}
-
-function tagType(status: string): string {
-  return { completed: 'success', running: 'warning', pending: 'info', failed: 'danger', cancelled: 'info' }[status] || 'info'
 }
 </script>

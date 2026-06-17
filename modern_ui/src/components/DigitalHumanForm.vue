@@ -8,12 +8,34 @@
         <div class="form-section">
         <div class="form-section-title">🧑 人物形象上传</div>
         <div class="form-section-body">
-        <el-form-item label="角色图片">
-          <div class="upload-field-container">
-            <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
-            <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
-          </div>
-        </el-form-item>
+        <template v-if="form.batch_mode">
+          <el-alert
+            title="可上传多张人物图片，按顺序与文案一一对应；少于文案数时最后一张循环使用"
+            type="info"
+            :closable="false"
+            show-icon
+            style="margin-bottom:14px;"
+          />
+          <el-form-item label="人物图片（按顺序一一对应）">
+            <div class="upload-field-container">
+              <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_character')" @select-history="(c) => $emit('select-history', c)" />
+            </div>
+            <div v-if="form.batch_character_assets.length > 0" style="width:100%;">
+              <div class="small muted" style="margin-bottom:6px;">
+                已上传 {{ form.batch_character_assets.length }} 张人物图片
+              </div>
+              <FilePreview :items="form.batch_character_assets" @remove="(idx) => form.batch_character_assets.splice(idx, 1)" />
+            </div>
+          </el-form-item>
+        </template>
+        <template v-else>
+          <el-form-item label="角色图片">
+            <div class="upload-field-container">
+              <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
+              <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
+            </div>
+          </el-form-item>
+        </template>
       </div>
         </div>
       </div>

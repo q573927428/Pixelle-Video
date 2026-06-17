@@ -421,6 +421,7 @@ async def generate_asset_based_async(
         task = task_manager.create_task(
             task_type=TaskType.VIDEO_GENERATION,
             request_params=request_body.model_dump(),
+            user_id=str(user_id),
         )
 
         async def execute():
@@ -494,7 +495,7 @@ async def generate_image_to_video_async(
     # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
     await increment_daily_usage(user_id)
     try:
-        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
+        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump(), user_id=str(user_id))
 
         async def execute():
             if not request_body.image_assets:
@@ -570,7 +571,7 @@ async def generate_action_transfer_async(
     # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
     await increment_daily_usage(user_id)
     try:
-        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
+        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump(), user_id=str(user_id))
 
         async def execute():
             if not request_body.video_assets:
@@ -656,10 +657,10 @@ async def generate_digital_human_async(
     # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
     await increment_daily_usage(user_id)
     try:
-        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump())
+        task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump(), user_id=str(user_id))
 
         async def execute():
-            task_manager.update_progress(task.task_id, 10, 100, "preparing")
+            task_manager.update_progress(task.task_id, 80, 100, "preparing")
             try:
                 final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
             except Exception:

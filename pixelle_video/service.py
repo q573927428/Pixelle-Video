@@ -192,6 +192,7 @@ class PixelleVideoCore:
         self,
         workflow_input: str,
         workflow_params: dict,
+        on_task_created: Optional[callable] = None,
     ):
         """
         Execute a RunningHub workflow with concurrency limiting.
@@ -203,17 +204,80 @@ class PixelleVideoCore:
         Args:
             workflow_input: RunningHub workflow ID or file path
             workflow_params: Workflow parameters
-            
+            on_task_created: Optional callback(runninghub_task_id: str) invoked
+                             as soon as the RunningHub task is created. Used to
+                             record the RunningHub task_id so it can be cancelled
+                             via the openapi cancel endpoint. If not provided,
+                             this method will auto-register a callback that
+                             writes the RunningHub task_id back to the local
+                             task_manager (via the current_task_id_var
+                             ContextVar) so the cancel endpoint can target the
+                             remote RunningHub task.
+
         Returns:
             ExecuteResult from ComfyKit
         """
+        # Auto-bind RunningHub remote task_id to the local task if running
+        # inside a task_manager-managed execution context. This is what makes
+        # the "Cancel" button in the Task Center actually cancel the remote
+        # RunningHub workflow.
+        if on_task_created is None:
+            try:
+                # Lazy import to avoid circular import (api.tasks -> pixelle_video)
+                from api.tasks.manager import current_task_id_var, task_manager
+                local_task_id = current_task_id_var.get()
+            except Exception:
+                local_task_id = None
+
+            if local_task_id:
+                def _record_runninghub_id(rh_task_id):
+                    try:
+                        # ComfyKit may pass an object/dict or plain string;
+                        # try common shapes.
+                        rid = rh_task_id
+                        if isinstance(rh_task_id, dict):
+                            rid = (
+                                rh_task_id.get("taskId")
+                                or rh_task_id.get("task_id")
+                                or rh_task_id.get("id")
+                            )
+                        elif hasattr(rh_task_id, "task_id"):
+                            rid = getattr(rh_task_id, "task_id")
+                        elif hasattr(rh_task_id, "taskId"):
+                            rid = getattr(rh_task_id, "taskId")
+                        if rid:
+                            task_manager.set_task_runninghub_id(local_task_id, str(rid))
+                            logger.info(
+                                f"🔗 Bound RunningHub task {rid} to local task "
+                                f"{local_task_id} (cancel-ready)"
+                            )
+                    except Exception as e:
+                        logger.warning(f"Failed to record RunningHub task_id: {e}")
+                on_task_created = _record_runninghub_id
+
         kit = await self._get_or_create_comfykit()
         await self.acquire_runninghub_slot()
         try:
-            result = await kit.execute(workflow_input, workflow_params)
+            # Try with on_task_created kwarg; if ComfyKit version doesn't
+            # support it, fall back to a plain call (the cancel feature will
+            # then be unavailable but generation still works).
+            try:
+                result = await kit.execute(
+                    workflow_input,
+                    workflow_params,
+                    on_task_created=on_task_created,
+                )
+            except TypeError:
+                logger.debug(
+                    "ComfyKit.execute does not accept on_task_created; "
+                    "falling back to plain execute (RunningHub cancel won't be available)."
+                )
+                result = await kit.execute(workflow_input, workflow_params)
             return result
         finally:
             self.release_runninghub_slot()
+
+
 
     def _get_comfykit_config(self) -> dict:
         """

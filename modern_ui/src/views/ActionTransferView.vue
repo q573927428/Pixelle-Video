@@ -29,6 +29,14 @@
             <div style="margin:18px 0;">
               <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
             </div>
+            <div v-if="submitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
+              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font-size:14px;color:var(--el-color-primary);flex:1;">
+                  ✅ 任务已提交，可以关闭网页。可在「任务中心」查看，成功后可以在「历史记录」查看。
+                </span>
+                <el-button size="small" type="danger" plain @click="cancelCurrentTask">取消任务</el-button>
+              </div>
+            </div>
             <video v-if="result.video_url" class="result-video" controls :src="result.video_url" />
             <div v-else class="empty-preview">
               <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>生成结果将在这里预览</div></div>
@@ -52,7 +60,7 @@ import { getAuth } from '../composables/useAuth'
 import ActionTransferForm from '../components/ActionTransferForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
-const { running, progress, statusText, result, submitTask, parseJson } = useTaskRunner()
+const { running, progress, statusText, result, submitTask, parseJson, submitted, cancelCurrentTask } = useTaskRunner()
 const { mediaWorkflows, handleUpload: uploadResource } = useResources()
 
 const actionForm = ref<ActionForm>({

@@ -109,14 +109,24 @@ export async function loadResources() {
   }
 }
 
-export async function loadTasks(limit = 30) {
-  return request<any[]>(`/api/tasks?limit=${limit}`)
+export async function loadTasks(limit = 30, status?: string) {
+  const params = new URLSearchParams({ limit: String(limit) })
+  if (status) params.set('status', status)
+  return request<any[]>(`/api/tasks?${params}`)
 }
 
 export async function loadTaskHistory(page = 1, pageSize = 20, status?: string) {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) })
   if (status) params.set('status', status)
   return request<{ tasks: any[]; total: number; page: number; page_size: number; total_pages: number }>(`/api/tasks/history?${params}`)
+}
+
+export async function getTaskHistoryDetail(taskId: string) {
+  return request<any>(`/api/tasks/history/${encodeURIComponent(taskId)}`)
+}
+
+export async function cancelTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'DELETE' })
 }
 
 export async function deleteTaskHistory(taskId: string): Promise<{ success: boolean; message: string }> {

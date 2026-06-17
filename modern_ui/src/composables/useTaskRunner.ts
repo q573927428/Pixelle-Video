@@ -1,12 +1,14 @@
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { request } from '../api'
+import { cancelTask } from '../api'
 
 export function useTaskRunner() {
   const running = ref(false)
   const progress = ref(0)
   const statusText = ref('等待开始')
   const result = ref<any>({})
+  const submitted = ref(false)
+  const currentTaskId = ref('')
 
   let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -29,11 +31,26 @@ export function useTaskRunner() {
     )
   }
 
+  async function cancelCurrentTask() {
+    if (!currentTaskId.value) return
+    try {
+      await cancelTask(currentTaskId.value)
+      submitted.value = false
+      running.value = false
+      statusText.value = '任务已取消'
+      stopPolling()
+    } catch (e: any) {
+      statusText.value = `取消失败：${e.message}`
+    }
+  }
+
   async function submitTask(url: string, payload: any) {
     running.value = true
     progress.value = 2
     statusText.value = '任务提交中...'
     result.value = {}
+    submitted.value = false
+    currentTaskId.value = ''
     try {
       const data: any = await request(url, {
         method: 'POST',
@@ -42,11 +59,12 @@ export function useTaskRunner() {
       })
       statusText.value = `任务已创建：${data.task_id}`
       progress.value = 8
+      currentTaskId.value = data.task_id
+      submitted.value = true
       pollTask(data.task_id)
     } catch (e: any) {
       running.value = false
       statusText.value = `提交失败：${e.message}`
-      ElMessage.error(statusText.value)
     }
   }
 
@@ -64,18 +82,25 @@ export function useTaskRunner() {
           progress.value = 100
           result.value = task.result || {}
           statusText.value = '生成完成'
+          submitted.value = false
           stopPolling()
-          ElMessage.success('视频生成完成')
         }
-        if (['failed', 'cancelled'].includes(task.status)) {
+        if (task.status === 'cancelled') {
+          running.value = false
+          statusText.value = task.error || '任务已取消'
+          submitted.value = false
+          stopPolling()
+        }
+        if (task.status === 'failed') {
           running.value = false
           statusText.value = `任务失败：${task.error || task.message || task.status}`
+          submitted.value = false
           stopPolling()
-          ElMessage.error(statusText.value)
         }
       } catch (e: any) {
         running.value = false
         statusText.value = `任务查询失败：${e.message}`
+        submitted.value = false
         stopPolling()
       }
     }
@@ -88,7 +113,10 @@ export function useTaskRunner() {
     progress,
     statusText,
     result,
+    submitted,
+    currentTaskId,
     submitTask,
+    cancelCurrentTask,
     parseJson,
     cleanedPayload,
     stopPolling,

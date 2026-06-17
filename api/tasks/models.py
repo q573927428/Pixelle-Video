@@ -44,6 +44,9 @@ class Task(BaseModel):
     task_type: TaskType
     status: TaskStatus = TaskStatus.PENDING
     
+    # User ownership (for user isolation)
+    user_id: Optional[str] = None
+    
     # Progress tracking
     progress: Optional[TaskProgress] = None
     

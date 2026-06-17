@@ -4,10 +4,13 @@ Task management endpoints
 Endpoints for managing async tasks (checking status, canceling, etc.)
 """
 
+import httpx
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from loguru import logger
+
+from pixelle_video.config import config_manager
 
 from api.tasks import task_manager, Task, TaskStatus
 from api.dependencies import PixelleVideoDep
@@ -29,12 +32,14 @@ class ConfirmResponse(BaseModel):
 @router.get("", response_model=List[Task])
 async def list_tasks(
     status: Optional[TaskStatus] = Query(None, description="Filter by status"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks")
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of tasks"),
+    current_user: Optional[UserInfo] = Depends(get_current_user),
 ):
     """
     List tasks
     
     Retrieve list of tasks with optional filtering.
+    Normal users only see their own tasks; admins see all.
     
     - **status**: Optional filter by status (pending/running/completed/failed/cancelled)
     - **limit**: Maximum number of tasks to return (default 100)
@@ -42,7 +47,9 @@ async def list_tasks(
     Returns list of tasks sorted by creation time (newest first).
     """
     try:
-        tasks = task_manager.list_tasks(status=status, limit=limit)
+        is_admin = current_user is not None and current_user.role == "admin"
+        user_id = None if is_admin else (current_user.id if current_user else None)
+        tasks = task_manager.list_tasks(status=status, limit=limit, user_id=user_id, is_admin=is_admin)
         return tasks
         
     except Exception as e:
@@ -245,20 +252,74 @@ async def get_task(task_id: str):
 
 
 @router.delete("/{task_id}")
-async def cancel_task(task_id: str):
+async def cancel_task(
+    task_id: str,
+    current_user: Optional[UserInfo] = Depends(get_current_user),
+):
     """
     Cancel task
     
     Cancel a running or pending task.
+    Only the task owner or admin can cancel a task.
+    If the task is running on RunningHub, also cancels it there.
     
     - **task_id**: Task ID
     
     Returns success status.
     """
     try:
+        task = task_manager.get_task(task_id)
+        if not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+        # Check ownership: only task owner or admin can cancel
+        if current_user:
+            is_owner = task.user_id is None or task.user_id == current_user.id
+            if not is_owner and current_user.role != "admin":
+                raise HTTPException(status_code=403, detail="您没有权限取消此任务")
+        else:
+            # Unauthenticated users cannot cancel tasks with user_id set
+            if task.user_id is not None:
+                raise HTTPException(status_code=401, detail="请先登录")
+
+        # Try to cancel on RunningHub using official openapi endpoint
+        runninghub_id = task_manager.get_runninghub_task_id(task_id)
+        if runninghub_id:
+            try:
+                comfyui_cfg = config_manager.get_comfyui_config()
+                rh_api_key = comfyui_cfg.get("runninghub_api_key") or ""
+                rh_url = "https://www.runninghub.cn"
+                payload = {
+                    "apiKey": rh_api_key,
+                    "taskId": runninghub_id,
+                }
+                async with httpx.AsyncClient(timeout=10) as client:
+                    cancel_resp = await client.post(
+                        f"{rh_url}/task/openapi/cancel",
+                        json=payload,
+                        headers={
+                            "Host": "www.runninghub.cn",
+                            "Authorization": f"Bearer {rh_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                    )
+                    if cancel_resp.is_success:
+                        logger.info(f"RunningHub task {runninghub_id} cancelled successfully via openapi")
+                    else:
+                        logger.warning(f"RunningHub openapi cancel returned {cancel_resp.status_code}: {cancel_resp.text}")
+            except Exception as rh_e:
+                logger.warning(f"Failed to cancel RunningHub task {runninghub_id}: {rh_e}")
+
+        # Cancel local task
         success = task_manager.cancel_task(task_id)
-        
         if not success:
+            # Task might already be in terminal state (completed/failed/cancelled)
+            if task:
+                logger.info(f"Task {task_id} already in terminal state ({task.status}), returning success")
+                return {
+                    "success": True,
+                    "message": f"Task {task_id} is already in terminal state: {task.status.value}"
+                }
             raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
         
         return {
