@@ -29,10 +29,15 @@
             :rows="10"
             placeholder="输入视频主题1&#10;输入视频主题2&#10;输入视频主题3&#10;..."
           />
+          <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
+            <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
+              第 {{ idx }} 行超 {{ textMaxLength }} 字
+            </el-tag>
+          </div>
         </el-form-item>
         <div class="soft-panel">
           <el-form-item label="标题前缀（可选）">
-            <el-input v-model="form.batch_title_prefix" placeholder="例如：产品名称 - " clearable />
+            <el-input v-model="form.batch_title_prefix" placeholder="例如：产品名称 - " :maxlength="textMaxLength" show-word-limit clearable />
           </el-form-item>
           <el-form-item label="分镜数量（所有视频统一）">
             <el-slider v-model="form.n_scenes" :min="1" :max="20" show-input />
@@ -66,13 +71,15 @@
         style="margin-bottom: 14px;"
       />
       <el-form-item label="视频标题">
-        <el-input v-model="form.title" placeholder="可留空，由 AI 自动生成" clearable />
+        <el-input v-model="form.title" placeholder="可留空，由 AI 自动生成" :maxlength="30" show-word-limit clearable />
       </el-form-item>
       <el-form-item :label="form.mode === 'generate' ? '主题 / 创作方向' : '固定旁白文案'">
         <el-input
           v-model="form.text"
           type="textarea"
           :rows="form.mode === 'generate' ? 8 : 12"
+          :maxlength="textMaxLength"
+          show-word-limit
           :placeholder="form.mode === 'generate' ? '输入视频主题、卖点、风格或营销方向...' : '输入完整旁白文案，每段可换行；系统会尽量按原文生成视频...'"
         />
       </el-form-item>
@@ -369,7 +376,7 @@
         </div>
 
         <el-form-item label="提示词前缀">
-          <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" placeholder="在生成图片提示词前添加固定前缀（可选）" />
+          <el-input v-model="form.prompt_prefix" type="textarea" :rows="2" :maxlength="textMaxLength" show-word-limit placeholder="在生成图片提示词前添加固定前缀（可选）" />
         </el-form-item>
 
         <!-- 预览提示词（默认折叠） -->
@@ -427,6 +434,10 @@ import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
 import { ElMessage } from 'element-plus'
+import { getAuth } from '../composables/useAuth'
+
+const auth = getAuth()
+const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
 
 const props = defineProps<{
   form: QuickForm
@@ -444,6 +455,21 @@ defineEmits<{
 
 const refAudioItems = computed<string[]>(() => {
   return props.form.ref_audio ? [props.form.ref_audio] : []
+})
+
+// 批量模式：超出字数限制的行号（1-based，跳过空行）
+const overLimitLines = computed(() => {
+  if (!props.form.batch_topics || !props.form.batch_topics.trim()) return []
+  const lines = props.form.batch_topics.split('\n')
+  const maxLen = textMaxLength.value
+  const result: number[] = []
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim()
+    if (trimmed && trimmed.length > maxLen) {
+      result.push(idx + 1)
+    }
+  })
+  return result
 })
 
 const previewActiveNames = ref<string[]>([])

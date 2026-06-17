@@ -40,6 +40,8 @@
           v-model="form.prompt_text"
           type="textarea"
           :rows="5"
+          :maxlength="textMaxLength"
+          show-word-limit
           placeholder="描述迁移后的画面风格..."
         />
       </el-form-item>
@@ -70,9 +72,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { ActionForm, WorkflowInfo } from '../types'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
+import { getAuth } from '../composables/useAuth'
+
+const auth = getAuth()
+const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
 
 defineProps<{
   form: ActionForm

@@ -63,6 +63,11 @@
               商品标题使用主题名称，文案由 AI 自动生成。
               可上传多张商品图片，按顺序与主题一一对应；少于主题数时最后一张循环使用。
             </div>
+            <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
+              <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
+                第 {{ idx }} 行超 {{ textMaxLength }} 字
+              </el-tag>
+            </div>
           </div>
           <el-form-item label="商品图片（按顺序一一对应）">
             <div class="upload-field-container">
@@ -97,6 +102,11 @@
           <div v-if="batchTopicsCount > 0" class="soft-panel">
             <el-tag type="success">共 {{ batchTopicsCount }} 段文案</el-tag>
             <div class="small muted" style="margin-top:6px;">每段文案对应一个口播视频</div>
+            <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
+              <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
+                第 {{ idx }} 行超 {{ textMaxLength }} 字
+              </el-tag>
+            </div>
           </div>
         </template>
       </template>
@@ -112,17 +122,17 @@
             </div>
           </el-form-item>
           <el-form-item label="商品标题">
-            <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" />
+            <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" :maxlength="30" show-word-limit />
           </el-form-item>
           <el-form-item label="口播文案（可留空自动生成）">
-            <el-input v-model="form.goods_text" type="textarea" :rows="5" placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
+            <el-input v-model="form.goods_text" type="textarea" :rows="5" :maxlength="textMaxLength" show-word-limit placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
           </el-form-item>
         </div>
 
         <!-- 自定义模式 -->
         <div v-if="form.mode === 'customize'" class="soft-panel">
           <el-form-item label="自定义口播文案">
-            <el-input v-model="form.goods_text" type="textarea" :rows="6" placeholder="填写固定口播文案内容" />
+            <el-input v-model="form.goods_text" type="textarea" :rows="6" :maxlength="textMaxLength" show-word-limit placeholder="填写固定口播文案内容" />
           </el-form-item>
         </div>
       </template>
@@ -379,6 +389,10 @@ import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
 import { ElMessage } from 'element-plus'
+import { getAuth } from '../composables/useAuth'
+
+const auth = getAuth()
+const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
 
 const props = defineProps<{
   form: DigitalForm
@@ -395,6 +409,21 @@ const refAudioItems = computed<string[]>(() => {
 const batchTopicsCount = computed(() => {
   if (!props.form.batch_topics || !props.form.batch_topics.trim()) return 0
   return props.form.batch_topics.trim().split('\n').filter(line => line.trim()).length
+})
+
+// 批量模式：超出字数限制的行号（1-based，跳过空行）
+const overLimitLines = computed(() => {
+  if (!props.form.batch_topics || !props.form.batch_topics.trim()) return []
+  const lines = props.form.batch_topics.split('\n')
+  const maxLen = textMaxLength.value
+  const result: number[] = []
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim()
+    if (trimmed && trimmed.length > maxLen) {
+      result.push(idx + 1)
+    }
+  })
+  return result
 })
 
 // 从 mediaWorkflows 中过滤出图片生成相关的工作流（来源为 runninghub）

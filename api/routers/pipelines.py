@@ -41,8 +41,8 @@ class AsyncTaskResponse(BaseModel):
 
 class AssetBasedRequest(BaseModel):
     assets: list[str] = Field(default_factory=list)
-    video_title: str = ""
-    intent: Optional[str] = None
+    video_title: str = Field("", max_length=30, description="视频标题，最长30字")
+    intent: Optional[str] = Field(None, max_length=398, description="创作意图，最长398字")
     duration: int = Field(30, ge=5, le=300)
     source: str = "runninghub"
     analysis_image_workflow: Optional[str] = None
@@ -59,7 +59,7 @@ class AssetBasedRequest(BaseModel):
 
 class ImageToVideoRequest(BaseModel):
     image_assets: list[str] = Field(default_factory=list)
-    prompt_text: str
+    prompt_text: str = Field(..., max_length=398, description="提示词，最长398字")
     workflow_key: str
     api_video_params: dict[str, Any] = Field(default_factory=dict)
 
@@ -67,7 +67,7 @@ class ImageToVideoRequest(BaseModel):
 class ActionTransferRequest(BaseModel):
     video_assets: list[str] = Field(default_factory=list)
     image_assets: list[str] = Field(default_factory=list)
-    prompt_text: str
+    prompt_text: str = Field(..., max_length=398, description="提示词，最长398字")
     duration: int = Field(5, ge=1, le=300)
     workflow_key: str
     api_video_params: dict[str, Any] = Field(default_factory=dict)
@@ -86,8 +86,8 @@ class DigitalHumanRequest(BaseModel):
     mode: Literal["digital", "customize"] = "digital"
     character_assets: list[str] = Field(default_factory=list)
     goods_assets: list[str] = Field(default_factory=list)
-    goods_title: str = ""
-    goods_text: str = ""
+    goods_title: str = Field("", max_length=30, description="商品标题，最长30字")
+    goods_text: str = Field("", max_length=398, description="口播文案，最长398字")
     workflow_config: DigitalWorkflowConfig = Field(default_factory=DigitalWorkflowConfig)
 
     # TTS parameters compatible with the existing Streamlit UI.

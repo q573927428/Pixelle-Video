@@ -15,14 +15,14 @@ Video generation API schemas
 """
 
 from typing import Optional, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class VideoGenerateRequest(BaseModel):
     """Video generation request"""
     
     # === Input ===
-    text: str = Field(..., description="Source text for video generation")
+    text: str = Field(..., max_length=398, description="Source text for video generation，最长398字")
     
     # === Processing Mode ===
     mode: Literal["generate", "fixed"] = Field(
@@ -31,7 +31,7 @@ class VideoGenerateRequest(BaseModel):
     )
     
     # === Optional Title ===
-    title: Optional[str] = Field(None, description="Video title (auto-generated if not provided)")
+    title: Optional[str] = Field(None, max_length=30, description="Video title (auto-generated if not provided)，最长30字")
     
     # === Basic Config ===
     n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
@@ -149,7 +149,21 @@ class VideoBatchGenerateRequest(BaseModel):
     
     # === Batch Topics ===
     topics: list[str] = Field(..., description="List of topics, one per video", min_length=1, max_length=100)
-    title_prefix: Optional[str] = Field(None, description="Prefix for video titles, will be prepended as '{title_prefix} - {topic}'")
+    
+    @field_validator('topics')
+    @classmethod
+    def validate_topic_length(cls, v: list[str]) -> list[str]:
+        # 先剔除空行
+        v = [t.strip() for t in v if t.strip()]
+        if not v:
+            raise ValueError("主题列表不能全为空")
+        max_len = 398
+        for i, topic in enumerate(v):
+            if len(topic) > max_len:
+                raise ValueError(f"第 {i+1} 行主题超出 {max_len} 字限制（当前 {len(topic)} 字）")
+        return v
+
+    title_prefix: Optional[str] = Field(None, max_length=398, description="Prefix for video titles, will be prepended as '{title_prefix} - {topic}'")
     
     # === Shared Config (applies to all videos in batch) ===
     n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes per video")

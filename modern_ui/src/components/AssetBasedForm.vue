@@ -27,10 +27,10 @@
       <div class="form-section-title">📋 视频信息</div>
       <div class="form-section-body">
       <el-form-item label="视频标题">
-        <el-input v-model="form.video_title" placeholder="如：宠物店年终促销" />
+        <el-input v-model="form.video_title" placeholder="如：宠物店年终促销" :maxlength="30" show-word-limit />
       </el-form-item>
       <el-form-item label="创作意图">
-        <el-input v-model="form.intent" type="textarea" :rows="4" placeholder="描述卖点、风格、受众等..." />
+        <el-input v-model="form.intent" type="textarea" :rows="4" :maxlength="textMaxLength" show-word-limit placeholder="描述卖点、风格、受众等..." />
       </el-form-item>
       <el-form-item label="目标时长（秒）">
         <el-slider v-model="form.duration" :min="15" :max="120" :step="5" show-input />
@@ -138,12 +138,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import type { AssetForm, BgmInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
 import { ElMessage } from 'element-plus'
+import { getAuth } from '../composables/useAuth'
+
+const auth = getAuth()
+const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
 
 const props = defineProps<{
   form: AssetForm

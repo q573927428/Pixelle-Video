@@ -25,6 +25,8 @@
           v-model="form.prompt_text"
           type="textarea"
           :rows="6"
+          :maxlength="textMaxLength"
+          show-word-limit
           placeholder="描述画面如何运动、镜头、风格等（如：镜头缓慢推进，阳光洒落）"
         />
       </el-form-item>
@@ -52,9 +54,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { I2vForm, WorkflowInfo } from '../types'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
+import { getAuth } from '../composables/useAuth'
+
+const auth = getAuth()
+const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
 
 const props = defineProps<{
   form: I2vForm
