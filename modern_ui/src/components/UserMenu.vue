@@ -28,7 +28,12 @@
     <div class="user-actions">
       <div class="user-action-btn" v-if="!auth.isAdmin.value" @click="showVipDialog">
         <el-icon><StarFilled /></el-icon>
-        <span>{{ auth.isVip.value ? '续费VIP' : auth.isSvip.value ? '续费SVIP' : '购买VIP' }}</span>
+        <span>{{ actionButtonLabel }}</span>
+      </div>
+      <!-- 升级SVIP按钮（仅VIP可见） -->
+      <div class="user-action-btn upgrade" v-if="auth.isVip.value && !auth.isAdmin.value" @click="showUpgradeDialog">
+        <el-icon><Top /></el-icon>
+        <span>升级SVIP</span>
       </div>
       <div class="user-action-btn admin" v-if="auth.isAdmin.value" @click="goAdmin">
         <el-icon><Setting /></el-icon>
@@ -37,27 +42,39 @@
     </div>
 
     <!-- VIP Purchase Dialog -->
-    <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="420px" class="vip-dialog" append-to-body>
+    <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="420px" class="vip-dialog" append-to-body @closed="handleDialogClose">
       <div class="vip-body">
-<!-- Price -->
-        <div class="vip-price-section">
-          <div class="vip-price-card original">
-            <div class="vip-label-badge">原价</div>
-            <div class="vip-price-amount">
-              <span class="vip-currency">¥</span>
-              <span class="vip-original-price">1588</span>
+        <!-- Plan Tabs: VIP / SVIP -->
+        <div class="vip-plan-tabs">
+          <div
+            class="vip-plan-tab"
+            :class="{ active: currentPlanType === 'vip' }"
+            @click="switchPlan('vip')"
+          >
+            <div class="vip-plan-check" v-if="currentPlanType === 'vip'">
+              <el-icon><CircleCheckFilled /></el-icon>
             </div>
-            <div class="vip-price-unit">/ 每年</div>
+            <div class="vip-plan-name">VIP 会员</div>
+            <div class="vip-plan-price">¥688</div>
+            <div class="vip-plan-unit">/ 每年</div>
           </div>
-          <div class="vip-price-arrow">→</div>
-          <div class="vip-price-card current">
-            <div class="vip-label-badge hot">限时特惠</div>
-            <div class="vip-price-amount">
-              <span class="vip-currency">¥</span>
-              <span class="vip-current-price">688</span>
+          <div
+            class="vip-plan-tab"
+            :class="{ active: currentPlanType === 'svip' }"
+            @click="switchPlan('svip')"
+          >
+            <div class="vip-plan-check" v-if="currentPlanType === 'svip'">
+              <el-icon><CircleCheckFilled /></el-icon>
             </div>
-            <div class="vip-price-unit">/ 每年</div>
-            <div class="vip-save-tag">省 ¥900</div>
+            <div class="vip-plan-name hot">SVIP 会员 🔥</div>
+            <template v-if="auth.isVip.value && currentPlanType === 'svip' && upgradePriceForCurrentDialog !== null">
+              <div class="vip-plan-price svip" style="font-size:20px;">补差价 ¥{{ upgradePriceForCurrentDialog }}</div>
+              <div class="vip-plan-unit" style="text-decoration:line-through; color:#666;">原价 ¥1588/年</div>
+            </template>
+            <template v-else>
+              <div class="vip-plan-price svip">¥1588</div>
+              <div class="vip-plan-unit">/ 每年 · 无限制</div>
+            </template>
           </div>
         </div>
 
@@ -65,11 +82,14 @@
         <div class="vip-compare">
           <div class="vip-compare-header">
             <div class="vip-compare-col plan-col-free">免费用户</div>
-            <div class="vip-compare-col plan-col-vip">VIP 会员</div>
+            <div class="vip-compare-col plan-col-vip">{{ currentPlanType === 'svip' ? 'SVIP 会员' : 'VIP 会员' }}</div>
           </div>
           <div class="vip-compare-row">
             <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span> 每日 1 次</div>
-            <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 每天 10 次</div>
+            <div class="vip-compare-col plan-col-vip">
+              <template v-if="currentPlanType === 'svip'"><span class="cmp-check">✓</span> 无限制</template>
+              <template v-else><span class="cmp-check">✓</span> 每天 10 次</template>
+            </div>
           </div>
           <div class="vip-compare-row vip-compare-row-word">
             <div class="vip-compare-col plan-col-free">
@@ -94,29 +114,120 @@
             <div class="vip-compare-col plan-col-vip">优先队列</div>
           </div>
           <div class="vip-compare-row">
-            <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span></div>
-            <div class="vip-compare-col plan-col-vip">专属客服</div>
+            <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span> 专属客服</div>
+            <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 专属客服</div>
           </div>
         </div>
 
-        <!-- WeChat Discount -->
-        <div class="vip-wechat-tip">
-          <el-icon style="margin-right:4px"><ChatLineSquare /></el-icon>
-          🎉 <strong>添加微信优惠30元</strong>，仅需 <strong style="color:#e6a23c;">¥358</strong>
+        <!-- Payment QR Code Section -->
+        <div v-if="!paymentQrUrl" class="vip-pay-start">
+          <el-button type="warning" size="large" class="vip-pay-btn" @click="createAndShowPayment" :loading="isCreatingPayment">
+            <el-icon style="margin-right:6px"><Coin /></el-icon>
+            微信支付 · ¥{{ currentPlanPrice }}
+          </el-button>
         </div>
 
-        <!-- WeChat QR Code -->
-        <div class="vip-qr-section">
-          <img src="/wechat.png" alt="微信二维码" class="vip-qr-img" />
-          <div class="vip-wechat-info">
-            <el-icon style="margin-right:4px; color:#07c160;"><ChatLineSquare /></el-icon>
-            <span>微信号：</span>
-            <span class="vip-wechat-id" @click="copyWechatId">zhuxixy</span>
-            <el-button size="small" type="success" plain style="margin-left:8px;" @click="copyWechatId">
-              复制微信号
-            </el-button>
+        <div v-else class="vip-pay-section">
+          <div class="vip-pay-title">微信扫码支付</div>
+          <img :src="paymentQrUrl" alt="微信支付二维码" class="vip-qr-img" />
+          <div class="vip-pay-hint">
+            <el-icon style="margin-right:4px"><WarningFilled /></el-icon>
+            请使用微信扫描二维码完成支付
           </div>
-          <div class="vip-wechat-hint">长按或扫码添加微信，付款后开通会员</div>
+          <div class="vip-pay-amount">
+            支付金额：<strong style="color:#e6a23c; font-size:22px;">¥{{ currentPlanPrice }}</strong>
+          </div>
+          <!-- 状态提示 -->
+          <div class="vip-pay-status" v-if="paymentStatus === 'pending'">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            等待支付...
+          </div>
+          <div class="vip-pay-status success" v-else-if="paymentStatus === 'paid'">
+            <el-icon><CircleCheck /></el-icon>
+            支付成功！VIP 已开通
+          </div>
+          <div class="vip-pay-status error" v-else-if="paymentStatus === 'expired'">
+            <el-icon><WarningFilled /></el-icon>
+            订单已过期，请重新下单
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- Upgrade to SVIP Dialog -->
+    <el-dialog v-model="upgradeDialogVisible" title="🚀 升级到 SVIP 会员" width="420px" class="vip-dialog" append-to-body @closed="handleUpgradeDialogClose">
+      <div class="vip-body">
+        <!-- 报价信息 -->
+        <div v-if="upgradeQuote" class="upgrade-quote-section">
+          <div class="upgrade-quote-icon">⬆️</div>
+          <div class="upgrade-quote-title">升级方案</div>
+          
+          <div class="upgrade-detail-row">
+            <span class="upgrade-detail-label">当前身份</span>
+            <el-tag type="warning" size="small">VIP 会员</el-tag>
+          </div>
+          <div class="upgrade-detail-row">
+            <span class="upgrade-detail-label">VIP 剩余天数</span>
+            <span class="upgrade-detail-value">{{ upgradeQuote.vip_remaining_days }} 天</span>
+          </div>
+          <div class="upgrade-detail-row">
+            <span class="upgrade-detail-label">目标身份</span>
+            <el-tag type="danger" size="small">SVIP 会员</el-tag>
+          </div>
+
+          <div class="upgrade-divider"></div>
+
+          <div class="upgrade-price-area">
+            <div class="upgrade-original-price" v-if="upgradeQuote.mode === 'upgrade'">
+              SVIP 原价 <s>¥{{ upgradeQuote.original_price }}</s>
+            </div>
+            <div class="upgrade-need-pay">
+              <template v-if="upgradeQuote.mode === 'upgrade'">
+                只需补差价 <strong class="upgrade-price-num">¥{{ upgradeQuote.need_pay }}</strong>
+              </template>
+              <template v-else>
+                需支付 <strong class="upgrade-price-num">¥{{ upgradeQuote.need_pay }}</strong>
+              </template>
+            </div>
+            <div class="upgrade-new-expiry" v-if="upgradeQuote.new_expiry">
+              升级后到期 {{ new Date(upgradeQuote.new_expiry).toLocaleDateString('zh-CN') }}
+            </div>
+            <div class="upgrade-tip" v-if="upgradeQuote.mode === 'upgrade'">
+              💡 已使用的 VIP 时长按日均价折算，只需补剩余天数的差价。VIP 剩余天数自动转为 SVIP。
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment QR Code -->
+        <div v-if="!upgradePaymentQrUrl" class="vip-pay-start">
+          <el-button type="danger" size="large" class="vip-pay-btn" @click="createUpgradePayment" :loading="isCreatingUpgradePayment">
+            <el-icon style="margin-right:6px"><Coin /></el-icon>
+            微信支付 · ¥{{ upgradeQuote?.need_pay || '--' }}
+          </el-button>
+        </div>
+
+        <div v-else class="vip-pay-section">
+          <div class="vip-pay-title">微信扫码支付</div>
+          <img :src="upgradePaymentQrUrl" alt="微信支付二维码" class="vip-qr-img" />
+          <div class="vip-pay-hint">
+            <el-icon style="margin-right:4px"><WarningFilled /></el-icon>
+            请使用微信扫描二维码完成支付
+          </div>
+          <div class="vip-pay-amount">
+            支付金额：<strong style="color:#e6a23c; font-size:22px;">¥{{ upgradeQuote?.need_pay }}</strong>
+          </div>
+          <div class="vip-pay-status" v-if="upgradePaymentStatus === 'pending'">
+            <el-icon class="is-loading"><Loading /></el-icon>
+            等待支付...
+          </div>
+          <div class="vip-pay-status success" v-else-if="upgradePaymentStatus === 'paid'">
+            <el-icon><CircleCheck /></el-icon>
+            支付成功！已升级为 SVIP
+          </div>
+          <div class="vip-pay-status error" v-else-if="upgradePaymentStatus === 'expired'">
+            <el-icon><WarningFilled /></el-icon>
+            订单已过期，请重新操作
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -132,9 +243,10 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { DataAnalysis, Setting, SwitchButton, StarFilled, Clock, ChatLineSquare } from '@element-plus/icons-vue'
+import { DataAnalysis, Setting, SwitchButton, StarFilled, Clock, ChatLineSquare, Coin, WarningFilled, Loading, CircleCheck, CircleCheckFilled, Top } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
+import { request } from '../api'
 
 const emit = defineEmits<{
   (e: 'show-login'): void
@@ -143,6 +255,14 @@ const emit = defineEmits<{
 
 const auth = getAuth()
 const vipDialogVisible = ref(false)
+const upgradeDialogVisible = ref(false)
+
+// 按钮文案：普通用户显示"购买VIP"，VIP显示"续费VIP"，SVIP显示"续费SVIP"
+const actionButtonLabel = computed(() => {
+  if (auth.isSvip.value) return '续费SVIP'
+  if (auth.isVip.value) return '续费VIP'
+  return '购买VIP'
+})
 
 const roleTagType = computed(() => {
   const role = auth.currentUser.value?.role
@@ -186,7 +306,6 @@ async function refreshUsage() {
 }
 
 onMounted(() => {
-  // 立即刷新，之后每 5 秒自动刷新（任务完成后次数会自动更新）
   refreshUsage()
   usageTimer = setInterval(refreshUsage, 5000)
 })
@@ -198,8 +317,260 @@ onUnmounted(() => {
   }
 })
 
+// ========== Payment Logic ==========
+
+const currentPlanType = ref('vip')
+// VIP 用户在续费弹窗中选择 SVIP 时，查询补差价
+const upgradePriceForCurrentDialog = ref<number | null>(null)
+const currentPlanPrice = computed(() => {
+  if (auth.isVip.value && currentPlanType.value === 'svip' && upgradePriceForCurrentDialog.value !== null) {
+    return upgradePriceForCurrentDialog.value
+  }
+  return currentPlanType.value === 'svip' ? 1588 : 688
+})
+const paymentQrUrl = ref('')
+const paymentStatus = ref('') // pending / paid / expired
+const orderNo = ref('')
+const isCreatingPayment = ref(false)
+let paymentTimer: ReturnType<typeof setInterval> | null = null
+
+function switchPlan(plan: string) {
+  if (paymentQrUrl.value) return // 支付进行中，不允许切换
+  currentPlanType.value = plan
+  upgradePriceForCurrentDialog.value = null
+
+  // 如果当前用户是 VIP 且切到 SVIP，查询补差价
+  if (plan === 'svip' && auth.isVip.value) {
+    request<{ need_pay: number }>('/api/payment/upgrade-quote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({ target_plan: 'svip' }),
+    }).then(res => {
+      upgradePriceForCurrentDialog.value = res.need_pay
+    }).catch(() => {
+      // 查询失败则显示全价
+    })
+  }
+}
+
 function showVipDialog() {
   vipDialogVisible.value = true
+  paymentQrUrl.value = ''
+  paymentStatus.value = ''
+  orderNo.value = ''
+}
+
+function handleDialogClose() {
+  stopPolling()
+  paymentQrUrl.value = ''
+  paymentStatus.value = ''
+  orderNo.value = ''
+}
+
+async function createAndShowPayment() {
+  if (isCreatingPayment.value) return
+  isCreatingPayment.value = true
+  try {
+    // 调用后端创建订单
+    const order = await request<{
+      order_no: string
+      code_url: string
+      amount: number
+      plan_type: string
+      plan_name: string
+    }>('/api/payment/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({ plan_type: currentPlanType.value }),
+    })
+
+    orderNo.value = order.order_no
+    currentPlanType.value = order.plan_type
+    paymentStatus.value = 'pending'
+
+    // 将 code_url 转为二维码图片
+    paymentQrUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.code_url)}`
+
+    // 开始轮询订单状态
+    startPolling(order.order_no)
+  } catch (e: any) {
+    ElMessage.error(e.message || '创建订单失败')
+  } finally {
+    isCreatingPayment.value = false
+  }
+}
+
+// 轮询订单状态
+function startPolling(orderNoStr: string) {
+  stopPolling()
+  paymentTimer = setInterval(async () => {
+    try {
+      const res = await request<{
+        status: string
+        paid_at?: string
+        vip_expires_at?: string
+      }>(`/api/payment/order/${orderNoStr}`, {
+        headers: {
+          ...auth._authHeaders(),
+        },
+      })
+
+      if (res.status === 'paid') {
+        paymentStatus.value = 'paid'
+        stopPolling()
+        ElMessage.success('🎉 支付成功！VIP 已自动开通')
+
+        // 刷新用户信息
+        await auth.fetchMe()
+        await refreshUsage()
+
+        // 5秒后关闭弹窗
+        setTimeout(() => {
+          vipDialogVisible.value = false
+        }, 5000)
+      } else if (res.status === 'expired') {
+        paymentStatus.value = 'expired'
+        stopPolling()
+        ElMessage.warning('订单已过期，请重新下单')
+      }
+    } catch {
+      // 忽略轮询错误
+    }
+  }, 3000) // 每3秒轮询一次
+}
+
+function stopPolling() {
+  if (paymentTimer) {
+    clearInterval(paymentTimer)
+    paymentTimer = null
+  }
+}
+
+// ========== Upgrade to SVIP Logic ==========
+
+interface UpgradeQuote {
+  need_pay: number
+  mode: string
+  vip_remaining_days: number
+  extra_svip_days: number
+  original_price: number
+  new_expiry: string | null
+}
+
+const upgradeQuote = ref<UpgradeQuote | null>(null)
+const upgradePaymentQrUrl = ref('')
+const upgradePaymentStatus = ref('')
+const upgradeOrderNo = ref('')
+const isCreatingUpgradePayment = ref(false)
+let upgradePaymentTimer: ReturnType<typeof setInterval> | null = null
+
+async function showUpgradeDialog() {
+  upgradeDialogVisible.value = true
+  upgradePaymentQrUrl.value = ''
+  upgradePaymentStatus.value = ''
+  upgradeOrderNo.value = ''
+
+  // 获取升级报价
+  try {
+    const quote = await request<UpgradeQuote>('/api/payment/upgrade-quote', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({ target_plan: 'svip' }),
+    })
+    upgradeQuote.value = quote
+  } catch (e: any) {
+    ElMessage.error(e.message || '获取升级报价失败')
+    upgradeDialogVisible.value = false
+  }
+}
+
+function handleUpgradeDialogClose() {
+  stopUpgradePolling()
+  upgradeQuote.value = null
+  upgradePaymentQrUrl.value = ''
+  upgradePaymentStatus.value = ''
+  upgradeOrderNo.value = ''
+}
+
+async function createUpgradePayment() {
+  if (isCreatingUpgradePayment.value) return
+  isCreatingUpgradePayment.value = true
+  try {
+    const order = await request<{
+      order_no: string
+      code_url: string
+      amount: number
+      plan_type: string
+      plan_name: string
+    }>('/api/payment/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({ plan_type: 'svip' }),
+    })
+
+    upgradeOrderNo.value = order.order_no
+    upgradePaymentStatus.value = 'pending'
+    upgradePaymentQrUrl.value = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.code_url)}`
+
+    startUpgradePolling(order.order_no)
+  } catch (e: any) {
+    ElMessage.error(e.message || '创建升级订单失败')
+  } finally {
+    isCreatingUpgradePayment.value = false
+  }
+}
+
+function startUpgradePolling(orderNoStr: string) {
+  stopUpgradePolling()
+  upgradePaymentTimer = setInterval(async () => {
+    try {
+      const res = await request<{
+        status: string
+        paid_at?: string
+        vip_expires_at?: string
+      }>(`/api/payment/order/${orderNoStr}`, {
+        headers: { ...auth._authHeaders() },
+      })
+
+      if (res.status === 'paid') {
+        upgradePaymentStatus.value = 'paid'
+        stopUpgradePolling()
+        ElMessage.success('🎉 升级成功！您已升级为 SVIP 会员')
+
+        await auth.fetchMe()
+        await refreshUsage()
+
+        setTimeout(() => {
+          upgradeDialogVisible.value = false
+        }, 5000)
+      } else if (res.status === 'expired') {
+        upgradePaymentStatus.value = 'expired'
+        stopUpgradePolling()
+        ElMessage.warning('订单已过期，请重新操作')
+      }
+    } catch {
+      // 忽略轮询错误
+    }
+  }, 3000)
+}
+
+function stopUpgradePolling() {
+  if (upgradePaymentTimer) {
+    clearInterval(upgradePaymentTimer)
+    upgradePaymentTimer = null
+  }
 }
 
 function goAdmin() {
@@ -218,15 +589,6 @@ async function handleLogout() {
     window.location.reload()
   } catch {
     // cancelled
-  }
-}
-
-async function copyWechatId() {
-  try {
-    await navigator.clipboard.writeText('zhuxixy')
-    ElMessage.success('微信号已复制')
-  } catch {
-    ElMessage.warning('复制失败，请手动记下微信号：zhuxixy')
   }
 }
 </script>
@@ -395,6 +757,25 @@ async function copyWechatId() {
   border-color: rgba(245, 108, 108, 0.3);
 }
 
+/* 升级SVIP按钮 - 紫色渐变 */
+.user-action-btn.upgrade {
+  background: linear-gradient(135deg, #8b5cf6, #6d28d9);
+  border-color: #8b5cf6;
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 9px 24px;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.25);
+}
+
+.user-action-btn.upgrade:hover {
+  background: linear-gradient(135deg, #a78bfa, #8b5cf6);
+  border-color: #a78bfa;
+  color: #fff;
+  box-shadow: 0 0 24px rgba(139, 92, 246, 0.4);
+  transform: translateY(-1px);
+}
+
 /* VIP Dialog Styles */
 :deep(.vip-dialog .el-dialog__body) {
   padding: 0;
@@ -404,103 +785,72 @@ async function copyWechatId() {
   padding: 20px 24px;
 }
 
-.vip-price-section {
+/* Plan Tabs */
+.vip-plan-tabs {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 20px;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba(230, 162, 60, 0.08), rgba(230, 162, 60, 0.02));
-  border-radius: 12px;
-  border: 1px solid rgba(230, 162, 60, 0.15);
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
-.vip-price-card {
+.vip-plan-tab {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 14px 20px;
+  padding: 14px 12px;
   border-radius: 10px;
-  min-width: 110px;
-}
-
-.vip-price-card.original {
   background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
 }
 
-.vip-price-card.current {
-  background: linear-gradient(135deg, rgba(230, 162, 60, 0.12), rgba(245, 158, 11, 0.06));
-  border: 1px solid rgba(230, 162, 60, 0.25);
+.vip-plan-tab:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.vip-label-badge {
-  font-size: 11px;
-  font-weight: 700;
-  color: #999;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.05);
+.vip-plan-tab.active {
+  background: rgba(230, 162, 60, 0.08);
+  border-color: rgba(230, 162, 60, 0.4);
 }
 
-.vip-label-badge.hot {
-  color: #fbbf24;
-  background: rgba(230, 162, 60, 0.15);
-}
-
-.vip-price-amount {
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-}
-
-.vip-currency {
-  font-size: 16px;
-  font-weight: 700;
-  color: #999;
-}
-
-.vip-price-card.current .vip-currency {
-  color: #e6a23c;
+.vip-plan-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   font-size: 18px;
+  color: #22c55e;
 }
 
-.vip-original-price {
-  font-size: 22px;
+.vip-plan-name {
+  font-size: 14px;
   font-weight: 700;
-  color: #999;
-  text-decoration: line-through;
+  color: #ddd;
+  margin-bottom: 6px;
 }
 
-.vip-current-price {
-  font-size: 30px;
+.vip-plan-name.hot {
+  color: #fbbf24;
+}
+
+.vip-plan-price {
+  font-size: 26px;
   font-weight: 800;
   color: #e6a23c;
-  line-height: 1;
 }
 
-.vip-price-unit {
+.vip-plan-price.svip {
+  color: #f59e0b;
+}
+
+.vip-plan-unit {
   font-size: 11px;
   color: #999;
+  margin-top: 2px;
 }
 
-.vip-save-tag {
-  font-size: 11px;
-  font-weight: 700;
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.vip-price-arrow {
-  font-size: 20px;
-  color: rgba(255, 255, 255, 0.2);
-  font-weight: 300;
-}
-
+/* Features Comparison */
 .vip-compare {
   margin-bottom: 16px;
   border-radius: 10px;
@@ -580,20 +930,22 @@ async function copyWechatId() {
   line-height: 1.3;
 }
 
-.vip-wechat-tip {
+/* Payment Section */
+.vip-pay-start {
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-size: 14px;
-  color: #e6a23c;
-  background: rgba(230, 162, 60, 0.08);
-  padding: 10px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  border: 1px dashed rgba(230, 162, 60, 0.3);
+  padding: 8px 0 4px;
 }
 
-.vip-qr-section {
+.vip-pay-btn {
+  width: 100%;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 14px;
+  border-radius: 10px;
+}
+
+.vip-pay-section {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -604,35 +956,148 @@ async function copyWechatId() {
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.vip-pay-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #07c160;
+  margin-bottom: 4px;
+}
+
 .vip-qr-img {
-  width: 160px;
-  height: 160px;
+  width: 200px;
+  height: 200px;
   border-radius: 8px;
   border: 2px solid #07c160;
+  padding: 5px;
 }
 
-.vip-wechat-info {
+.vip-pay-hint {
   display: flex;
   align-items: center;
-  font-size: 14px;
-  color: #ddd;
-}
-
-.vip-wechat-id {
-  color: #07c160;
-  font-weight: 700;
-  cursor: pointer;
-  padding: 2px 6px;
-  border-radius: 4px;
-  transition: background 0.2s;
-}
-
-.vip-wechat-id:hover {
-  background: rgba(7, 193, 96, 0.1);
-}
-
-.vip-wechat-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: #999;
+  margin-top: 4px;
+}
+
+.vip-pay-amount {
+  font-size: 14px;
+  color: #ccc;
+  margin-top: 4px;
+}
+
+.vip-pay-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #e6a23c;
+  margin-top: 8px;
+  padding: 8px 16px;
+  background: rgba(230, 162, 60, 0.08);
+  border-radius: 8px;
+}
+
+.vip-pay-status.success {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.vip-pay-status.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+/* Upgrade Dialog Styles */
+.upgrade-quote-section {
+  padding: 4px 0;
+}
+
+.upgrade-quote-icon {
+  text-align: center;
+  font-size: 40px;
+  margin-bottom: 8px;
+}
+
+.upgrade-quote-title {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ddd;
+  margin-bottom: 16px;
+}
+
+.upgrade-detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.upgrade-detail-label {
+  font-size: 13px;
+  color: #999;
+}
+
+.upgrade-detail-value {
+  font-size: 13px;
+  color: #ddd;
+  font-weight: 600;
+}
+
+.upgrade-detail-value.highlight {
+  color: #22c55e;
+  font-weight: 700;
+}
+
+.upgrade-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.4), transparent);
+  margin: 16px 0;
+}
+
+.upgrade-price-area {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.upgrade-original-price {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+.upgrade-original-price s {
+  color: #666;
+}
+
+.upgrade-need-pay {
+  font-size: 16px;
+  color: #ddd;
+  margin-bottom: 8px;
+}
+
+.upgrade-price-num {
+  color: #e6a23c;
+  font-size: 28px;
+  font-weight: 800;
+  margin-left: 6px;
+}
+
+.upgrade-new-expiry {
+  font-size: 12px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.upgrade-tip {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #a78bfa;
+  line-height: 1.5;
+  text-align: left;
 }
 </style>

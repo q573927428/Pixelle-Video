@@ -75,6 +75,14 @@ class APIConfig(BaseModel):
         "template_code": os.getenv("ALIYUN_SMS_TEMPLATE_CODE", ""),
     }
 
+    # WeChat payment settings (overridable via environment variables)
+    wechat_payment: dict = {
+        "mchid": os.getenv("WECHAT_MCHID", ""),
+        "api_key": os.getenv("WECHAT_API_KEY", ""),
+        "appid": os.getenv("WECHAT_APPID", ""),
+        "notify_url": os.getenv("WECHAT_NOTIFY_URL", ""),
+    }
+
     # Storage limits per role (in bytes)
     storage_limits: dict = {
         "normal": 200 * 1024 * 1024,  # 200MB

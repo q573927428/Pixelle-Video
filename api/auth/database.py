@@ -212,6 +212,34 @@ class Database:
                 )
                 logger.info("✅ Added phone column to users table")
 
+            # Create payment_orders table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS `payment_orders` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `order_no` VARCHAR(64) NOT NULL UNIQUE COMMENT '商户订单号（业务唯一）',
+                    `user_id` INT NOT NULL COMMENT '用户ID',
+                    `username` VARCHAR(50) NOT NULL COMMENT '用户名（冗余，方便对账）',
+                    `plan_type` VARCHAR(16) NOT NULL DEFAULT 'vip' COMMENT '套餐类型: vip/svip',
+                    `plan_name` VARCHAR(64) NOT NULL DEFAULT 'VIP会员年卡' COMMENT '套餐名称',
+                    `amount` DECIMAL(10,2) NOT NULL COMMENT '支付金额（元）',
+                    `duration_days` INT NOT NULL DEFAULT 365 COMMENT '开通天数',
+                    `status` VARCHAR(20) NOT NULL DEFAULT 'pending'
+                        COMMENT '订单状态: pending=待支付, paid=已支付, expired=已过期, cancelled=已取消, refunded=已退款',
+                    `wechat_transaction_id` VARCHAR(64) DEFAULT NULL COMMENT '微信支付订单号',
+                    `code_url` VARCHAR(255) DEFAULT NULL COMMENT '微信支付二维码链接',
+                    `paid_at` DATETIME DEFAULT NULL COMMENT '支付完成时间',
+                    `vip_expires_at` DATETIME DEFAULT NULL COMMENT '本次开通后的会员到期时间',
+                    `notify_raw` TEXT DEFAULT NULL COMMENT '微信回调原始数据（JSON）',
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                    INDEX `idx_user_id` (`user_id`),
+                    INDEX `idx_order_no` (`order_no`),
+                    INDEX `idx_status` (`status`),
+                    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+            """)
+            logger.info("✅ payment_orders table initialized")
+
             cursor.close()
         except Exception as e:
             logger.warning(f"⚠️ Migration warning: {e}")
