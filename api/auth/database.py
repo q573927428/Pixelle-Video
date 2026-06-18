@@ -21,8 +21,8 @@ CREATE TABLE IF NOT EXISTS `users` (
     `username` VARCHAR(50) NOT NULL UNIQUE,
     `password_hash` VARCHAR(255) NOT NULL,
     `email` VARCHAR(255) DEFAULT NULL,
-    `role` ENUM('normal', 'vip', 'admin') NOT NULL DEFAULT 'normal',
-    `daily_limit` INT NOT NULL DEFAULT 1 COMMENT '-1 means unlimited (VIP)',
+    `role` ENUM('normal', 'vip', 'svip', 'admin') NOT NULL DEFAULT 'normal',
+    `daily_limit` INT NOT NULL DEFAULT 1 COMMENT '-1 means unlimited (SVIP), 10 means VIP',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1=active, 0=disabled',
     `vip_expires_at` DATETIME DEFAULT NULL COMMENT 'VIP会员到期时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -166,13 +166,36 @@ class Database:
                 )
                 logger.info("✅ Added vip_expires_at column to users table")
 
-            # Fix: ensure existing VIP users have daily_limit = -1 (migrate old data)
+            # Migrate role ENUM: if MySQL doesn't support 'svip', alter the table
+            # Check if 'svip' is in the ENUM values
             cursor.execute(
-                "UPDATE users SET daily_limit = -1 WHERE role = 'vip' AND daily_limit != -1"
+                "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'",
+                (db_name,)
             )
-            fixed_count = cursor.rowcount
-            if fixed_count > 0:
-                logger.info(f"✅ Fixed {fixed_count} existing VIP users: set daily_limit = -1")
+            col_type_row = cursor.fetchone()
+            if col_type_row and "svip" not in col_type_row["COLUMN_TYPE"]:
+                cursor.execute(
+                    "ALTER TABLE `users` MODIFY COLUMN `role` "
+                    "ENUM('normal', 'vip', 'svip', 'admin') NOT NULL DEFAULT 'normal'"
+                )
+                logger.info("✅ Updated users.role ENUM to include 'svip'")
+
+            # VIP: daily_limit = 10 (was -1, now changed to 10 per day)
+            cursor.execute(
+                "UPDATE users SET daily_limit = 10 WHERE role = 'vip' AND daily_limit = -1"
+            )
+            fixed_vip_count = cursor.rowcount
+            if fixed_vip_count > 0:
+                logger.info(f"✅ Updated {fixed_vip_count} VIP users: daily_limit changed from -1 to 10")
+
+            # SVIP: daily_limit = -1 (unlimited)
+            cursor.execute(
+                "UPDATE users SET daily_limit = -1 WHERE role = 'svip' AND daily_limit != -1"
+            )
+            fixed_svip_count = cursor.rowcount
+            if fixed_svip_count > 0:
+                logger.info(f"✅ Fixed {fixed_svip_count} SVIP users: set daily_limit = -1")
 
             # Check if phone column exists
             cursor.execute(

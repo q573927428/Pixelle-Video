@@ -230,7 +230,8 @@ async def get_usage(user: UserInfo = Depends(require_user)):
 
     today = date.today()
 
-    if user.daily_limit == -1 or user.role == 'vip':
+    # SVIP/admin: unlimited
+    if user.daily_limit == -1:
         return UserDailyUsage(used_today=0, remaining=-1, is_unlimited=True)
 
     usage = await Database.fetchone(
@@ -314,16 +315,25 @@ async def update_user(
     if body.role is not None:
         updates.append("role = %s")
         params.append(body.role)
-        # When setting role to vip, auto-set daily_limit to -1 (unlimited)
-        if body.role == 'vip' and body.daily_limit is None:
+        # When setting role to vip, auto-set daily_limit to 10 (daily limit)
+        # Override even when daily_limit is explicitly provided to ensure consistency
+        if body.role == 'vip':
+            updates.append("daily_limit = %s")
+            params.append(10)
+        # When setting role to svip, auto-set daily_limit to -1 (unlimited)
+        elif body.role == 'svip':
             updates.append("daily_limit = %s")
             params.append(-1)
+        # When setting role to normal/admin and daily_limit not specifically set, keep original
+        elif body.daily_limit is not None:
+            updates.append("daily_limit = %s")
+            params.append(body.daily_limit)
+    elif body.daily_limit is not None:
+        updates.append("daily_limit = %s")
+        params.append(body.daily_limit)
     if body.status is not None:
         updates.append("status = %s")
         params.append(body.status)
-    if body.daily_limit is not None:
-        updates.append("daily_limit = %s")
-        params.append(body.daily_limit)
     if body.vip_expires_at is not None:
         updates.append("vip_expires_at = %s")
         params.append(body.vip_expires_at)
@@ -349,7 +359,8 @@ async def set_vip(
     body: AdminSetVipRequest,
     admin: UserInfo = Depends(require_admin),
 ):
-    """Set a user as VIP with expiry date (admin only)"""
+    """Set a user as VIP with expiry date (admin only).
+    VIP users get 10 generations per day."""
     # Find user by username or phone
     if body.phone:
         row = await Database.fetchone(
@@ -366,12 +377,57 @@ async def set_vip(
 
     user_id = row["id"]
 
-    # Update role to vip, set vip_expires_at and daily_limit = -1 (unlimited)
+    # Update role to vip, set vip_expires_at and daily_limit = 10 (daily limit)
     await Database.execute(
-        "UPDATE users SET role = 'vip', vip_expires_at = %s, daily_limit = -1 WHERE id = %s",
+        "UPDATE users SET role = 'vip', vip_expires_at = %s, daily_limit = 10 WHERE id = %s",
         (body.vip_expires_at, user_id),
     )
-    logger.info(f"Admin set VIP for user {body.username} (id={user_id}) until {body.vip_expires_at}")
+    logger.info(f"Admin set VIP for user {row['username']} (id={user_id}) until {body.vip_expires_at}")
+
+    # Return updated user
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (user_id,),
+    )
+    return _row_to_userinfo(row)
+
+
+class AdminSetSvipRequest(BaseModel):
+    """Admin set SVIP request"""
+    username: str = ""
+    phone: str = ""
+    svip_expires_at: datetime
+
+
+@router.post("/admin/set-svip", response_model=UserInfo)
+async def set_svip(
+    body: AdminSetSvipRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """Set a user as SVIP with expiry date (admin only).
+    SVIP users get unlimited generations per day."""
+    # Find user by username or phone
+    if body.phone:
+        row = await Database.fetchone(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE phone = %s",
+            (body.phone,),
+        )
+    else:
+        row = await Database.fetchone(
+            f"SELECT {_USER_COLUMNS} FROM users WHERE username = %s",
+            (body.username,),
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    user_id = row["id"]
+
+    # Update role to svip, set vip_expires_at and daily_limit = -1 (unlimited)
+    await Database.execute(
+        "UPDATE users SET role = 'svip', vip_expires_at = %s, daily_limit = -1 WHERE id = %s",
+        (body.svip_expires_at, user_id),
+    )
+    logger.info(f"Admin set SVIP for user {row['username']} (id={user_id}) until {body.svip_expires_at}")
 
     # Return updated user
     row = await Database.fetchone(
@@ -386,7 +442,7 @@ async def remove_vip(
     user_id: int,
     admin: UserInfo = Depends(require_admin),
 ):
-    """Remove VIP status from a user (admin only)"""
+    """Remove VIP/SVIP status from a user, reset to normal (admin only)"""
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
@@ -394,12 +450,14 @@ async def remove_vip(
     if not row:
         raise HTTPException(status_code=404, detail="用户不存在")
 
+    old_role = row["role"]
+
     # Reset to normal
     await Database.execute(
         "UPDATE users SET role = 'normal', vip_expires_at = NULL, daily_limit = 1 WHERE id = %s",
         (user_id,),
     )
-    logger.info(f"Admin removed VIP from user {row['username']} (id={user_id})")
+    logger.info(f"Admin removed {old_role.upper()} from user {row['username']} (id={user_id}), reset to normal")
 
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",

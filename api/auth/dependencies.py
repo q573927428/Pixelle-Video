@@ -100,7 +100,9 @@ async def check_daily_limit(
 ) -> UserInfo:
     """
     Check if user has exceeded daily generation limit.
-    VIP users (daily_limit = -1) have unlimited access.
+    - SVIP/admin users (daily_limit = -1) have unlimited access.
+    - VIP users have 10 generations per day.
+    - Normal users have limited generations per day.
     Raises 429 if limit exceeded.
     
     Returns UserInfo for the authenticated user.
@@ -109,8 +111,8 @@ async def check_daily_limit(
 
     today = date.today()
 
-    # VIP: unlimited
-    if user.daily_limit == -1 or user.role == 'vip':
+    # SVIP, admin, or any user with daily_limit = -1: unlimited
+    if user.daily_limit == -1:
         return user
 
     # Get today's usage count
@@ -122,9 +124,13 @@ async def check_daily_limit(
     remaining = max(0, user.daily_limit - used_today)
 
     if remaining <= 0:
+        role_name = "VIP" if user.role == "vip" else "普通用户"
+        detail = f"今日生成次数已用完（上限 {user.daily_limit} 次），请明天再试"
+        if user.role != "svip":
+            detail += "，或升级为 SVIP 获取无限制次数"
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"今日生成次数已用完（上限 {user.daily_limit} 次），请明天再试或升级为 VIP",
+            detail=detail,
         )
 
     return user

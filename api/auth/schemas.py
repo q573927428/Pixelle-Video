@@ -53,7 +53,7 @@ class UserDailyUsage(BaseModel):
 
 class AdminUserUpdate(BaseModel):
     """Admin user update request"""
-    role: Optional[str] = Field(None, pattern="^(vip|normal|admin)$")
+    role: Optional[str] = Field(None, pattern="^(vip|svip|normal|admin)$")
     status: Optional[int] = Field(None, ge=0, le=1)
     daily_limit: Optional[int] = Field(None, ge=-1)
     vip_expires_at: Optional[datetime] = None

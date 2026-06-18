@@ -77,8 +77,9 @@ class APIConfig(BaseModel):
 
     # Storage limits per role (in bytes)
     storage_limits: dict = {
-        "normal": 200 * 1024 * 1024,  # 500MB
-        "vip": 1 * 1024 * 1024 * 1024,  # 2GB
+        "normal": 200 * 1024 * 1024,  # 200MB
+        "vip": 1 * 1024 * 1024 * 1024,  # 1GB
+        "svip": 2 * 1024 * 1024 * 1024,  # 2GB
         "admin": -1,  # unlimited
     }
 

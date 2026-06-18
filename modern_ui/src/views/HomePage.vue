@@ -211,7 +211,7 @@
           <ul class="plan-features plan-features-wechat">
             <li class="plan-feature-item">
               <el-icon style="color:#07c160;"><Discount /></el-icon>
-              <span>微信专享价 <strong style="color:#e6a23c;">¥358/年</strong>（省¥30）</span>
+              <span>微信专享价 <strong style="color:#e6a23c;">¥658/年</strong>（省¥30）</span>
             </li>
             <li class="plan-feature-item">
               <el-icon style="color:#07c160;"><MagicStick /></el-icon>
@@ -356,8 +356,18 @@ const freePlan = [
   '社区支持',
 ]
 
-const vipPlan = [
+const svipPlan = [
   '无限次视频生成',
+  { text: '文案最多 398 字', sub: '生成视频时长约80秒' },
+  '1080P 超清画质输出',
+  '全部数字人模板解锁',
+  '优先渲染队列',
+  '专属技术支持',
+  '新功能抢先体验',
+]
+
+const vipPlan = [
+  '每日 10 次视频生成',
   { text: '文案最多 398 字', sub: '生成视频时长约80秒' },
   '1080P 超清画质输出',
   '全部数字人模板解锁',

@@ -28,7 +28,7 @@
     <div class="user-actions">
       <div class="user-action-btn" v-if="!auth.isAdmin.value" @click="showVipDialog">
         <el-icon><StarFilled /></el-icon>
-        <span>{{ auth.isVip.value ? '续费VIP' : '购买VIP' }}</span>
+        <span>{{ auth.isVip.value ? '续费VIP' : auth.isSvip.value ? '续费SVIP' : '购买VIP' }}</span>
       </div>
       <div class="user-action-btn admin" v-if="auth.isAdmin.value" @click="goAdmin">
         <el-icon><Setting /></el-icon>
@@ -45,7 +45,7 @@
             <div class="vip-label-badge">原价</div>
             <div class="vip-price-amount">
               <span class="vip-currency">¥</span>
-              <span class="vip-original-price">788</span>
+              <span class="vip-original-price">1588</span>
             </div>
             <div class="vip-price-unit">/ 每年</div>
           </div>
@@ -54,10 +54,10 @@
             <div class="vip-label-badge hot">限时特惠</div>
             <div class="vip-price-amount">
               <span class="vip-currency">¥</span>
-              <span class="vip-current-price">388</span>
+              <span class="vip-current-price">688</span>
             </div>
             <div class="vip-price-unit">/ 每年</div>
-            <div class="vip-save-tag">省 ¥400</div>
+            <div class="vip-save-tag">省 ¥900</div>
           </div>
         </div>
 
@@ -69,7 +69,7 @@
           </div>
           <div class="vip-compare-row">
             <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span> 每日 1 次</div>
-            <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 无限次</div>
+            <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 每天 10 次</div>
           </div>
           <div class="vip-compare-row vip-compare-row-word">
             <div class="vip-compare-col plan-col-free">
@@ -116,7 +116,7 @@
               复制微信号
             </el-button>
           </div>
-          <div class="vip-wechat-hint">长按或扫码添加微信，付款后开通 VIP</div>
+          <div class="vip-wechat-hint">长按或扫码添加微信，付款后开通会员</div>
         </div>
       </div>
     </el-dialog>
@@ -148,12 +148,13 @@ const roleTagType = computed(() => {
   const role = auth.currentUser.value?.role
   if (role === 'admin') return 'danger'
   if (role === 'vip') return 'warning'
+  if (role === 'svip') return 'danger'
   return 'info'
 })
 
 const userVipExpiry = computed(() => {
   const user = auth.currentUser.value
-  if (user?.role === 'vip' && user?.vip_expires_at) {
+  if ((user?.role === 'vip' || user?.role === 'svip') && user?.vip_expires_at) {
     try {
       const date = new Date(user.vip_expires_at)
       return `到期 ${date.toLocaleDateString('zh-CN')}`
@@ -179,7 +180,7 @@ async function refreshUsage() {
     const user = auth.currentUser.value
     usage.value = {
       remaining: user?.daily_limit ?? 0,
-      is_unlimited: user?.role === 'vip' || user?.daily_limit === -1,
+      is_unlimited: user?.role === 'vip' || user?.role === 'svip' || user?.daily_limit === -1,
     }
   }
 }

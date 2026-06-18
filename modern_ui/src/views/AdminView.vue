@@ -49,7 +49,7 @@
           </el-table-column>
           <el-table-column label="VIP 到期" width="150">
             <template #default="{ row }">
-              <span v-if="row.role === 'vip' && row.vip_expires_at" class="vip-expiry-cell">
+              <span v-if="(row.role === 'vip' || row.role === 'svip') && row.vip_expires_at" class="vip-expiry-cell">
                 {{ formatDate(row.vip_expires_at) }}
               </span>
               <span v-else class="muted">-</span>
@@ -77,8 +77,8 @@
               >
                 {{ row.status === 0 ? '启用' : '禁用' }}
               </el-button>
-              <el-button size="small" type="danger" plain v-if="row.role === 'vip'" @click="handleRemoveVipById(row)">
-                取消VIP
+              <el-button size="small" type="danger" plain v-if="row.role === 'vip' || row.role === 'svip'" @click="handleRemoveVipById(row)">
+                取消VIP/SVIP
               </el-button>
             </template>
           </el-table-column>
@@ -112,11 +112,12 @@
           <el-select v-model="editForm.role" style="width: 100%">
             <el-option label="普通用户" value="normal" />
             <el-option label="VIP 会员" value="vip" />
+            <el-option label="SVIP 会员" value="svip" />
             <el-option label="管理员" value="admin" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="VIP 到期时间" v-if="editForm.role === 'vip'">
+        <el-form-item label="VIP/SVIP 到期时间" v-if="editForm.role === 'vip' || editForm.role === 'svip'">
           <el-date-picker
             v-model="editForm.vip_expires_at"
             type="datetime"
@@ -128,7 +129,7 @@
 
         <el-form-item label="每日生成上限">
           <el-input-number v-model="editForm.daily_limit" :min="-1" style="width: 100%" />
-          <div class="small muted" style="margin-top: 4px;">-1 表示无限制（VIP）</div>
+          <div class="small muted" style="margin-top: 4px;">-1 表示无限制（SVIP），VIP 默认为 10 次</div>
         </el-form-item>
 
         <el-form-item label="账号状态">
@@ -216,12 +217,14 @@ async function loadUsers() {
 function roleTagType(role: string): string {
   if (role === 'admin') return 'danger'
   if (role === 'vip') return 'warning'
+  if (role === 'svip') return 'danger'
   return 'info'
 }
 
 function roleLabel(role: string): string {
   if (role === 'admin') return '管理员'
   if (role === 'vip') return 'VIP'
+  if (role === 'svip') return 'SVIP'
   return '普通'
 }
 
@@ -250,11 +253,19 @@ async function handleSaveEdit() {
   saving.value = true
   try {
     const auth = getAuth()
+    const role = editForm.value.role
     const body: Record<string, any> = {
-      role: editForm.value.role,
-      daily_limit: editForm.value.daily_limit,
+      role,
     }
-    if (editForm.value.role === 'vip' && editForm.value.vip_expires_at) {
+    // Only send daily_limit for normal/admin when not auto-managed
+    if (role === 'vip') {
+      // VIP: auto-set to 10 by backend
+    } else if (role === 'svip') {
+      // SVIP: auto-set to -1 (unlimited) by backend
+    } else {
+      body.daily_limit = editForm.value.daily_limit
+    }
+    if ((role === 'vip' || role === 'svip') && editForm.value.vip_expires_at) {
       body.vip_expires_at = editForm.value.vip_expires_at
     }
     await request(`/api/auth/admin/users/${editingUser.value.id}`, {
@@ -306,8 +317,8 @@ async function handleToggleStatus(user: UserInfo) {
 async function handleRemoveVipById(user: UserInfo) {
   try {
     await ElMessageBox.confirm(
-      `确定要取消「${user.username}」的 VIP 资格吗？`,
-      '确认取消 VIP',
+       `确定要取消「${user.username}」的 ${user.role === 'svip' ? 'SVIP' : 'VIP'} 资格吗？`,
+      '确认取消',
       { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
     )
   } catch {
@@ -319,7 +330,7 @@ async function handleRemoveVipById(user: UserInfo) {
       method: 'POST',
       headers: auth._authHeaders(),
     })
-    ElMessage.success(`已取消「${user.username}」的 VIP 资格`)
+    ElMessage.success(`已取消「${user.username}」的 ${user.role === 'svip' ? 'SVIP' : 'VIP'} 资格`)
     loadUsers()
   } catch (e: any) {
     ElMessage.error(`操作失败：${e.message}`)

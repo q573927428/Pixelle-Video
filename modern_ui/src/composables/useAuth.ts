@@ -6,7 +6,7 @@ export interface UserInfo {
   username: string
   email: string | null
   phone: string | null
-  role: 'vip' | 'normal' | 'admin'
+  role: 'vip' | 'svip' | 'normal' | 'admin'
   daily_limit: number
   vip_expires_at: string | null
   status: number
@@ -49,9 +49,11 @@ export function useAuth() {
   const isLoggedIn = computed(() => !!token.value && !!currentUser.value)
   const isAdmin = computed(() => currentUser.value?.role === 'admin')
   const isVip = computed(() => currentUser.value?.role === 'vip')
+  const isSvip = computed(() => currentUser.value?.role === 'svip')
   const roleLabel = computed(() => {
     const role = currentUser.value?.role
     if (role === 'admin') return '管理员'
+    if (role === 'svip') return 'SVIP 会员'
     if (role === 'vip') return 'VIP 会员'
     return '普通用户'
   })
@@ -172,6 +174,7 @@ export function useAuth() {
     isLoggedIn,
     isAdmin,
     isVip,
+    isSvip,
     roleLabel,
     login,
     loginByPhone,

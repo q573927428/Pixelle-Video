@@ -85,7 +85,7 @@ import FilePreview from './FilePreview.vue'
 import { getAuth } from '../composables/useAuth'
 
 const auth = getAuth()
-const textMaxLength = computed(() => (auth.isVip.value || auth.isAdmin.value) ? 398 : 150)
+const textMaxLength = computed(() => (auth.isVip.value || auth.isSvip.value || auth.isAdmin.value) ? 398 : 150)
 
 defineProps<{
   form: ActionForm

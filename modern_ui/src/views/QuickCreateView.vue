@@ -162,7 +162,7 @@ async function generateSingle() {
     const auth = getAuth()
     const usage = await auth.fetchUsage()
     if (!usage.is_unlimited && usage.remaining <= 0) {
-      ElMessage.warning('今日生成次数已用完，请明天再试或升级为 VIP')
+      ElMessage.warning('今日生成次数已用完，请明天再试或升级会员')
       return
     }
   } catch (e: any) {

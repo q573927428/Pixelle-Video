@@ -48,7 +48,11 @@ async def list_tasks(
     """
     try:
         is_admin = current_user is not None and current_user.role == "admin"
-        user_id = None if is_admin else (current_user.id if current_user else None)
+        # Normalize user_id to str for consistent comparison with task.user_id (which is str)
+        raw_user_id = current_user.id if current_user else None
+        user_id = str(raw_user_id) if raw_user_id is not None else None
+        if is_admin:
+            user_id = None
         tasks = task_manager.list_tasks(status=status, limit=limit, user_id=user_id, is_admin=is_admin)
         return tasks
         
@@ -274,7 +278,10 @@ async def cancel_task(
 
         # Check ownership: only task owner or admin can cancel
         if current_user:
-            is_owner = task.user_id is None or task.user_id == current_user.id
+            # task.user_id is stored as str, current_user.id is int — compare both types
+            task_user_id = task.user_id
+            current_user_id = str(current_user.id)
+            is_owner = task_user_id is None or task_user_id == current_user_id
             if not is_owner and current_user.role != "admin":
                 raise HTTPException(status_code=403, detail="您没有权限取消此任务")
         else:
