@@ -101,7 +101,7 @@ const digitalForm = ref<DigitalForm>({
     third_workflow_path: 'workflows/runninghub/digital_customize.json',
     api_image_workflow: '', api_video_workflow: '', api_video_params: {},
   },
-  tts_inference_mode: 'local', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
+  tts_inference_mode: 'comfyui', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
   tts_speed: 1.2, tts_workflow: 'runninghub/tts_index2.json', ref_audio: '', voxcpm_cfg: 2.0,
   voxcpm_normalize: false, voxcpm_denoise: false,
   voxcpm_control_instruction: '', voxcpm_use_prompt_text: false,

@@ -53,8 +53,8 @@
         <div class="form-section-body">
         <el-form-item>
           <el-radio-group v-model="form.tts_inference_mode">
-            <el-radio-button value="local">本地</el-radio-button>
             <el-radio-button value="comfyui">克隆声音</el-radio-button>
+            <el-radio-button value="local">内置语音</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
