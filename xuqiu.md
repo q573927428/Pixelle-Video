@@ -14,6 +14,15 @@ net start MySQL97
 
 uv run streamlit run web/app.py
 
+
+# 服务器上面拉取最新 modern_ui 分支代码
+git pull origin modern_ui
+
+# 临时允许所有构建脚本
+cd modern_ui
+pnpm approve-builds esbuild
+
+
 担心海关查验会把你的心爱宝贝弄坏。真实情况是，海关比你想象的要专业，但也确实会有痕迹。
 
 

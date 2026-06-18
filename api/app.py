@@ -196,6 +196,11 @@ if _modern_ui_dist.exists() and _modern_ui_index.exists():
                 path = request.url.path
                 # Don't intercept API, docs, health endpoints
                 if not path.startswith(("/api", "/docs", "/redoc", "/openapi.json", "/health")):
+                    # Try to serve static files from dist/ root (e.g. favicon.png, wechat.png)
+                    file_path = _modern_ui_dist / path.lstrip("/")
+                    if file_path.exists() and file_path.is_file():
+                        return FileResponse(str(file_path))
+                    # SPA fallback: let Vue Router handle client-side routing
                     return FileResponse(str(_modern_ui_index))
             return response
 
