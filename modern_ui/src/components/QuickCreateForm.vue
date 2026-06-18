@@ -1,6 +1,6 @@
 <template>
   <el-form label-position="top" class="form-sections">
-    <!-- ====== 左列 ====== -->
+    <!-- ====== 左列 ======  -->
     <div class="form-column">
 
       <!-- ====== 第一板块：批量模式与文案输入 ====== -->
