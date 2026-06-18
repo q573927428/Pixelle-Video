@@ -171,14 +171,14 @@
             <h3 class="plan-name">VIP 会员</h3>
             <div class="plan-price">
               <div class="price-original-row">
-                <span class="price-original">¥788</span>
+                <span class="price-original">¥1588</span>
                 <span class="price-period">/年</span>
               </div>
               <div class="price-current-row">
                 <span class="price-currency">¥</span>
-                <span class="price-value">388</span>
+                <span class="price-value">688</span>
                 <span class="price-period">/年</span>
-                <span class="price-save">省 ¥400</span>
+                <span class="price-save">省 ¥900</span>
               </div>
             </div>
             <p class="plan-desc">解锁全部功能，畅享无限制创作</p>
