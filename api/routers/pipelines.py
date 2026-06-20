@@ -834,7 +834,7 @@ async def subtitle_preview(
 ):
     """
     字幕预览 API
-    生成带字幕的预览视频（使用 demo 视频 shu-06.mp4）
+    生成带字幕的预览视频（使用 demo 视频 shu-09.mp4）
     """
     try:
         import shutil
@@ -842,7 +842,7 @@ async def subtitle_preview(
 
         # 使用 demo 视频作为预览基础
         preview_video_dir = Path("modern_ui/public/videos")
-        preview_video_path = preview_video_dir / "shu-06.mp4"
+        preview_video_path = preview_video_dir / "shu-09.mp4"
         if not preview_video_path.exists():
             return SubtitlePreviewResponse(
                 success=False,

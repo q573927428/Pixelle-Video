@@ -302,7 +302,7 @@ const portraitVideos = [
   {
     icon: '🎤',
     title: '个人IP口播',
-    src: '/videos/shu-05.mp4',
+    src: '/videos/shu-09.mp4',
     poster: '',
     desc: '个人IP语音克隆口播视频',
   },
