@@ -1023,3 +1023,162 @@ class VideoService:
             logger.error(f"FFmpeg error padding video: {error_msg}")
             raise RuntimeError(f"Failed to pad video: {error_msg}")
 
+    def burn_subtitle_frames(
+        self,
+        video: str,
+        subtitle_dir: str,
+        output: str,
+        fps: int = 30,
+    ) -> str:
+        """
+        将 Pillow 生成的字幕帧图像（PNG 序列）通过 FFmpeg overlay filter 叠加到视频上
+
+        subtitle_dir 应包含 metadata.json 和字幕 PNG 图片。
+        metadata.json 格式:
+        {
+            "video_width": 1080,
+            "video_height": 1920,
+            "fps": 30,
+            "frames": [
+                {"path": "...", "start_frame": 0, "end_frame": 150, "start_time": 0.0, "end_time": 5.0},
+                ...
+            ]
+        }
+
+        Args:
+            video: 输入视频路径
+            subtitle_dir: 字幕帧目录（包含 metadata.json 和 PNG 文件）
+            output: 输出视频路径
+            fps: 视频帧率
+
+        Returns:
+            输出视频路径
+        """
+        self._ensure_ffmpeg()
+
+        import json
+
+        metadata_path = os.path.join(subtitle_dir, "metadata.json")
+        if not os.path.exists(metadata_path):
+            logger.warning(f"Subtitle metadata not found: {metadata_path}")
+            return video  # 没有字幕元数据，直接返回原视频
+
+        with open(metadata_path, "r", encoding="utf-8") as f:
+            meta = json.load(f)
+
+        frame_files = meta.get("frames", [])
+        if not frame_files:
+            logger.warning("No subtitle frames to burn")
+            return video
+
+        logger.info(f"Burning {len(frame_files)} subtitle frames onto video")
+
+        # 构建 FFmpeg filter_complex
+        # 策略：为每段字幕生成一个 overlay，叠加到对应时间段
+        # filter_complex 格式: [0:v][1:v]overlay=enable='between(t,0,5)'[tmp1];[tmp1][2:v]overlay=enable='between(t,5,10)'[out]
+
+        # 记录 overlay 链中已经使用的临时标签
+        overlay_filters = []
+        prev_label = "0:v"  # 起始输入是原始视频
+
+        for i, frame_info in enumerate(frame_files):
+            frame_path = frame_info["path"]
+            if not os.path.exists(frame_path):
+                logger.warning(f"Subtitle frame not found, skipping: {frame_path}")
+                continue
+
+            start_time = frame_info["start_time"]
+            end_time = frame_info["end_time"]
+            duration = end_time - start_time
+
+            # 输入标签：[i+1:v]
+            input_label = f"{i + 1}:v"
+            # 输出标签：如果还有下一个，用 [tmp{i+1}]；否则用 [out]
+            if i < len(frame_files) - 1:
+                out_label = f"[tmp{i + 1}]"
+            else:
+                out_label = "[out]"
+
+            overlay_filters.append(
+                f"overlay=enable='between(t,{start_time:.3f},{end_time:.3f})'"
+            )
+
+            # 更新 prev_label 用于下一个 loop
+            prev_label = out_label.strip("[]")
+
+        # 构建完整的 filter_complex
+        # Windows FFmpeg 不支持 enable 表达式中的双引号。
+        # 使用反斜杠转义逗号（FFmpeg filter 语法中逗号是特殊字符，需要转义）
+        filter_parts = []
+        current_input = "0:v"
+
+        for i, frame_info in enumerate(frame_files):
+            frame_path = frame_info["path"]
+            if not os.path.exists(frame_path):
+                continue
+
+            start_time = frame_info["start_time"]
+            end_time = frame_info["end_time"]
+
+            img_input_idx = i + 1
+            if i < len(frame_files) - 1:
+                tmp_out = f"sub{i + 1}"
+            else:
+                tmp_out = "v_out"
+
+            # 反斜杠转义逗号，避免 FFmpeg 将 between(t,0,3.5) 中的逗号解析为 filter 分隔符
+            # shortest=1: 当最短输入（视频）结束时停止编码，避免 -loop 1 无限 PNG 流卡死
+            # overlay 默认对 RGBA PNG 进行预乘 alpha 混合，输出 yuv420p（无 alpha），
+            # 这是标准方案，预览也使用相同方式工作正常。
+            enable_expr = f"between(t\\,{start_time:.3f}\\,{end_time:.3f})"
+            filter_parts.append(
+                f"[{current_input}][{img_input_idx}:v]overlay=enable={enable_expr}:shortest=1[{tmp_out}]"
+            )
+            current_input = tmp_out
+
+        if not filter_parts:
+            logger.warning("No valid subtitle frames to overlay")
+            return video
+
+        filter_complex = ";".join(filter_parts)
+
+        try:
+            import subprocess
+
+            cmd = ["ffmpeg", "-y"]
+            # 输入视频
+            cmd.extend(["-i", video])
+            # 输入字幕帧图片（必须加 -loop 1 让图片持续显示）
+            for frame_info in frame_files:
+                frame_path = frame_info["path"]
+                if os.path.exists(frame_path):
+                    cmd.extend(["-loop", "1", "-framerate", str(fps), "-i", frame_path])
+
+            cmd.extend(["-filter_complex", filter_complex])
+            cmd.extend(["-map", "[v_out]"])
+            cmd.extend(["-map", "0:a"])  # 保留原音频
+            cmd.extend([
+                "-c:v", "libx264",
+                "-c:a", "copy",
+                "-preset", "ultrafast",
+                "-crf", "28",
+                output,
+            ])
+
+            logger.info(f"Running FFmpeg subtitle burn command (filter: {filter_complex})")
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            logger.success(f"Subtitle burned successfully: {output}")
+            return output
+        except subprocess.CalledProcessError as e:
+            error_msg = e.stderr if e.stderr else str(e)
+            logger.error(f"FFmpeg subtitle burn error: {error_msg}")
+            raise RuntimeError(f"Failed to burn subtitles: {error_msg}")
+        except Exception as e:
+            logger.error(f"Subtitle burn error: {e}")
+            raise RuntimeError(f"Failed to burn subtitles: {e}")
+

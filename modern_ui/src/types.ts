@@ -123,6 +123,23 @@ export interface VideoApiParams {
   watermark: boolean
 }
 
+// ===== 字幕配置接口 =====
+export interface SubtitleConfig {
+  enabled: boolean
+  font_size: number
+  font_color: string
+  font_family: string
+  position_x: number
+  position_y: number
+  max_width: number
+  background_color: string
+  background_opacity: number
+  background_padding: string
+  background_radius: number
+  font_border_width: number
+  font_border_color: string
+}
+
 export interface DigitalForm {
   mode: 'digital' | 'customize'
   // 批量模式
@@ -154,6 +171,9 @@ export interface DigitalForm {
   video_service_mode: 'runninghub' | 'api'
   video_api_model: string
   video_api_params: VideoApiParams
+  // ===== 字幕配置 =====
+  subtitle_enabled: boolean
+  subtitle_config: SubtitleConfig
 }
 
 export interface I2vForm {

@@ -29,6 +29,9 @@ from api.tasks import TaskType, task_manager
 from pixelle_video.pipelines.asset_based import AssetBasedPipeline
 from pixelle_video.utils.os_util import create_task_output_dir
 from api.utils.history_persistence import save_web_generation_history
+from pixelle_video.services.subtitle import SubtitleService, SubtitleConfigModel
+from pixelle_video.services.video import VideoService
+from pixelle_video.utils.os_util import get_temp_path
 
 router = APIRouter(prefix="/pipelines", tags=["Modern Pipelines"])
 
@@ -82,6 +85,23 @@ class DigitalWorkflowConfig(BaseModel):
     api_video_params: dict[str, Any] = Field(default_factory=dict)
 
 
+class SubtitleRequestConfig(BaseModel):
+    """字幕配置（与前端 SubtitleConfig 接口对应）"""
+    enabled: bool = False
+    font_size: int = 48
+    font_color: str = "#FFFFFF"
+    font_family: str = "PingFang SC"
+    position_x: int = 0
+    position_y: int = 0
+    max_width: int = 900
+    background_color: str = "#000000"
+    background_opacity: float = 0.6
+    background_padding: str = "10 20"
+    background_radius: int = 8
+    font_border_width: int = 0
+    font_border_color: str = "#000000"
+
+
 class DigitalHumanRequest(BaseModel):
     mode: Literal["digital", "customize"] = "digital"
     character_assets: list[str] = Field(default_factory=list)
@@ -103,6 +123,9 @@ class DigitalHumanRequest(BaseModel):
     voxcpm_control_instruction: str = ""
     voxcpm_use_prompt_text: bool = False
     voxcpm_prompt_text: str = ""
+
+    # 字幕配置
+    subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
 
 
 def _is_api_workflow(workflow_key: str | None) -> bool:
@@ -261,6 +284,129 @@ async def _run_second_digital_workflow(
     return await _download_to_file(generated_video_url, final_video_path)
 
 
+def _burn_subtitles_sync(
+    video_path: str,
+    request_body: DigitalHumanRequest,
+    generated_text: str,
+    audio_path: str,
+    task_dir: str,
+) -> str:
+    """
+    同步字幕烧录函数（在 thread pool 中执行）
+    如果字幕开启，生成字幕帧并叠加到视频上
+    """
+    subtitle_config = request_body.subtitle_config
+    # 🔍 关键调试日志：打印接收到的字幕配置实际值
+    logger.info(
+        f"🎬 [字幕烧录入口] video_path={video_path}, "
+        f"subtitle_config.enabled={getattr(subtitle_config, 'enabled', 'NO_CFG')}, "
+        f"text_len={len(generated_text) if generated_text else 0}, "
+        f"audio_path_exists={os.path.exists(audio_path) if audio_path else False}"
+    )
+    if not subtitle_config or not subtitle_config.enabled:
+        logger.warning(
+            f"⚠️  字幕开关未启用，跳过字幕烧录。subtitle_config={subtitle_config}"
+        )
+        return video_path
+
+    if not generated_text or not generated_text.strip():
+        logger.warning("⚠️  generated_text 为空，无法生成字幕，跳过字幕烧录")
+        return video_path
+
+    if not os.path.exists(video_path):
+        logger.error(f"❌ 源视频文件不存在，无法烧录字幕：{video_path}")
+        return video_path
+
+    if not os.path.exists(audio_path):
+        logger.error(f"❌ 音频文件不存在，无法获取时长：{audio_path}")
+        return video_path
+
+    try:
+        cfg_model = SubtitleConfigModel.from_dict(subtitle_config.model_dump())
+        subtitle_service = SubtitleService()
+
+        # 获取音频时长
+        video_service = VideoService()
+        audio_duration = video_service._get_audio_duration(audio_path)
+        logger.info(f"🎬 音频时长={audio_duration:.2f}s, 字幕文本前30字={generated_text[:30]!r}")
+
+        # 获取实际视频分辨率，不再硬编码
+        import ffmpeg
+        probe = ffmpeg.probe(video_path)
+        video_stream = next((stream for stream in probe['streams'] if stream['codec_type'] == 'video'), None)
+        if not video_stream:
+            logger.error(f"❌ 无法读取视频流信息，无法烧录字幕: {video_path}")
+            return video_path
+        video_width = int(video_stream['width'])
+        video_height = int(video_stream['height'])
+        logger.info(f"🎬 实际视频分辨率: {video_width}x{video_height}")
+
+        # 前端配置是基于1080x1920设计的，需要按实际分辨率比例缩放参数
+        design_width = 1080
+        design_height = 1920
+        scale_factor_width = video_width / design_width
+        scale_factor_height = video_height / design_height
+        # 取较小的缩放因子保持比例一致
+        scale_factor = min(scale_factor_width, scale_factor_height)
+        logger.info(f"🎬 字幕参数缩放比例: {scale_factor:.4f} (宽: {scale_factor_width:.4f}, 高: {scale_factor_height:.4f})")
+
+        # 缩放所有字幕配置参数
+        cfg_model.font_size = max(12, int(cfg_model.font_size * scale_factor))
+        cfg_model.max_width = int(cfg_model.max_width * scale_factor)
+        cfg_model.position_x = int(cfg_model.position_x * scale_factor)
+        cfg_model.position_y = int(cfg_model.position_y * scale_factor)
+        cfg_model.background_radius = max(0, int(cfg_model.background_radius * scale_factor))
+        if cfg_model.font_border_width > 0:
+            cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * scale_factor))
+        
+        # 缩放padding
+        pad_parts = (cfg_model.background_padding or '10 20').split(' ')
+        scaled_pad = []
+        for p in pad_parts:
+            p = p.strip()
+            if p.isdigit():
+                scaled_pad.append(str(max(1, int(int(p) * scale_factor))))
+        if scaled_pad:
+            cfg_model.background_padding = ' '.join(scaled_pad)
+
+        # 生成字幕帧
+        frames_dir = subtitle_service.generate_subtitle_frames(
+            text=generated_text,
+            audio_duration=audio_duration,
+            config=cfg_model,
+            output_dir=task_dir,
+            video_width=video_width,
+            video_height=video_height,
+            fps=30,
+        )
+
+        if not frames_dir:
+            logger.warning("⚠️  No subtitle frames generated, skipping subtitle burn")
+            return video_path
+
+        # 烧录字幕到视频
+        subtitled_path = os.path.join(task_dir, "final_subtitled.mp4")
+        video_service.burn_subtitle_frames(
+            video=video_path,
+            subtitle_dir=frames_dir,
+            output=subtitled_path,
+            fps=30,
+        )
+
+        if not os.path.exists(subtitled_path):
+            logger.error(f"❌ 字幕烧录完成但输出文件不存在：{subtitled_path}")
+            return video_path
+
+        logger.info(f"✅ Subtitles burned to video: {subtitled_path}")
+        return subtitled_path
+    except Exception as e:
+        # 🔒 关键：字幕烧录失败不应导致整个数字人流程失败
+        # 此前异常会向上抛，使任务 FAILED；现在改为退化为返回原视频
+        logger.exception(f"❌ 字幕烧录异常，将返回原始视频（无字幕）：{e}")
+        return video_path
+
+
+
 async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalHumanRequest) -> str:
     task_dir, _task_id = create_task_output_dir()
     final_video_path = os.path.join(task_dir, "final.mp4")
@@ -329,20 +475,32 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
             audio=True,
             video_ratio=api_video_params.get("video_ratio", "9:16"),
         )
-        return await _download_to_file(media_result.url, final_video_path)
+        final_path = await _download_to_file(media_result.url, final_video_path)
+
+        # ===== 字幕烧录 =====
+        if request_body.subtitle_config and request_body.subtitle_config.enabled:
+            final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+
+        return final_path
 
     if request_body.mode == "customize":
         generated_image = character_assets[0]
         await _run_tts(pixelle_video, request_body, generated_text, audio_path)
         if not cfg.second_workflow_path:
             raise ValueError("second_workflow_path is required for customize mode.")
-        return await _run_second_digital_workflow(
+        final_path = await _run_second_digital_workflow(
             pixelle_video,
             workflow_path_str=cfg.second_workflow_path,
             generated_image=generated_image,
             audio_path=audio_path,
             final_video_path=final_video_path,
         )
+
+        # ===== 字幕烧录 =====
+        if request_body.subtitle_config and request_body.subtitle_config.enabled:
+            final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+
+        return final_path
 
     # Digital product mode: generate/combine a product image first, then synthesize talking video.
     if cfg.api_image_workflow:
@@ -394,13 +552,19 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
     if not cfg.second_workflow_path:
         raise ValueError("second_workflow_path is required for digital mode.")
 
-    return await _run_second_digital_workflow(
+    final_path = await _run_second_digital_workflow(
         pixelle_video,
         workflow_path_str=cfg.second_workflow_path,
         generated_image=generated_image,
         audio_path=audio_path,
         final_video_path=final_video_path,
     )
+
+    # ===== 字幕烧录 =====
+    if request_body.subtitle_config and request_body.subtitle_config.enabled:
+        final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+
+    return final_path
 
 
 def _task_response(task_id: str) -> AsyncTaskResponse:
@@ -646,6 +810,137 @@ async def generate_action_transfer_async(
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+class SubtitlePreviewRequest(BaseModel):
+    """字幕预览请求"""
+    text: str = Field(..., description="文案内容")
+    audio_duration: float = Field(..., description="音频时长（秒）")
+    video_width: int = Field(1080, description="视频宽度")
+    video_height: int = Field(1920, description="视频高度")
+    subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
+
+
+class SubtitlePreviewResponse(BaseModel):
+    """字幕预览响应"""
+    success: bool = True
+    preview_video_url: str = ""
+    subtitle_url: str = ""
+    message: str = ""
+
+
+@router.post("/digital-human/subtitle-preview", response_model=SubtitlePreviewResponse)
+async def subtitle_preview(
+    request_body: SubtitlePreviewRequest,
+    request: Request,
+):
+    """
+    字幕预览 API
+    生成带字幕的预览视频（使用 demo 视频 shu-06.mp4）
+    """
+    try:
+        import shutil
+        from pixelle_video.utils.os_util import create_task_output_dir
+
+        # 使用 demo 视频作为预览基础
+        preview_video_dir = Path("modern_ui/public/videos")
+        preview_video_path = preview_video_dir / "shu-06.mp4"
+        if not preview_video_path.exists():
+            return SubtitlePreviewResponse(
+                success=False,
+                message=f"Preview video not found: {preview_video_path}"
+            )
+
+        # 创建临时工作目录
+        task_dir, _task_id = create_task_output_dir()
+        
+        import subprocess
+
+        # 限制预览时长 5 秒
+        preview_duration = min(request_body.audio_duration, 5.0)
+
+        # 缩放为 540x960（半分辨率），前 5 秒（大幅加速预览生成）
+        preview_video_short = os.path.join(task_dir, "preview_demo_short.mp4")
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(preview_video_path), "-t", "5",
+             "-vf", "scale=540:960:flags=bilinear",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+             "-c:a", "aac", "-ar", "22050", "-ac", "1", preview_video_short],
+            capture_output=True, text=True, check=True,
+        )
+
+        # 生成字幕也使用 540x960 分辨率
+        preview_video_width = 540
+        preview_video_height = 960
+
+        # 生成 SRT 字幕文件
+        subtitle_service = SubtitleService()
+        srt_path = subtitle_service.generate_srt_file(
+            text=request_body.text,
+            audio_duration=preview_duration,
+            output_dir=task_dir,
+        )
+
+        # 将 SubtitleRequestConfig 转换为 SubtitleConfigModel
+        cfg_model = SubtitleConfigModel.from_dict(request_body.subtitle_config.model_dump())
+
+        # 缩放到 540x960 时需要按比例缩放字号和最大宽度
+        # 原配置是针对 1080x1920 设计的，缩放比例 = 540/1080 = 0.5
+        scale_factor = preview_video_width / request_body.video_width if request_body.video_width > 0 else 0.5
+        cfg_model.font_size = max(12, int(cfg_model.font_size * scale_factor))
+        cfg_model.max_width = int(cfg_model.max_width * scale_factor)
+        cfg_model.position_x = int(cfg_model.position_x * scale_factor)
+        cfg_model.position_y = int(cfg_model.position_y * scale_factor)
+        cfg_model.background_radius = max(0, int(cfg_model.background_radius * scale_factor))
+        if cfg_model.font_border_width > 0:
+            cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * scale_factor))
+
+        # 生成字幕帧图像（缩小分辨率）
+        frames_dir = subtitle_service.generate_subtitle_frames(
+            text=request_body.text,
+            audio_duration=preview_duration,
+            config=cfg_model,
+            output_dir=task_dir,
+            video_width=preview_video_width,
+            video_height=preview_video_height,
+            fps=30,
+        )
+
+        if not frames_dir:
+            return SubtitlePreviewResponse(
+                success=False,
+                message="No subtitle frames generated"
+            )
+
+        # 烧录字幕到缩放后的 demo 视频
+        video_service = VideoService()
+        preview_output = os.path.join(task_dir, "preview_subtitled.mp4")
+        video_service.burn_subtitle_frames(
+            video=preview_video_short,
+            subtitle_dir=frames_dir,
+            output=preview_output,
+            fps=30,
+        )
+
+        # 生成预览视频 URL
+        preview_url = path_to_url(request, preview_output) if Path(preview_output).exists() else ""
+
+        # SRT 预览 URL（用于 <track> 标签）
+        srt_url = path_to_url(request, srt_path) if Path(srt_path).exists() else ""
+
+        return SubtitlePreviewResponse(
+            success=True,
+            preview_video_url=preview_url,
+            subtitle_url=srt_url,
+            message="字幕预览生成成功"
+        )
+
+    except Exception as e:
+        logger.error(f"Subtitle preview error: {e}")
+        return SubtitlePreviewResponse(
+            success=False,
+            message=str(e)
+        )
+
+
 @router.post("/digital-human/async", response_model=AsyncTaskResponse)
 async def generate_digital_human_async(
     request_body: DigitalHumanRequest,
@@ -654,10 +949,18 @@ async def generate_digital_human_async(
     _user: UserInfo = Depends(check_daily_limit),
 ):
     user_id = _user.id
+    # 🔍 入口日志：打印 request_body 中字幕配置，便于确认前端是否正确传递
+    logger.info(
+        f"📨 [数字人请求入口] mode={request_body.mode}, "
+        f"goods_text_len={len(request_body.goods_text)}, "
+        f"subtitle.enabled={request_body.subtitle_config.enabled}, "
+        f"subtitle_config={request_body.subtitle_config.model_dump()}"
+    )
     # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
     await increment_daily_usage(user_id)
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump(), user_id=str(user_id))
+
 
         async def execute():
             task_manager.update_progress(task.task_id, 80, 100, "preparing")

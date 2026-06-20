@@ -340,6 +340,8 @@ const { createApp } = Vue;
               api_video_workflow: "",
               api_video_params: {},
             },
+            // 存储角色信息，用于动态选择工作流
+            _role: null,
             tts_inference_mode: "local",
             tts_engine: "",
             tts_voice: "zh-CN-YunjianNeural",
@@ -529,9 +531,28 @@ const { createApp } = Vue;
           if (!this.assetForm.assets.length) return ElementPlus.ElMessage.warning("请上传素材图片或视频");
           await this.submitTask("/api/pipelines/asset-based/async", this.cleanedPayload(this.assetForm));
         },
+        _getVideoWorkflowPath() {
+          // 从 localStorage 读取用户角色信息，判断是否为 VIP 及以上
+          try {
+            const userRaw = localStorage.getItem('pixelle_auth_user')
+            if (userRaw) {
+              const user = JSON.parse(userRaw)
+              const role = user.role
+              if (role === 'vip' || role === 'svip' || role === 'admin') {
+                return 'workflows/runninghub/digital_combination_new.json'
+              }
+            }
+          } catch (_) {}
+          return 'workflows/runninghub/digital_combination.json'
+        },
+        _updateDigitalWorkflowPath() {
+          this.digitalForm.workflow_config.second_workflow_path = this._getVideoWorkflowPath()
+        },
         async generateDigitalHuman() {
           if (!this.digitalForm.character_assets.length) return ElementPlus.ElMessage.warning("请上传角色图片");
           if (this.digitalForm.mode === "digital" && !this.digitalForm.goods_assets.length) return ElementPlus.ElMessage.warning("请上传商品图片");
+          // 每次生成前根据用户角色更新视频合成工作流路径
+          this._updateDigitalWorkflowPath()
           await this.submitTask("/api/pipelines/digital-human/async", this.cleanedPayload(this.digitalForm));
         },
         async generateI2v() {

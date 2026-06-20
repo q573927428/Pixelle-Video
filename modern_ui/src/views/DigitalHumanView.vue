@@ -29,7 +29,10 @@
               {{ running ? '正在生成...' : '开始生成 - 🤖 数字人' }}
             </el-button>
             <div style="margin:18px 0;">
-              <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;">{{ statusText }}</div>
+              <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span>{{ statusText }}</span>
+                <span v-if="running" style="color:var(--el-color-warning);font-weight:600;white-space:nowrap;margin-left:12px;">⏱ {{ elapsedTime }}</span>
+              </div>
             </div>
             <div v-if="submitted || batchSubmitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -62,10 +65,37 @@
             </template>
 
             <!-- 单次模式结果 -->
-            <video v-if="!batchResults.length && result.video_url" class="result-video" controls :src="result.video_url" />
-            <div v-else-if="!batchResults.length" class="empty-preview">
+            <video v-else-if="result.video_url" class="result-video" controls :src="result.video_url" />
+
+            <!-- 字幕预览（开启字幕且不在运行/提交状态时显示） -->
+            <div v-else-if="digitalForm.subtitle_enabled && !running && !submitted && !batchSubmitted" style="margin-bottom:12px;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                <span style="font-size:12px;color:var(--el-text-color-secondary);">🎬 实时字幕样式预览</span>
+              </div>
+              <canvas
+                ref="previewCanvasRef"
+                :width="canvasWidth"
+                :height="canvasHeight"
+                style="width:100%;height:auto;max-height:auto;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#000;"
+              />
+              <el-button
+                v-if="digitalForm.subtitle_enabled && digitalForm.goods_text.trim()"
+                type="info"
+                size="small"
+                @click="handleSubtitlePreview"
+                :loading="subtitlePreviewLoading"
+                style="width:100%;"
+              >
+                {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 预览字幕效果' }}
+              </el-button>
+              <video v-if="subtitlePreviewUrl" :src="subtitlePreviewUrl" controls style="width:100%;height:auto;max-height:auto;object-fit:contain;background:#000;border-radius:8px;margin-top:8px;" />
+            </div>
+
+            <!-- 空预览占位 -->
+            <div v-else class="empty-preview">
               <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>生成结果将在这里预览</div></div>
             </div>
+            
           </div>
         </div>
       </div>
@@ -75,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, watchEffect, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DigitalForm } from '../types'
 import { request, filePreviewUrl, getUserUploads, cancelTask } from '../api'
@@ -92,13 +122,27 @@ const batchResults = ref<any[]>([])
 const batchSubmitted = ref(false)
 const batchTaskIds = ref<string[]>([])
 
+const auth = getAuth()
+
+/**
+ * 根据用户角色返回视频合成工作流路径：
+ * - 普通用户 → digital_combination.json
+ * - VIP/SVIP/Admin → digital_combination_new.json
+ */
+function getVideoWorkflowPath(): string {
+  if (auth.isVip.value || auth.isSvip.value || auth.isAdmin.value) {
+    return 'workflows/runninghub/digital_combination_new.json'
+  }
+  return 'workflows/runninghub/digital_combination.json'
+}
+
 const digitalForm = ref<DigitalForm>({
   mode: 'customize', batch_mode: false, batch_topics: '', batch_goods_assets: [], batch_character_assets: [],
   character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',
-    second_workflow_path: 'workflows/runninghub/digital_combination.json',
-    third_workflow_path: 'workflows/runninghub/digital_customize.json',
+    second_workflow_path: getVideoWorkflowPath(),//根据角色选择视频生成工作流
+    third_workflow_path: 'workflows/runninghub/digital_customize.json',//这个是把商品和人物融合在一起，人物拿着商品图片
     api_image_workflow: '', api_video_workflow: '', api_video_params: {},
   },
   tts_inference_mode: 'comfyui', tts_engine: 'edge_tts', tts_voice: 'zh-CN-YunjianNeural',
@@ -109,12 +153,346 @@ const digitalForm = ref<DigitalForm>({
   image_service_mode: 'runninghub', image_api_model: '',
   video_service_mode: 'runninghub', video_api_model: '',
   video_api_params: { duration: 10, resolution: '1280x720', aspect_ratio: '9:16', negative_prompt: '', watermark: false },
+  // 字幕配置
+  subtitle_enabled: false,
+  subtitle_config: {
+    enabled: false,
+    font_size: 50,
+    font_color: '#FF0000',
+    font_family: 'PingFang SC',
+    position_x: 0,
+    position_y: -220,
+    max_width: 900,
+    background_color: '#000000',
+    background_opacity: 0,
+    background_padding: '10 20',
+    background_radius: 20,
+    font_border_width: 3,
+    font_border_color: '#FFFFFF',
+  },
+})
+
+const elapsedTime = ref('')
+let startTime = 0
+let timerHandle: ReturnType<typeof setInterval> | null = null
+
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}时${m}分${s}秒`
+  if (m > 0) return `${m}分${s}秒`
+  return `${s}秒`
+}
+
+function startTimer() {
+  stopTimer()
+  startTime = Date.now()
+  elapsedTime.value = '0秒'
+  timerHandle = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000)
+    elapsedTime.value = formatElapsed(elapsed)
+  }, 1000)
+}
+
+function stopTimer() {
+  if (timerHandle) {
+    clearInterval(timerHandle)
+    timerHandle = null
+  }
+}
+
+// 监听 running 状态：开始生成时启动计时器，结束生成时停止
+watch(running, (val) => {
+  if (val) {
+    startTimer()
+  } else {
+    stopTimer()
+  }
+})
+
+onUnmounted(() => {
+  stopTimer()
 })
 
 const historyVisible = ref(false)
 const historyLoading = ref(false)
 const historyRecords = ref<any[]>([])
 const historyFilterCategory = ref<string | undefined>(undefined)
+
+const subtitlePreviewLoading = ref(false)
+const subtitlePreviewUrl = ref('')
+
+// === 实时字幕预览 Canvas ===
+const previewCanvasRef = ref<HTMLCanvasElement | null>(null)
+// Canvas 尺寸与后端预览 API 保持一致（540x960），确保预览效果一致
+const _PW = 540
+const _PH = 960
+const canvasWidth = computed(() => _PW)
+const canvasHeight = computed(() => _PH)
+
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.substring(0, 2), 16)
+  const g = parseInt(h.substring(2, 4), 16)
+  const b = parseInt(h.substring(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
+// 预加载背景图片（使用任务图片或默认图片）
+let bgImage: HTMLImageElement | null = null
+
+/** 根据 character_asset 或默认图片加载背景 */
+function loadBackgroundImage() {
+  const assetPath = digitalForm.value.character_asset
+  const imgUrl = assetPath ? filePreviewUrl(assetPath) : '/videos/0000010.jpg'
+  // URL 没变且图片已加载，不再重复加载
+  if (bgImage && bgImage.dataset.src === imgUrl) return
+  bgImage = null // 清除旧图片，避免闪烁显示旧图
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.dataset.src = imgUrl
+  img.onload = () => {
+    bgImage = img
+    renderSubtitlePreview()
+  }
+  img.onerror = () => {
+    bgImage = null
+    renderSubtitlePreview()
+  }
+  img.src = imgUrl
+}
+
+function renderSubtitlePreview() {
+  const canvas = previewCanvasRef.value
+  if (!canvas) return
+  const cfg = digitalForm.value.subtitle_config
+  if (!cfg) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  // 预览时只取第一句文案显示
+  let rawText = digitalForm.value.goods_text?.trim() || '这是一个字幕样式预览'
+  if (rawText.length > 3) {
+    const sentences = rawText.split(/(?<=[。！？；，.!?;\s])/)
+    rawText = sentences[0] || rawText
+  }
+  const text = rawText
+
+  const scaleX = _PW / 1080
+  const scaleY = _PH / 1920
+  const scale = Math.min(scaleX, scaleY)
+
+  ctx.clearRect(0, 0, _PW, _PH)
+
+  // 绘制视频帧作为背景（如果有）
+  if (bgImage) {
+    ctx.drawImage(bgImage, 0, 0, _PW, _PH)
+  } else {
+    // 没有加载成功时使用深色背景
+    ctx.fillStyle = '#1a1a2e'
+    ctx.fillRect(0, 0, _PW, _PH)
+    // 异步加载背景图片
+    loadBackgroundImage()
+  }
+
+  // 预览显示放大2倍，与实际生成效果匹配
+  const fontSize = Math.round(cfg.font_size * scale)
+  const maxWidth = Math.round(cfg.max_width * scale)
+  const offsetX = Math.round(cfg.position_x * scale)
+  const offsetY = Math.round(cfg.position_y * scale)
+  const radius = Math.round(cfg.background_radius * scale)
+
+  // 解析 padding（与后端 SubtitleService._parse_padding 逻辑一致，预览放大2倍）
+  const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
+  let padT = 10, padR = 20, padB = 10, padL = 20
+  if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
+  else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
+  else if (padParts.length === 4) { padT = padParts[0]; padR = padParts[1]; padB = padParts[2]; padL = padParts[3] }
+  // 内边距同样放大2倍，与字体匹配
+  padT = Math.round(padT * 2 * scale); padR = Math.round(padR * 2 * scale)
+  padB = Math.round(padB * 2 * scale); padL = Math.round(padL * 2 * scale)
+
+  // 使用普通字重（Pillow 默认无加粗），减少与 Pillow 渲染的差异
+  ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+  ctx.textBaseline = 'top'
+
+  // 按最大宽度换行
+  const lines: string[] = []
+  let currentLine = ''
+  for (const char of text) {
+    const test = currentLine + char
+    if (ctx.measureText(test).width > maxWidth && currentLine) {
+      lines.push(currentLine)
+      currentLine = char
+    } else {
+      currentLine = test
+    }
+  }
+  if (currentLine) lines.push(currentLine)
+
+  // 行高 = 字号 + 4px（与后端一致，4px也放大2倍）
+  const lineHeight = fontSize + Math.round(1 * 2 * scale)
+  const maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width))
+  const bgWidth = maxLineWidth + padL + padR
+  const bgHeight = lines.length * lineHeight + padT + padB
+
+  // 位置：底部向上 100px（1080p 尺寸），按比例缩放
+  const baseX = _PW / 2 + offsetX
+  const baseY = _PH - Math.round(100 * scale) + offsetY
+  const bgX = baseX - bgWidth / 2
+  const bgY = baseY - bgHeight
+
+  // 绘制圆角背景
+  const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
+  ctx.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
+
+  const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
+  if (r > 0) {
+    ctx.beginPath()
+    ctx.moveTo(bgX + r, bgY)
+    ctx.lineTo(bgX + bgWidth - r, bgY)
+    ctx.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
+    ctx.lineTo(bgX + bgWidth, bgY + bgHeight - r)
+    ctx.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
+    ctx.lineTo(bgX + r, bgY + bgHeight)
+    ctx.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
+    ctx.lineTo(bgX, bgY + r)
+    ctx.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
+    ctx.closePath()
+    ctx.fill()
+  } else {
+    ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+  }
+
+  // 文字边框宽度（预览缩放）
+  const borderWidth = Math.round((cfg.font_border_width || 0) * 2 * scale)
+  const borderColor = cfg.font_border_color || '#000000'
+
+  // 绘制文字（注：Canvas2D 与 Pillow 字体度量存在差异，文字宽度/位置仅供参考）
+  ctx.fillStyle = cfg.font_color || '#FFFFFF'
+  for (let i = 0; i < lines.length; i++) {
+    const lineWidth = ctx.measureText(lines[i]).width
+    const x = baseX - lineWidth / 2
+    const y = bgY + padT + i * lineHeight
+    if (borderWidth > 0) {
+      ctx.strokeStyle = borderColor
+      ctx.lineWidth = borderWidth
+      ctx.lineJoin = 'round'
+      ctx.miterLimit = 2
+      ctx.strokeText(lines[i], x, y)
+    }
+    ctx.fillText(lines[i], x, y)
+  }
+}
+
+// 监听角色图片切换：实时更新 Canvas 背景
+watch(
+  () => digitalForm.value.character_asset,
+  () => {
+    if (digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
+      loadBackgroundImage()
+    }
+  }
+)
+
+// 监听字幕开关：开启时渲染 Canvas（flush:post 确保 DOM 已创建）
+watch(
+  () => digitalForm.value.subtitle_enabled,
+  (enabled) => {
+    if (enabled) {
+      nextTick(() => renderSubtitlePreview())
+    }
+  },
+  { immediate: true, flush: 'post' }
+)
+
+// 取消生成任务后重新渲染字幕预览 Canvas
+watch(
+  () => ({ running: running.value, submitted: submitted.value, batchSubmitted: batchSubmitted.value }),
+  (newVal, oldVal) => {
+    // 从生成中/已提交状态恢复到空闲状态时，重新渲染 Canvas
+    const wasBusy = oldVal.running || oldVal.submitted || oldVal.batchSubmitted
+    const isIdle = !newVal.running && !newVal.submitted && !newVal.batchSubmitted
+    if (wasBusy && isIdle && digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
+      nextTick(() => renderSubtitlePreview())
+    }
+  },
+  { immediate: false }
+)
+
+  // 监听字幕样式参数变化：开启字幕时实时更新预览
+  watch(
+    () => ({
+      fz: digitalForm.value.subtitle_config.font_size,
+      fc: digitalForm.value.subtitle_config.font_color,
+      px: digitalForm.value.subtitle_config.position_x,
+      py: digitalForm.value.subtitle_config.position_y,
+      mw: digitalForm.value.subtitle_config.max_width,
+      bc: digitalForm.value.subtitle_config.background_color,
+      bo: digitalForm.value.subtitle_config.background_opacity,
+      bp: digitalForm.value.subtitle_config.background_padding,
+      br: digitalForm.value.subtitle_config.background_radius,
+      bw: digitalForm.value.subtitle_config.font_border_width,
+      bclr: digitalForm.value.subtitle_config.font_border_color,
+    }),
+    () => {
+      if (digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
+        renderSubtitlePreview()
+      }
+    },
+    { deep: true }
+  )
+
+async function handleSubtitlePreview() {
+  const text = digitalForm.value.goods_text?.trim()
+  if (!text) {
+    ElMessage.warning('请填写口播文案')
+    return
+  }
+  subtitlePreviewLoading.value = true
+  subtitlePreviewUrl.value = ''
+  try {
+    // 粗略估算音频时长：中文约 4 字/秒，取平均值
+    const estimatedDuration = Math.max(text.length / 4, 3)
+    const payload = {
+      text,
+      audio_duration: estimatedDuration,
+      video_width: 1080,
+      video_height: 1920,
+       subtitle_config: {
+         enabled: true,
+         font_size: digitalForm.value.subtitle_config.font_size,
+         font_color: digitalForm.value.subtitle_config.font_color,
+         font_family: digitalForm.value.subtitle_config.font_family,
+         position_x: digitalForm.value.subtitle_config.position_x,
+         position_y: digitalForm.value.subtitle_config.position_y,
+         max_width: digitalForm.value.subtitle_config.max_width,
+         background_color: digitalForm.value.subtitle_config.background_color,
+         background_opacity: digitalForm.value.subtitle_config.background_opacity,
+         background_padding: digitalForm.value.subtitle_config.background_padding,
+         background_radius: digitalForm.value.subtitle_config.background_radius,
+         font_border_width: digitalForm.value.subtitle_config.font_border_width,
+         font_border_color: digitalForm.value.subtitle_config.font_border_color,
+       },
+    }
+    const res: any = await request('/api/pipelines/digital-human/subtitle-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (res.success && res.preview_video_url) {
+      subtitlePreviewUrl.value = res.preview_video_url
+      ElMessage.success('字幕预览生成成功')
+    } else {
+      ElMessage.warning(res.message || '字幕预览生成失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(`字幕预览失败：${e.message}`)
+  } finally {
+    subtitlePreviewLoading.value = false
+  }
+}
 
 const currentAssets = computed<string[]>(() => {
   return [digitalForm.value.character_asset, digitalForm.value.goods_asset, digitalForm.value.ref_audio].filter((x): x is string => !!x)
@@ -178,6 +556,8 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
   payload.goods_title = overrides?.title ?? digitalForm.value.goods_title
   payload.goods_text = overrides?.text ?? digitalForm.value.goods_text
   payload.workflow_config = { ...digitalForm.value.workflow_config }
+  // 根据用户角色动态设置视频合成工作流路径
+  payload.workflow_config.second_workflow_path = getVideoWorkflowPath()
   payload.tts_inference_mode = digitalForm.value.tts_inference_mode
   payload.tts_engine = digitalForm.value.tts_engine
   payload.tts_voice = digitalForm.value.tts_voice
@@ -203,8 +583,33 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
     payload.workflow_config.api_video_workflow = digitalForm.value.video_api_model
   }
 
+  // ===== 字幕配置 =====
+   payload.subtitle_config = {
+     enabled: digitalForm.value.subtitle_enabled,
+     font_size: digitalForm.value.subtitle_config.font_size,
+     font_color: digitalForm.value.subtitle_config.font_color,
+     font_family: digitalForm.value.subtitle_config.font_family,
+     position_x: digitalForm.value.subtitle_config.position_x,
+     position_y: digitalForm.value.subtitle_config.position_y,
+     max_width: digitalForm.value.subtitle_config.max_width,
+     background_color: digitalForm.value.subtitle_config.background_color,
+     background_opacity: digitalForm.value.subtitle_config.background_opacity,
+     background_padding: digitalForm.value.subtitle_config.background_padding,
+     background_radius: digitalForm.value.subtitle_config.background_radius,
+     font_border_width: digitalForm.value.subtitle_config.font_border_width,
+     font_border_color: digitalForm.value.subtitle_config.font_border_color,
+   }
+
+  // 🔍 调试：打印 payload 中字幕配置，便于在浏览器 Console 排查
+  // eslint-disable-next-line no-console
+  console.log('[DigitalHuman] 提交 payload 字幕配置:', {
+    subtitle_enabled_switch: digitalForm.value.subtitle_enabled,
+    payload_subtitle_config: payload.subtitle_config,
+  })
+
   return payload
 }
+
 
 async function generate() {
   if (digitalForm.value.batch_mode) {

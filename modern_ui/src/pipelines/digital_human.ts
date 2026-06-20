@@ -102,6 +102,21 @@ export function buildDigitalPayload(form: DigitalForm): Record<string, any> {
       voxcpm_control_instruction: form.voxcpm_control_instruction,
       voxcpm_use_prompt_text: form.voxcpm_use_prompt_text,
       voxcpm_prompt_text: form.voxcpm_prompt_text,
+      subtitle_config: {
+        enabled: form.subtitle_enabled,
+        font_size: form.subtitle_config.font_size,
+        font_color: form.subtitle_config.font_color,
+        font_family: form.subtitle_config.font_family,
+        position_x: form.subtitle_config.position_x,
+        position_y: form.subtitle_config.position_y,
+        max_width: form.subtitle_config.max_width,
+        background_color: form.subtitle_config.background_color,
+        background_opacity: form.subtitle_config.background_opacity,
+        background_padding: form.subtitle_config.background_padding,
+        background_radius: form.subtitle_config.background_radius,
+        font_border_width: form.subtitle_config.font_border_width,
+        font_border_color: form.subtitle_config.font_border_color,
+      },
     }).filter(([_, v]) => v !== '' && v !== null && v !== undefined)
   )
 }

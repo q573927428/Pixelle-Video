@@ -26,7 +26,8 @@ pnpm approve-builds esbuild
 担心海关查验会把你的心爱宝贝弄坏。真实情况是，海关比你想象的要专业，但也确实会有痕迹。
 
 
-玩摄影穷到吃土？日淘二手镜头真能省出一辆车！
+玩摄影穷到吃土？
+日淘二手镜头真能省出一辆车！
 我干日本转运十二年，
 帮好多摄影老炮转运过二手镜头，
 今天给你们算笔明白账：
@@ -60,3 +61,24 @@ pnpm approve-builds esbuild
 
 生成的视频是否可以自动加字幕。生成好的视频，添加可以分发到其他短视频平台的功能。
 
+
+
+
+modern_ui\src\views\DigitalHumanView.vue
+api\routers\pipelines.py
+modern_ui\src\components\DigitalHumanForm.vue
+pixelle_video\services\video.py
+modern_ui\src\pipelines\digital_human.ts
+pixelle_video\services\subtitle.py
+modern_ui\src\types.ts
+
+
+            <canvas
+                ref="previewCanvasRef"
+                :width="canvasWidth"
+                :height="canvasHeight"
+                style="width:100%;height:auto;max-height:auto;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#000;"
+              />
+
+modern_ui\src\views\DigitalHumanView.vue
+不要使用loadVideoFrame这个方法，根据上传的任务图片作为预览，如果未上传图片则使用modern_ui\public\videos\0000010.jpg作为默认图片
