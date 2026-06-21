@@ -29,7 +29,7 @@
           <div class="stat-divider"></div>
           <div class="stat-item">
             <span class="stat-value">高清画质</span>
-            <span class="stat-label">720P 输出</span>
+            <span class="stat-label">高清输出</span>
           </div>
           <div class="stat-divider"></div>
           <div class="stat-item">
@@ -350,7 +350,6 @@ const landscapeVideos = [
 const freePlan = [
   '每日 1 次视频生成',
   { text: '文案最多 150 字', sub: '生成视频时长约30秒' },
-  '480P 基础画质输出',
   '基础数字人模板',
   '标准渲染队列',
   '社区支持',
@@ -359,7 +358,6 @@ const freePlan = [
 const svipPlan = [
   '无限次视频生成',
   { text: '文案最多 398 字', sub: '生成视频时长约80秒' },
-  '720P 超清画质输出',
   '自动添加字幕',
   '全部数字人模板解锁',
   '优先渲染队列',
@@ -370,7 +368,6 @@ const svipPlan = [
 const vipPlan = [
   '每日 10 次视频生成',
   { text: '文案最多 398 字', sub: '生成视频时长约80秒' },
-  '720P 超清画质输出',
   '自动添加字幕',
   '全部数字人模板解锁',
   '优先渲染队列',

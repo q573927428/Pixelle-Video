@@ -102,10 +102,6 @@
             </div>
           </div>
           <div class="vip-compare-row">
-            <div class="vip-compare-col plan-col-free">480P 画质</div>
-            <div class="vip-compare-col plan-col-vip">720P 超清</div>
-          </div>
-          <div class="vip-compare-row">
             <div class="vip-compare-col plan-col-free"><span class="cmp-remove">✕</span> 添加字幕</div>
             <div class="vip-compare-col plan-col-vip"><span class="cmp-check">✓</span> 添加字幕</div>
           </div>
