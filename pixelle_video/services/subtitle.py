@@ -353,7 +353,7 @@ class SubtitleService:
         # position_y: 0 = 底部(距底边100px), 负数 = 偏上, 正数 = 偏下
         base_x = video_width // 2
         offset_x = config.position_x
-        base_y = video_height - 100 + config.position_y  # 默认距底边 100px
+        base_y = video_height - 50 + config.position_y  # 默认距底边 150px，与前端预览完全对齐
 
         frame_files: list[dict] = []  # [{path, start_frame, end_frame}]
 
@@ -365,8 +365,8 @@ class SubtitleService:
             # 将文本按 max_width 分割成多行
             lines = self._split_text_into_lines(seg_text, font, config.max_width)
 
-            # 计算每行高度：与前端保持一致，直接使用font_size + 4
-            line_height = font_size + 4
+            # 计算每行高度：与前端保持一致
+            line_height = font_size 
 
             text_height = len(lines) * line_height
 
@@ -409,17 +409,18 @@ class SubtitleService:
             # 逐行绘制文字
             for j, line in enumerate(lines):
                 line_x = base_x + offset_x - int(font.getlength(line)) // 2
-                # line_y 是基线 y 坐标（anchor='la'），加上 ascent 达到 textBaseline='top' 效果
-                line_y = bg_y1 + pad_top + j * line_height + ascent
+                # 与前端Canvas textBaseline='top'保持完全一致，移除ascent偏移
+                line_y = bg_y1 + pad_top + j * line_height
                 if border_width > 0 and border_color:
                     draw.text(
                         (line_x, line_y), line,
                         fill=fg_color, font=font,
                         stroke_width=border_width,
                         stroke_fill=border_color,
+                        anchor='lt'
                     )
                 else:
-                    draw.text((line_x, line_y), line, fill=fg_color, font=font)
+                    draw.text((line_x, line_y), line, fill=fg_color, font=font, anchor='lt')
 
             # 生成帧图像文件名（使用 uuid 避免并发冲突）
             frame_filename = f"subtitle_{uuid.uuid4().hex[:8]}_{seg['index']:04d}.png"

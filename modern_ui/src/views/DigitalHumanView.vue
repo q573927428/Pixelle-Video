@@ -167,7 +167,7 @@ const digitalForm = ref<DigitalForm>({
     background_opacity: 0,
     background_padding: '10 20',
     background_radius: 20,
-    font_border_width: 3,
+    font_border_width: 4,
     font_border_color: '#FFFFFF',
   },
 })
