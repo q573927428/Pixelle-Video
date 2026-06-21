@@ -28,10 +28,10 @@
             <el-button type="primary" size="large" style="width:100%;height:48px;font-weight:900;" :loading="running" @click="generate">
               {{ running ? '正在生成...' : '开始生成 - 🤖 数字人' }}
             </el-button>
-            <div style="margin:18px 0;">
+              <div style="margin:18px 0;">
               <div class="small muted" style="padding:8px 12px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span>{{ statusText }}</span>
-                <span v-if="running" style="color:var(--el-color-warning);font-weight:600;white-space:nowrap;margin-left:12px;">⏱ {{ elapsedTime }}</span>
+                <span v-if="elapsedTime" style="font-weight:600;white-space:nowrap;margin-left:12px;" :style="{ color: running ? 'var(--el-color-warning)' : 'var(--el-color-success)' }">⏱ {{ elapsedTime }}</span>
               </div>
             </div>
             <div v-if="submitted || batchSubmitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
@@ -161,7 +161,7 @@ const digitalForm = ref<DigitalForm>({
     font_color: '#FF0000',
     font_family: 'PingFang SC',
     position_x: 0,
-    position_y: -220,
+    position_y: -390,
     max_width: 900,
     background_color: '#000000',
     background_opacity: 0,
