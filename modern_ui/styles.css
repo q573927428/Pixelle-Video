@@ -31,7 +31,7 @@
       position: sticky;
       top: 0;
       height: 100vh;
-      padding: 26px 18px;
+      padding: 10px;
       border-right: 1px solid var(--line);
       background: rgba(2, 6, 23, 0.6);
       backdrop-filter: blur(22px);
@@ -41,7 +41,7 @@
       display: flex;
       align-items: center;
       gap: 14px;
-      padding: 10px 10px 24px;
+      padding: 10px;
     }
 
     .brand-logo {
@@ -505,6 +505,23 @@
     @media (max-width: 680px) {
       .task-center-grid {
         grid-template-columns: 1fr;
+      }
+      .task-thumb {
+        width: 44px;
+        height: 44px;
+      }
+      .task-card-main {
+        gap: 8px;
+        padding: 8px;
+      }
+      .task-card-info {
+        min-width: 0;
+      }
+      .info-row {
+        font-size: 11px;
+      }
+      .task-card-footer {
+        padding: 6px 8px;
       }
     }
 
@@ -1058,6 +1075,23 @@
       .main { padding: 18px 14px 30px; }
       .topbar { flex-direction: column; }
       .tool-grid, .metric-row { grid-template-columns: 1fr; }
+      .card-body {
+        padding: 12px;
+        overflow-x: hidden;
+      }
+      .el-pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+      }
+      .el-pagination .el-pagination__sizes {
+        display: none;
+      }
+      .pagination-wrapper {
+        padding-top: 8px;
+        overflow-x: auto;
+        max-width: 100%;
+      }
     }
 
     /* ====== ElMessageBox 深色主题适配 ====== */
@@ -1315,4 +1349,11 @@
     .el-pagination .el-pagination__total,
     .el-pagination .el-pagination__jump {
       color: #94a3b8;
+    }
+
+    .pagination-wrapper {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: center;
+      padding-top: 12px;
     }

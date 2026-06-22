@@ -110,6 +110,10 @@
             <div class="vip-compare-col plan-col-vip">全部模板</div>
           </div>
           <div class="vip-compare-row">
+            <div class="vip-compare-col plan-col-free">720p 高清画质</div>
+            <div class="vip-compare-col plan-col-vip">1080P 高清画质</div>
+          </div>
+          <div class="vip-compare-row">
             <div class="vip-compare-col plan-col-free">标准队列</div>
             <div class="vip-compare-col plan-col-vip">优先队列</div>
           </div>

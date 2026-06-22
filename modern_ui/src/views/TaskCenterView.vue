@@ -4,7 +4,7 @@
       <div class="card-header">
         <h3 class="card-title">📊 任务中心</h3>
         <div class="card-header-tools">
-          <el-select v-model="filterStatus" placeholder="状态筛选" size="small" clearable @change="loadTasks" style="width:110px;margin-right:8px">
+          <el-select v-model="filterStatus" placeholder="状态筛选" size="small" clearable @change="onFilterChange" style="width:110px;margin-right:8px">
             <el-option label="全部" value="" />
             <el-option label="待处理" value="pending" />
             <el-option label="进行中" value="running" />
@@ -17,8 +17,8 @@
         </div>
       </div>
       <div class="card-body task-center-grid">
-        <div v-if="!filteredTasks.length" class="empty-preview">暂无任务</div>
-        <div v-for="task in filteredTasks" :key="task.task_id" class="task-card">
+        <div v-if="!pagedTasks.length" class="empty-preview">暂无任务</div>
+        <div v-for="task in pagedTasks" :key="task.task_id" class="task-card">
           <div class="task-card-header">
             <span class="task-card-id mono">{{ shortId(task.task_id) }}</span>
             <div class="task-card-header-actions">
@@ -86,13 +86,25 @@
             <span class="footer-text">{{ getText(task) }}</span>
           </div>
         </div>
+        <div class="pagination-wrapper" v-if="filteredTasks.length > pageSize">
+          <el-pagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="filteredTasks.length"
+            :page-sizes="[10, 20, 50, 100]"
+            layout="total, sizes, prev, pager, next"
+            @current-change="onPageChange"
+            @size-change="onPageChange"
+            background
+          />
+        </div>
       </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadTasks as apiLoadTasks, cancelTask as apiCancelTask, filePreviewUrl } from '../api'
 import { useResources } from '../composables/useResources'
@@ -105,9 +117,17 @@ const filterStatus = ref('')
 const { tasks } = useResources()
 const { isAdmin } = getAuth()
 
+const currentPage = ref(1)
+const pageSize = ref(16)
+
 const filteredTasks = computed(() => {
   if (!filterStatus.value) return tasks.value
   return tasks.value.filter((t: any) => t.status === filterStatus.value)
+})
+
+const pagedTasks = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return filteredTasks.value.slice(start, start + pageSize.value)
 })
 
 onMounted(() => {
@@ -121,12 +141,25 @@ async function loadTasks() {
   finally { loadingTasks.value = false }
 }
 
+function onFilterChange() {
+  currentPage.value = 1
+  loadTasks()
+}
+
+function onPageChange() {
+  // el-pagination 已通过 v-model 绑定 currentPage / pageSize
+}
+
+watch(pageSize, () => {
+  currentPage.value = 1
+})
+
 function tagType(status: string): string {
   return { completed: 'success', running: 'warning', pending: 'info', failed: 'danger', cancelled: 'info' }[status] || 'info'
 }
 
 function shortId(id: string): string {
-  return id.length > 12 ? id.slice(0, 12) + '...' : id
+  return id.length > 28 ? id.slice(0, 28) + '...' : id
 }
 
 function statusLabel(status: string): string {

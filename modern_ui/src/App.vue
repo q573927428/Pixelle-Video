@@ -95,10 +95,10 @@ const { loadAll } = useResources()
 
 const baseNavItems: NavItem[] = [
   { key: 'digital_human', icon: '🤖', label: '数字人' },
-  { key: 'quick_create', icon: '⚡', label: '快速创作' },
+  // { key: 'quick_create', icon: '⚡', label: '快速创作' },
   // { key: 'custom_media', icon: '🎨', label: '素材创作' },
   { key: 'image_to_video', icon: '🎥', label: '图生视频' },
-  { key: 'action_transfer', icon: '💃', label: '动作迁移' },
+  // { key: 'action_transfer', icon: '💃', label: '动作迁移' },
   { key: 'tasks', icon: '📊', label: '任务中心' },
   { key: 'history', icon: '📋', label: '历史记录' },
 ]
