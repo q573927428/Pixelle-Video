@@ -1357,3 +1357,56 @@
       justify-content: center;
       padding-top: 12px;
     }
+
+    /* ====== ElSwitch 深色主题适配 ====== */
+    .el-switch {
+      --el-switch-on-color: #8b5cf6;
+      --el-switch-off-color: rgba(100, 116, 139, 0.55);
+      --el-switch-border-color: rgba(148, 163, 184, 0.25);
+    }
+    .el-switch .el-switch__core {
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 12px;
+      min-width: 44px;
+      height: 24px;
+      background: rgba(51, 65, 85, 0.65);
+      box-shadow: 0 0 0 1px rgba(148, 163, 184, 0.3) inset;
+      transition: all 0.25s ease;
+    }
+    .el-switch .el-switch__core .el-switch__inner,
+    .el-switch .el-switch__core .el-switch__action {
+      width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      background: #cbd5e1;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+      transition: all 0.25s ease;
+    }
+    .el-switch.is-checked .el-switch__core {
+      border-color: rgba(125, 211, 252, 0.5);
+      background: linear-gradient(135deg, #8b5cf6, #22d3ee);
+      box-shadow: 0 0 24px rgba(139, 92, 246, 0.5), 0 0 0 1px rgba(125, 211, 252, 0.35) inset;
+    }
+    .el-switch.is-checked .el-switch__core .el-switch__action {
+      background: #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    }
+    .el-switch:hover .el-switch__core {
+      border-color: rgba(125, 211, 252, 0.45);
+      box-shadow: 0 0 0 1px rgba(125, 211, 252, 0.3) inset;
+    }
+    .el-switch.is-checked:hover .el-switch__core {
+      border-color: rgba(125, 211, 252, 0.7);
+      box-shadow: 0 0 32px rgba(139, 92, 246, 0.65), 0 0 0 1px rgba(125, 211, 252, 0.5) inset;
+    }
+    .el-switch.is-disabled {
+      opacity: 0.45;
+    }
+    .el-switch .el-switch__label {
+      color: #cbd5e1;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .el-switch .el-switch__label.is-active {
+      color: #e5eefb;
+    }
