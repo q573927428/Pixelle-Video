@@ -455,8 +455,67 @@ class PersistenceService:
         except Exception as e:
             logger.error(f"Failed to save index: {e}")
     
+    async def cleanup_old_tasks(self, retention_days: int = 90):
+        """
+        Clean up tasks older than retention_days
+        
+        Args:
+            retention_days: Number of days to retain tasks (default: 30)
+        """
+        from datetime import timedelta
+        
+        try:
+            index = self._load_index()
+            tasks = index.get("tasks", [])
+            
+            now = datetime.now()
+            cutoff_date = now - timedelta(days=retention_days)
+            
+            tasks_to_keep = []
+            tasks_to_delete = []
+            
+            for task in tasks:
+                try:
+                    created_at_str = task.get("created_at")
+                    if created_at_str:
+                        created_at = datetime.fromisoformat(created_at_str)
+                        if created_at >= cutoff_date:
+                            tasks_to_keep.append(task)
+                        else:
+                            tasks_to_delete.append(task)
+                    else:
+                        # 没有时间戳的任务保留
+                        tasks_to_keep.append(task)
+                except Exception:
+                    # 解析失败的任务也保留
+                    tasks_to_keep.append(task)
+            
+            # Delete old task directories
+            deleted_count = 0
+            for task in tasks_to_delete:
+                task_id = task.get("task_id")
+                if task_id:
+                    import shutil
+                    task_dir = self.get_task_dir(task_id)
+                    if task_dir.exists():
+                        shutil.rmtree(task_dir)
+                        deleted_count += 1
+                        logger.info(f"Deleted old task: {task_id}")
+            
+            # Update index
+            if tasks_to_delete:
+                index["tasks"] = tasks_to_keep
+                self._save_index(index)
+                logger.info(f"Cleanup complete: deleted {deleted_count} tasks older than {retention_days} days")
+            
+        except Exception as e:
+            logger.error(f"Failed to cleanup old tasks: {e}")
+    
     async def _update_index_for_task(self, task_id: str, metadata: Dict[str, Any]):
         """Update index entry for a specific task"""
+        # Cleanup old tasks before updating index
+        await self.cleanup_old_tasks()
+        
         index = self._load_index()
         
         # Try to get title from multiple sources

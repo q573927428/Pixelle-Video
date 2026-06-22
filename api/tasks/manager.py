@@ -18,7 +18,9 @@ In-memory task management for video generation jobs.
 
 import asyncio
 import contextvars
+import json
 import uuid
+from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
 from loguru import logger
@@ -80,6 +82,10 @@ class TaskManager:
         # tasks simultaneously. Tasks exceeding the limit will be queued
         # and executed sequentially as slots become available.
         self._concurrency_semaphore: Optional[asyncio.Semaphore] = None
+
+        # Persistence
+        self._tasks_index_file = Path("output") / ".tasks_index.json"
+        self._load_tasks_index()
 
     def _get_max_concurrent(self) -> int:
         """Get the max concurrent tasks limit from the UI-configurable setting.
@@ -526,6 +532,90 @@ class TaskManager:
         logger.info(f"Cancelled task {task_id}")
         return True
     
+    # ========================================================================
+    # Index Persistence (similar to output/.index.json)
+    # ========================================================================
+
+    def _task_to_index_entry(self, task: Task) -> dict:
+        """Convert a Task to a serializable index entry"""
+        return {
+            "task_id": task.task_id,
+            "task_type": task.task_type.value if task.task_type else None,
+            "status": task.status.value if task.status else None,
+            "user_id": task.user_id,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "started_at": task.started_at.isoformat() if task.started_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+            "progress": {
+                "current": task.progress.current if task.progress else 0,
+                "total": task.progress.total if task.progress else 0,
+                "percentage": task.progress.percentage if task.progress else 0,
+                "message": task.progress.message if task.progress else "",
+            } if task.progress else None,
+            "result": task.result,
+            "error": task.error,
+            "warnings": task.warnings,
+        }
+
+    def _load_tasks_index(self):
+        """Load tasks from persistent index file"""
+        try:
+            if self._tasks_index_file.exists():
+                with open(self._tasks_index_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                tasks_data = data.get("tasks", [])
+                for entry in tasks_data:
+                    try:
+                        task = Task(
+                            task_id=entry["task_id"],
+                            task_type=TaskType(entry["task_type"]) if entry.get("task_type") else None,
+                            status=TaskStatus(entry["status"]) if entry.get("status") else TaskStatus.PENDING,
+                            user_id=entry.get("user_id"),
+                        )
+                        # Restore additional fields
+                        if entry.get("created_at"):
+                            task.created_at = datetime.fromisoformat(entry["created_at"])
+                        if entry.get("started_at"):
+                            task.started_at = datetime.fromisoformat(entry["started_at"])
+                        if entry.get("completed_at"):
+                            task.completed_at = datetime.fromisoformat(entry["completed_at"])
+                        task.result = entry.get("result")
+                        task.error = entry.get("error")
+                        task.warnings = entry.get("warnings", [])
+                        prog = entry.get("progress")
+                        if prog:
+                            task.progress = TaskProgress(
+                                current=prog.get("current", 0),
+                                total=prog.get("total", 0),
+                                percentage=prog.get("percentage", 0),
+                                message=prog.get("message", ""),
+                            )
+                        self._tasks[task.task_id] = task
+                    except Exception as e:
+                        logger.warning(f"Failed to restore task {entry.get('task_id')}: {e}")
+                if tasks_data:
+                    logger.info(f"Restored {len(tasks_data)} tasks from {self._tasks_index_file}")
+        except Exception as e:
+            logger.error(f"Failed to load tasks index: {e}")
+
+    def _save_tasks_index(self):
+        """Save tasks to persistent index file"""
+        try:
+            self._tasks_index_file.parent.mkdir(parents=True, exist_ok=True)
+            tasks_data = []
+            for task in self._tasks.values():
+                # Only save completed/failed/cancelled tasks for persistence
+                if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
+                    tasks_data.append(self._task_to_index_entry(task))
+            with open(self._tasks_index_file, "w", encoding="utf-8") as f:
+                json.dump({
+                    "version": "1.0",
+                    "tasks": tasks_data,
+                    "last_updated": datetime.now().isoformat(),
+                }, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            logger.error(f"Failed to save tasks index: {e}")
+
     async def _cleanup_loop(self):
         """Periodically clean up old completed tasks"""
         while self._running:
@@ -555,6 +645,9 @@ class TaskManager:
         
         if tasks_to_remove:
             logger.info(f"Cleaned up {len(tasks_to_remove)} old tasks")
+        
+        # Save index after cleanup
+        self._save_tasks_index()
 
 
 # Global task manager instance

@@ -40,7 +40,7 @@ class APIConfig(BaseModel):
 
     # Task settings
     task_cleanup_interval: int = 3600  # Clean completed tasks every hour
-    task_retention_time: int = 86400   # Keep task results for 24 hours
+    task_retention_time: int = 2592000  # Keep task results for 30 days
 
     # File upload settings
     max_upload_size: int = 100 * 1024 * 1024  # 100MB
