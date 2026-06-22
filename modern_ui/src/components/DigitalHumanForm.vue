@@ -454,7 +454,7 @@
                   <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">⚙️ 高级设置</span>
                 </template>
                 <el-form-item label="文字大小">
-                  <el-slider v-model="form.subtitle_config.font_size" :min="24" :max="96" :step="2" show-input />
+                  <el-slider v-model="form.subtitle_config.font_size" :min="22" :max="96" :step="2" show-input />
                 </el-form-item>
                 <el-form-item label="文字颜色">
                   <el-color-picker v-model="form.subtitle_config.font_color" show-alpha />
@@ -466,7 +466,7 @@
                   <el-slider v-model="form.subtitle_config.position_y" :min="-1700" :max="100" :step="10" show-input />
                 </el-form-item>
                 <el-form-item label="最大宽度">
-                  <el-slider v-model="form.subtitle_config.max_width" :min="200" :max="1080" :step="20" show-input />
+                  <el-slider v-model="form.subtitle_config.max_width" :min="100" :max="1980" :step="20" show-input />
                 </el-form-item>
                 <el-form-item label="背景颜色">
                   <el-color-picker v-model="form.subtitle_config.background_color" show-alpha />
@@ -476,6 +476,7 @@
                 </el-form-item>
                 <el-form-item label="背景内边距">
                   <el-input v-model="form.subtitle_config.background_padding" placeholder="例如：10 20（上下 左右） 或 10 20 10 20（上 右 下 左）" />
+                  <small>例如：10 20（上下 左右） 或 10 20 10 20（上 右 下 左）</small>
                 </el-form-item>
                 <el-form-item label="背景圆角">
                   <el-input-number v-model="form.subtitle_config.background_radius" :min="0" :max="50" :step="2" style="width:100%;" />
