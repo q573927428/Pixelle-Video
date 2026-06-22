@@ -11,7 +11,7 @@
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-size:13px;font-weight:400;">批量模式</span>
             <el-switch v-model="form.batch_mode" @change="onBatchModeChange" />
-            <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value">👑 VIP</span>
+            <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
           </div>
         </div>
         <div class="form-section-body">
@@ -468,7 +468,7 @@
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="font-size:13px;font-weight:400;">开启字幕</span>
               <el-switch v-model="form.subtitle_enabled" @change="onSubtitleEnabledChange" />
-              <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value">👑 VIP</span>
+              <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
             </div>
           </div>
           <div class="form-section-body">
@@ -520,6 +520,7 @@
 
     </div>
   </el-form>
+  <VipPurchaseDialog ref="vipDialogRef" />
 </template>
 
 <script setup lang="ts">
@@ -528,10 +529,16 @@ import type { DigitalForm, WorkflowInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
+import VipPurchaseDialog from './VipPurchaseDialog.vue'
 import { ElMessage } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
 
 const auth = getAuth()
+const vipDialogRef = ref<InstanceType<typeof VipPurchaseDialog> | null>(null)
+
+function handleVipBadgeClick() {
+  vipDialogRef.value?.openVipDialog()
+}
 const textMaxLength = computed(() => (auth.isVip.value || auth.isSvip.value || auth.isAdmin.value) ? 398 : 150)
 const BATCH_MAX_COUNT = 10
 
