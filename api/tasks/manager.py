@@ -314,6 +314,7 @@ class TaskManager:
                 task.result = result
                 task.completed_at = datetime.now()
                 logger.info(f"Task {task_id} completed")
+                self._save_tasks_index()
                 
             except TaskConfirmationTimeout:
                 # Confirmation timed out - fail gracefully
@@ -321,17 +322,20 @@ class TaskManager:
                 task.error = "User confirmation timed out"
                 task.completed_at = datetime.now()
                 logger.error(f"Task {task_id} failed: confirmation timeout")
+                self._save_tasks_index()
                 
             except asyncio.CancelledError:
                 task.status = TaskStatus.CANCELLED
                 task.completed_at = datetime.now()
                 logger.info(f"Task {task_id} cancelled")
+                self._save_tasks_index()
                 
             except Exception as e:
                 task.status = TaskStatus.FAILED
                 task.error = str(e)
                 task.completed_at = datetime.now()
                 logger.error(f"Task {task_id} failed: {e}")
+                self._save_tasks_index()
         
         # Start execution
         future = asyncio.create_task(_execute())
@@ -383,6 +387,7 @@ class TaskManager:
                     task.result = result
                     task.completed_at = datetime.now()
                     logger.info(f"Task {task_id} completed, released concurrency slot")
+                    self._save_tasks_index()
 
                     
             except TaskConfirmationTimeout:
@@ -390,17 +395,20 @@ class TaskManager:
                 task.error = "User confirmation timed out"
                 task.completed_at = datetime.now()
                 logger.error(f"Task {task_id} failed: confirmation timeout")
+                self._save_tasks_index()
                 
             except asyncio.CancelledError:
                 task.status = TaskStatus.CANCELLED
                 task.completed_at = datetime.now()
                 logger.info(f"Task {task_id} cancelled")
+                self._save_tasks_index()
                 
             except Exception as e:
                 task.status = TaskStatus.FAILED
                 task.error = str(e)
                 task.completed_at = datetime.now()
                 logger.error(f"Task {task_id} failed: {e}")
+                self._save_tasks_index()
             finally:
                 # Always reset context variable to avoid leaking to other tasks
                 try:
@@ -537,7 +545,14 @@ class TaskManager:
     # ========================================================================
 
     def _task_to_index_entry(self, task: Task) -> dict:
-        """Convert a Task to a serializable index entry"""
+        """Convert a Task to minimal index entry (only fields used by TaskCenterView)"""
+        # Only keep request_params fields used by the UI
+        request_params = {}
+        if task.request_params:
+            for key in ["character_assets", "goods_assets", "goods_title", "goods_text", "_runninghub_task_id"]:
+                if key in task.request_params:
+                    request_params[key] = task.request_params[key]
+
         return {
             "task_id": task.task_id,
             "task_type": task.task_type.value if task.task_type else None,
@@ -546,15 +561,9 @@ class TaskManager:
             "created_at": task.created_at.isoformat() if task.created_at else None,
             "started_at": task.started_at.isoformat() if task.started_at else None,
             "completed_at": task.completed_at.isoformat() if task.completed_at else None,
-            "progress": {
-                "current": task.progress.current if task.progress else 0,
-                "total": task.progress.total if task.progress else 0,
-                "percentage": task.progress.percentage if task.progress else 0,
-                "message": task.progress.message if task.progress else "",
-            } if task.progress else None,
-            "result": task.result,
             "error": task.error,
             "warnings": task.warnings,
+            "request_params": request_params or None,
         }
 
     def _load_tasks_index(self):
@@ -572,24 +581,15 @@ class TaskManager:
                             status=TaskStatus(entry["status"]) if entry.get("status") else TaskStatus.PENDING,
                             user_id=entry.get("user_id"),
                         )
-                        # Restore additional fields
                         if entry.get("created_at"):
                             task.created_at = datetime.fromisoformat(entry["created_at"])
                         if entry.get("started_at"):
                             task.started_at = datetime.fromisoformat(entry["started_at"])
                         if entry.get("completed_at"):
                             task.completed_at = datetime.fromisoformat(entry["completed_at"])
-                        task.result = entry.get("result")
                         task.error = entry.get("error")
                         task.warnings = entry.get("warnings", [])
-                        prog = entry.get("progress")
-                        if prog:
-                            task.progress = TaskProgress(
-                                current=prog.get("current", 0),
-                                total=prog.get("total", 0),
-                                percentage=prog.get("percentage", 0),
-                                message=prog.get("message", ""),
-                            )
+                        task.request_params = entry.get("request_params")
                         self._tasks[task.task_id] = task
                     except Exception as e:
                         logger.warning(f"Failed to restore task {entry.get('task_id')}: {e}")
@@ -599,12 +599,11 @@ class TaskManager:
             logger.error(f"Failed to load tasks index: {e}")
 
     def _save_tasks_index(self):
-        """Save tasks to persistent index file"""
+        """Save tasks to persistent index file (minimal fields for TaskCenterView)"""
         try:
             self._tasks_index_file.parent.mkdir(parents=True, exist_ok=True)
             tasks_data = []
             for task in self._tasks.values():
-                # Only save completed/failed/cancelled tasks for persistence
                 if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED]:
                     tasks_data.append(self._task_to_index_entry(task))
             with open(self._tasks_index_file, "w", encoding="utf-8") as f:

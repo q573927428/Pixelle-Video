@@ -447,24 +447,59 @@ class PersistenceService:
             return {"version": "1.0", "tasks": []}
     
     def _save_index(self, index_data: Dict[str, Any]):
-        """Save index to file"""
+        """Save index to file and clean up incomplete task folders"""
         try:
             index_data["last_updated"] = datetime.now().isoformat()
             with open(self.index_file, "w", encoding="utf-8") as f:
                 json.dump(index_data, f, ensure_ascii=False, indent=2)
+            # Clean up incomplete task folders (no metadata.json)
+            self._cleanup_incomplete_dirs()
         except Exception as e:
             logger.error(f"Failed to save index: {e}")
+    
+    def _cleanup_incomplete_dirs(self):
+        """Remove task directories without metadata.json"""
+        try:
+            import shutil
+            for task_dir in self.output_dir.iterdir():
+                if not task_dir.is_dir() or task_dir.name.startswith("."):
+                    continue
+                if task_dir.name in ("api", "api_images"):
+                    continue
+                if not (task_dir / "metadata.json").exists():
+                    shutil.rmtree(task_dir)
+                    logger.info(f"Deleted incomplete folder: {task_dir.name}")
+        except Exception as e:
+            logger.error(f"Failed to clean up incomplete dirs: {e}")
     
     async def cleanup_old_tasks(self, retention_days: int = 90):
         """
         Clean up tasks older than retention_days
         
+        Also cleans up incomplete task folders (no metadata.json).
+        
         Args:
-            retention_days: Number of days to retain tasks (default: 30)
+            retention_days: Number of days to retain tasks (default: 90)
         """
         from datetime import timedelta
         
         try:
+            # ---- Step 1: Clean up incomplete task folders (no metadata.json) ----
+            import shutil
+            deleted_count = 0
+            for task_dir in self.output_dir.iterdir():
+                if not task_dir.is_dir() or task_dir.name.startswith("."):
+                    continue
+                # Skip known system directories
+                if task_dir.name in ("api", "api_images"):
+                    continue
+                metadata_path = task_dir / "metadata.json"
+                if not metadata_path.exists():
+                    shutil.rmtree(task_dir)
+                    deleted_count += 1
+                    logger.info(f"Deleted incomplete folder: {task_dir.name}")
+
+            # ---- Step 2: Clean up expired tasks from index ----
             index = self._load_index()
             tasks = index.get("tasks", [])
             
@@ -490,23 +525,25 @@ class PersistenceService:
                     # 解析失败的任务也保留
                     tasks_to_keep.append(task)
             
-            # Delete old task directories
-            deleted_count = 0
+            # Delete expired task directories
             for task in tasks_to_delete:
                 task_id = task.get("task_id")
                 if task_id:
-                    import shutil
                     task_dir = self.get_task_dir(task_id)
                     if task_dir.exists():
                         shutil.rmtree(task_dir)
                         deleted_count += 1
-                        logger.info(f"Deleted old task: {task_id}")
+                        logger.info(f"Deleted expired task: {task_id}")
             
             # Update index
             if tasks_to_delete:
                 index["tasks"] = tasks_to_keep
                 self._save_index(index)
-                logger.info(f"Cleanup complete: deleted {deleted_count} tasks older than {retention_days} days")
+            
+            if deleted_count > 0:
+                logger.info(f"Cleanup complete: deleted {deleted_count} folders")
+            else:
+                logger.debug("Cleanup: no folders to delete")
             
         except Exception as e:
             logger.error(f"Failed to cleanup old tasks: {e}")

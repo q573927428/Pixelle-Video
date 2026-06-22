@@ -329,6 +329,13 @@ async def cancel_task(
                 }
             raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
         
+        # Clean up incomplete task directories (no metadata.json)
+        try:
+            from pixelle_video.services.persistence import PersistenceService
+            PersistenceService()._cleanup_incomplete_dirs()
+        except Exception as e:
+            logger.warning(f"Failed to clean up incomplete dirs: {e}")
+        
         return {
             "success": True,
             "message": f"Task {task_id} cancelled successfully"
