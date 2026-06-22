@@ -105,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { DigitalForm } from '../types'
 import { request, filePreviewUrl, getUserUploads, cancelTask } from '../api'
@@ -254,25 +254,38 @@ function hexToRgba(hex: string, alpha: number): string {
 
 // 预加载背景图片（使用任务图片或默认图片）
 let bgImage: HTMLImageElement | null = null
+/** 记录已加载失败的URL，避免重复加载 */
+let failedImageUrls: Set<string> = new Set()
 
 /** 根据 character_asset 或默认图片加载背景 */
 function loadBackgroundImage() {
   const assetPath = digitalForm.value.character_asset
   const imgUrl = assetPath ? filePreviewUrl(assetPath) : '/videos/0000010.jpg'
-  // URL 没变且图片已加载，不再重复加载
-  if (bgImage && bgImage.dataset.src === imgUrl) return
+  // URL 没变且图片已加载，说明只是 canvas DOM 被重建（开关切换），直接在新 canvas 上重绘
+  if (bgImage && bgImage.dataset.src === imgUrl) {
+    renderSubtitlePreview()
+    return
+  }
+  // 如果该 URL 之前已加载失败，不再重试
+  if (failedImageUrls.has(imgUrl)) return
   bgImage = null // 清除旧图片，避免闪烁显示旧图
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.dataset.src = imgUrl
   img.onload = () => {
     bgImage = img
+    // 从失败集合中移除（之前失败现在成功了）
+    failedImageUrls.delete(imgUrl)
     updateCanvasSizeFromImage()
-    renderSubtitlePreview()
+    // 使用 nextTick 确保 Vue 已更新 canvas 的 width/height 属性后再渲染，
+    // 避免 canvas 属性变更导致画布被清空后无人重新渲染
+    nextTick(() => renderSubtitlePreview())
   }
   img.onerror = () => {
+    // 记录失败 URL 到集合中，避免后续重复加载
+    failedImageUrls.add(imgUrl)
+    console.warn('[SubtitlePreview] 背景图片加载失败:', imgUrl)
     bgImage = null
-    renderSubtitlePreview()
   }
   img.src = imgUrl
 }
@@ -434,16 +447,19 @@ watch(
   }
 )
 
-// 监听字幕开关：开启时渲染 Canvas（flush:post 确保 DOM 已创建）
-watch(
-  () => digitalForm.value.subtitle_enabled,
-  (enabled) => {
-    if (enabled) {
-      nextTick(() => renderSubtitlePreview())
-    }
-  },
-  { immediate: true, flush: 'post' }
-)
+  // 监听字幕开关变化
+  watch(
+    () => digitalForm.value.subtitle_enabled,
+    (enabled) => {
+      if (enabled) {
+        // 确保 canvas DOM 已存在后，加载背景并渲染
+        nextTick(() => {
+          loadBackgroundImage()
+        })
+      }
+    },
+    { immediate: true, flush: 'post' }
+  )
 
 // 取消生成任务后重新渲染字幕预览 Canvas
 watch(
