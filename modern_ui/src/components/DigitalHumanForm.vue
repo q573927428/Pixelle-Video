@@ -9,8 +9,9 @@
         <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
           <span>🧑 人物形象上传</span>
           <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:13px;font-weight:400;">批量</span>
-            <el-switch v-model="form.batch_mode" />
+            <span style="font-size:13px;font-weight:400;">批量模式</span>
+            <el-switch v-model="form.batch_mode" @change="onBatchModeChange" />
+            <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value">👑 VIP</span>
           </div>
         </div>
         <div class="form-section-body">
@@ -203,7 +204,18 @@
               />
             </el-form-item>
             <div v-if="batchTopicsCount > 0" class="soft-panel">
-              <el-tag type="success">共 {{ batchTopicsCount }} 个主题</el-tag>
+              <el-tag :type="batchExceedLimit ? 'danger' : 'success'">
+                共 {{ batchTopicsCount }} 个主题
+                <template v-if="batchExceedLimit">（最多 10 个）</template>
+              </el-tag>
+              <el-alert
+                v-if="batchExceedLimit"
+                title="批量模式最多支持 10 个主题，请减少数量"
+                type="error"
+                :closable="false"
+                show-icon
+                style="margin-top:8px;"
+              />
               <div class="small muted" style="margin-top:6px;">
                 商品标题使用主题名称，文案由 AI 自动生成。
                 可上传多张商品图片，按顺序与主题一一对应；少于主题数时最后一张循环使用。
@@ -245,7 +257,18 @@
               />
             </el-form-item>
             <div v-if="batchTopicsCount > 0" class="soft-panel">
-              <el-tag type="success">共 {{ batchTopicsCount }} 段文案</el-tag>
+              <el-tag :type="batchExceedLimit ? 'danger' : 'success'">
+                共 {{ batchTopicsCount }} 段文案
+                <template v-if="batchExceedLimit">（最多 10 段）</template>
+              </el-tag>
+              <el-alert
+                v-if="batchExceedLimit"
+                title="批量模式最多支持 10 段文案，请减少数量"
+                type="error"
+                :closable="false"
+                show-icon
+                style="margin-top:8px;"
+              />
               <div class="small muted" style="margin-top:6px;">每段文案对应一个口播视频</div>
               <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
                 <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
@@ -438,13 +461,14 @@
         </div>
       </div>
       <!-- ====== 字幕配置 ====== -->
-      <div v-if="showSubtitleConfig" class="form-section-wrapper">
+      <div class="form-section-wrapper">
         <div class="form-section">
           <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
             <span>📝 字幕配置</span>
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="font-size:13px;font-weight:400;">开启字幕</span>
-              <el-switch v-model="form.subtitle_enabled" />
+              <el-switch v-model="form.subtitle_enabled" @change="onSubtitleEnabledChange" />
+              <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value">👑 VIP</span>
             </div>
           </div>
           <div class="form-section-body">
@@ -508,8 +532,8 @@ import { ElMessage } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
 
 const auth = getAuth()
-const showSubtitleConfig = computed(() => auth.isVip.value || auth.isSvip.value || auth.isAdmin.value)
 const textMaxLength = computed(() => (auth.isVip.value || auth.isSvip.value || auth.isAdmin.value) ? 398 : 150)
+const BATCH_MAX_COUNT = 10
 
 const props = defineProps<{
   form: DigitalForm
@@ -526,6 +550,11 @@ const refAudioItems = computed<string[]>(() => {
 const batchTopicsCount = computed(() => {
   if (!props.form.batch_topics || !props.form.batch_topics.trim()) return 0
   return props.form.batch_topics.trim().split('\n').filter(line => line.trim()).length
+})
+
+// 批量模式：是否超过最大限制
+const batchExceedLimit = computed(() => {
+  return batchTopicsCount.value > BATCH_MAX_COUNT
 })
 
 // 批量模式：超出字数限制的行号（1-based，跳过空行）
@@ -566,7 +595,19 @@ const emit = defineEmits<{
 
 // 批量模式下不强制切换模式，两种模式都支持
 function onBatchModeChange(val: boolean) {
-  // 不需要额外操作，保持当前 mode 不变
+  if (!val) return
+  if (!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value) {
+    props.form.batch_mode = false
+    ElMessage.warning('批量模式为 VIP 会员专属功能，请升级会员后使用')
+  }
+}
+
+function onSubtitleEnabledChange(val: boolean) {
+  if (!val) return
+  if (!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value) {
+    props.form.subtitle_enabled = false
+    ElMessage.warning('字幕功能为 VIP 会员专属功能，请升级会员后使用')
+  }
 }
 
 const videoApiParamsActiveNames = ref<string[]>([])
@@ -885,6 +926,35 @@ async function handleMediaParse() {
 @media (max-width: 640px) {
   .media-dialog {
     --el-dialog-width: 90%;
+  }
+}
+
+/* VIP 标识：亮眼金色渐变 + 闪烁效果 */
+.vip-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 0 0 16px rgba(255, 165, 0, 0.3);
+  animation: vipPulse 2s ease-in-out infinite;
+  cursor: pointer;
+  user-select: none;
+}
+
+@keyframes vipPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 0 0 16px rgba(255, 165, 0, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.9), 0 0 24px rgba(255, 165, 0, 0.5);
+    transform: scale(1.05);
   }
 }
 </style>

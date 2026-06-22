@@ -695,6 +695,13 @@ async function generate() {
       const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
       if (!topics.length) { ElMessage.warning('请输入商品主题列表'); return }
       
+      // 批量模式最多支持 10 个
+      const BATCH_MAX_COUNT = 10
+      if (topics.length > BATCH_MAX_COUNT) {
+        ElMessage.error(`批量模式最多支持 ${BATCH_MAX_COUNT} 个主题/文案，当前 ${topics.length} 个，请减少数量`)
+        return
+      }
+
       try {
         const auth = getAuth()
         const usage = await auth.fetchUsage()
