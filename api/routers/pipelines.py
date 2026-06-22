@@ -270,7 +270,37 @@ async def _run_second_digital_workflow(
 
     second_workflow_config = json.loads(second_workflow_path.read_text(encoding="utf-8"))
     workflow_input = _workflow_input_from_config(second_workflow_path, second_workflow_config)
-    result = await pixelle_video.execute_with_concurrency(workflow_input, {"videoimage": generated_image, "audio": audio_path})
+    
+    # 🔍 调试日志
+    logger.info(
+        f"🎬 [运行数字人工作流] workflow={workflow_path_str}, "
+        f"workflow_input={workflow_input}, "
+        f"image_path={generated_image}, "
+        f"audio_path={audio_path}, "
+        f"audio_exists={Path(audio_path).exists()}"
+    )
+    
+    # 🔧 关键修复：同时传递多个可能的参数名，兼容不同的加载节点
+    workflow_params = {
+        # 图片参数 - 兼容多种节点类型
+        "videoimage": generated_image,
+        "image": generated_image,
+        "input_image": generated_image,
+        "imagefile": generated_image,
+        "image_file": generated_image,
+        
+        # 音频参数 - 兼容多种节点类型
+        "audio": audio_path,
+        "audiofile": audio_path,
+        "audio_file": audio_path,
+        "file": audio_path,
+        "input_file": audio_path,
+    }
+    
+    # 🔍 调试日志
+    logger.debug(f"🎬 工作流参数: {workflow_params}")
+    
+    result = await pixelle_video.execute_with_concurrency(workflow_input, workflow_params)
 
     # If the result contains an error status, propagate the original error
     if result.status == "error":
