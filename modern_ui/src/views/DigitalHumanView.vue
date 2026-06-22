@@ -683,6 +683,11 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
 
 
 async function generate() {
+  // 克隆声音模式必须上传参考音频
+  if (digitalForm.value.tts_inference_mode === 'comfyui' && !digitalForm.value.ref_audio) {
+    ElMessage.warning('克隆声音模式，请上传参考音频'); return
+  }
+
   if (digitalForm.value.batch_mode) {
     if (!digitalForm.value.character_asset && digitalForm.value.batch_character_assets.length === 0) {
       ElMessage.warning('请上传角色图片'); return
