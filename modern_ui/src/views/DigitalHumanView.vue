@@ -225,11 +225,24 @@ const subtitlePreviewUrl = ref('')
 
 // === 实时字幕预览 Canvas ===
 const previewCanvasRef = ref<HTMLCanvasElement | null>(null)
-// Canvas 尺寸与后端预览 API 保持一致（540x960），确保预览效果一致
-const _PW = 540
-const _PH = 960
-const canvasWidth = computed(() => _PW)
-const canvasHeight = computed(() => _PH)
+// Canvas 基础宽度（固定），高度根据上传图片比例动态计算
+const CANVAS_BASE_WIDTH = 540
+const canvasWidth = ref(CANVAS_BASE_WIDTH)
+const canvasHeight = ref(960) // 默认 9:16
+
+/** 根据 bgImage 更新 Canvas 尺寸，使宽高比与图片一致 */
+function updateCanvasSizeFromImage() {
+  if (bgImage && bgImage.naturalWidth > 0 && bgImage.naturalHeight > 0) {
+    const imgW = bgImage.naturalWidth
+    const imgH = bgImage.naturalHeight
+    canvasWidth.value = CANVAS_BASE_WIDTH
+    canvasHeight.value = Math.round(CANVAS_BASE_WIDTH * (imgH / imgW))
+  } else {
+    // 无图片时使用默认 9:16
+    canvasWidth.value = CANVAS_BASE_WIDTH
+    canvasHeight.value = Math.round(CANVAS_BASE_WIDTH * (16 / 9))
+  }
+}
 
 function hexToRgba(hex: string, alpha: number): string {
   const h = hex.replace('#', '')
@@ -254,6 +267,7 @@ function loadBackgroundImage() {
   img.dataset.src = imgUrl
   img.onload = () => {
     bgImage = img
+    updateCanvasSizeFromImage()
     renderSubtitlePreview()
   }
   img.onerror = () => {
@@ -261,6 +275,30 @@ function loadBackgroundImage() {
     renderSubtitlePreview()
   }
   img.src = imgUrl
+}
+
+/**
+ * 以 object-fit: contain 方式绘制背景图到 Canvas
+ * 保持图片原始宽高比，居中显示，不足部分填充黑色
+ */
+function drawBackgroundContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, canvasW: number, canvasH: number) {
+  const imgRatio = img.naturalWidth / img.naturalHeight
+  const canvasRatio = canvasW / canvasH
+  let drawW: number, drawH: number, drawX: number, drawY: number
+  if (imgRatio > canvasRatio) {
+    // 图片更宽 → 适配画布宽度，上下留黑边
+    drawW = canvasW
+    drawH = canvasW / imgRatio
+    drawX = 0
+    drawY = (canvasH - drawH) / 2
+  } else {
+    // 图片更高 → 适配画布高度，左右留黑边
+    drawH = canvasH
+    drawW = canvasH * imgRatio
+    drawX = (canvasW - drawW) / 2
+    drawY = 0
+  }
+  ctx.drawImage(img, drawX, drawY, drawW, drawH)
 }
 
 function renderSubtitlePreview() {
@@ -279,19 +317,19 @@ function renderSubtitlePreview() {
   }
   const text = rawText
 
-  const scaleX = _PW / 1080
-  const scaleY = _PH / 1920
-  const scale = Math.min(scaleX, scaleY)
+  const cw = canvasWidth.value
+  const ch = canvasHeight.value
+  const scale = Math.min(cw / 1080, ch / 1920)
 
-  ctx.clearRect(0, 0, _PW, _PH)
+  ctx.clearRect(0, 0, cw, ch)
 
-  // 绘制视频帧作为背景（如果有）
+  // 绘制视频帧作为背景（如果有），保持原始宽高比（object-fit: contain）
   if (bgImage) {
-    ctx.drawImage(bgImage, 0, 0, _PW, _PH)
+    drawBackgroundContain(ctx, bgImage, cw, ch)
   } else {
     // 没有加载成功时使用深色背景
     ctx.fillStyle = '#1a1a2e'
-    ctx.fillRect(0, 0, _PW, _PH)
+    ctx.fillRect(0, 0, cw, ch)
     // 异步加载背景图片
     loadBackgroundImage()
   }
@@ -338,8 +376,8 @@ function renderSubtitlePreview() {
   const bgHeight = lines.length * lineHeight + padT + padB
 
   // 位置：底部向上 100px（1080p 尺寸），按比例缩放
-  const baseX = _PW / 2 + offsetX
-  const baseY = _PH - Math.round(100 * scale) + offsetY
+  const baseX = cw / 2 + offsetX
+  const baseY = ch - Math.round(100 * scale) + offsetY
   const bgX = baseX - bgWidth / 2
   const bgY = baseY - bgHeight
 
@@ -453,13 +491,30 @@ async function handleSubtitlePreview() {
   subtitlePreviewLoading.value = true
   subtitlePreviewUrl.value = ''
   try {
+    // 根据上传的图片实际宽高比，自适应 video_width/video_height
+    let videoWidth = 1080
+    let videoHeight = 1920
+    if (bgImage && bgImage.naturalWidth > 0 && bgImage.naturalHeight > 0) {
+      const imgW = bgImage.naturalWidth
+      const imgH = bgImage.naturalHeight
+      // 保持短边至少 1080px，长边按比例等比放大
+      if (imgW >= imgH) {
+        // 横图或方图：以高度为基准 1920px
+        videoHeight = 1920
+        videoWidth = Math.round(1920 * (imgW / imgH))
+      } else {
+        // 竖图：以宽度为基准 1080px
+        videoWidth = 1080
+        videoHeight = Math.round(1080 * (imgH / imgW))
+      }
+    }
     // 粗略估算音频时长：中文约 4 字/秒，取平均值
     const estimatedDuration = Math.max(text.length / 4, 3)
     const payload = {
       text,
       audio_duration: estimatedDuration,
-      video_width: 1080,
-      video_height: 1920,
+      video_width: videoWidth,
+      video_height: videoHeight,
        subtitle_config: {
          enabled: true,
          font_size: digitalForm.value.subtitle_config.font_size,

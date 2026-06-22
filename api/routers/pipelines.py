@@ -857,19 +857,27 @@ async def subtitle_preview(
         # 限制预览时长 5 秒
         preview_duration = min(request_body.audio_duration, 5.0)
 
-        # 缩放为 540x960（半分辨率），前 5 秒（大幅加速预览生成）
+        # 根据前端传入的 video_width/video_height 等比缩放到预览尺寸（短边至少 540px）
+        vw = request_body.video_width or 1080
+        vh = request_body.video_height or 1920
+        if vw >= vh:
+            # 横图或方图：以高度为基准 540px
+            preview_video_height = 540
+            preview_video_width = max(540, round(540 * (vw / vh)))
+        else:
+            # 竖图：以宽度为基准 540px
+            preview_video_width = 540
+            preview_video_height = max(540, round(540 * (vh / vw)))
+
+        # 缩放视频（适配宽高比，保持比例，黑边填充）
         preview_video_short = os.path.join(task_dir, "preview_demo_short.mp4")
         subprocess.run(
             ["ffmpeg", "-y", "-i", str(preview_video_path), "-t", "5",
-             "-vf", "scale=540:960:flags=bilinear",
+             "-vf", f"scale={preview_video_width}:{preview_video_height}:flags=bilinear",
              "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
              "-c:a", "aac", "-ar", "22050", "-ac", "1", preview_video_short],
             capture_output=True, text=True, check=True,
         )
-
-        # 生成字幕也使用 540x960 分辨率
-        preview_video_width = 540
-        preview_video_height = 960
 
         # 生成 SRT 字幕文件
         subtitle_service = SubtitleService()

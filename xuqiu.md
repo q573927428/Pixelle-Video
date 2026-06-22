@@ -55,30 +55,5 @@ pnpm approve-builds esbuild
 
 ## 待完成
 
+生成好的视频，添加可以分发到其他短视频平台的功能。
 
-这个商业化有个很重要的问题，runninghub  同时最多只能2个任务，多了需要开更高级的会员。专业版 Plus  169元每月  可以5个任务。
-
-
-生成的视频是否可以自动加字幕。生成好的视频，添加可以分发到其他短视频平台的功能。
-
-
-
-
-modern_ui\src\views\DigitalHumanView.vue
-api\routers\pipelines.py
-modern_ui\src\components\DigitalHumanForm.vue
-pixelle_video\services\video.py
-modern_ui\src\pipelines\digital_human.ts
-pixelle_video\services\subtitle.py
-modern_ui\src\types.ts
-
-
-            <canvas
-                ref="previewCanvasRef"
-                :width="canvasWidth"
-                :height="canvasHeight"
-                style="width:100%;height:auto;max-height:auto;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#000;"
-              />
-
-modern_ui\src\views\DigitalHumanView.vue
-不要使用loadVideoFrame这个方法，根据上传的任务图片作为预览，如果未上传图片则使用modern_ui\public\videos\0000010.jpg作为默认图片
