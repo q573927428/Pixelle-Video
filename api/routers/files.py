@@ -210,7 +210,7 @@ async def upload_file(
         allowed_suffixes = {
             ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif",
             ".mp4", ".mov", ".avi", ".mkv", ".webm",
-            ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg",
+            ".mp3", ".wav", ".flac", ".m4a", ".aac", ".ogg", ".amr",
         }
         if suffix not in allowed_suffixes:
             raise HTTPException(status_code=400, detail=f"不支持的文件类型: {suffix}")
@@ -246,54 +246,75 @@ async def upload_file(
         upload_dir = Path("temp") / "uploads" / str(user.id) / safe_category
         upload_dir.mkdir(parents=True, exist_ok=True)
 
-        # HEIC/HEIF images are not supported by browsers, convert to JPEG using ffmpeg
-        heic_suffixes = {".heic", ".heif"}
-        if suffix in heic_suffixes:
+        # ======== 格式自动转换（兼容 RunningHub 工作流）========
+        # RunningHub 工作流仅支持: 图片 JPG/PNG, 音频 MP3
+        # 非目标格式的文件用 ffmpeg 自动转换后存储
+
+        # 需要转换的图片格式 -> 目标格式 .jpg
+        convert_image_suffixes = {".heic", ".heif", ".gif", ".webp", ".bmp", ".tiff", ".tif"}
+        # 需要转换的音频格式 -> 目标格式 .mp3
+        convert_audio_suffixes = {".wav", ".flac", ".m4a", ".aac", ".ogg", ".amr", ".opus", ".wma"}
+
+        new_suffix = suffix  # 默认保持原后缀
+        need_convert = False
+
+        if suffix in convert_image_suffixes:
+            new_suffix = ".jpg"
+            need_convert = True
+        elif suffix in convert_audio_suffixes:
+            new_suffix = ".mp3"
+            need_convert = True
+
+        safe_stem = "".join(
+            ch if ch.isalnum() or ch in ("-", "_") else "_"
+            for ch in Path(original_name).stem
+        ).strip("_") or "upload"
+        stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{new_suffix}"
+        stored_path = upload_dir / stored_name
+
+        if need_convert:
             try:
-                new_suffix = ".jpg"
-                safe_stem = "".join(
-                    ch if ch.isalnum() or ch in ("-", "_") else "_"
-                    for ch in Path(original_name).stem
-                ).strip("_") or "upload"
-                stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{new_suffix}"
-                stored_path = upload_dir / stored_name
-                # Write HEIC content to temp file, then convert with ffmpeg
+                # 写入临时文件
                 with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                     tmp.write(content)
                     tmp_path = tmp.name
                 try:
-                    subprocess.run(
-                        ["ffmpeg", "-y", "-i", tmp_path, "-q:v", "3", str(stored_path)],
-                        capture_output=True, timeout=30, check=True
-                    )
-                    # Update content for size recalculation
+                    if new_suffix == ".jpg":
+                        # 图片转 JPG
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-i", tmp_path, "-q:v", "3", str(stored_path)],
+                            capture_output=True, timeout=30, check=True
+                        )
+                    else:
+                        # 音频转 MP3
+                        subprocess.run(
+                            ["ffmpeg", "-y", "-i", tmp_path, "-q:a", "2", str(stored_path)],
+                            capture_output=True, timeout=120, check=True
+                        )
+                    # 更新文件大小
                     content = stored_path.read_bytes()
                     file_size = len(content)
-                    logger.info(f"Converted {original_name} to JPEG: {stored_name}")
+                    logger.info(f"Converted {original_name} -> {stored_name}")
+                except subprocess.CalledProcessError as convert_err:
+                    logger.error(f"FFmpeg conversion failed for {original_name}: {convert_err.stderr.decode()}")
+                    # 转换失败：降级为原始格式存储
+                    stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
+                    stored_path = upload_dir / stored_name
+                    stored_path.write_bytes(content)
+                    logger.warning(f"Saved {original_name} as-is (fallback): {stored_name}")
                 finally:
                     Path(tmp_path).unlink(missing_ok=True)
-            except subprocess.CalledProcessError as convert_err:
-                logger.error(f"HEIC/HEIF ffmpeg conversion failed for {original_name}: {convert_err.stderr.decode()}")
-                # Fallback: save as-is with .jpg extension (may not display but at least stored)
-                safe_stem = "".join(
-                    ch if ch.isalnum() or ch in ("-", "_") else "_"
-                    for ch in Path(original_name).stem
-                ).strip("_") or "upload"
-                stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}.heic"
+            except Exception as convert_err:
+                logger.error(f"Conversion failed for {original_name}: {convert_err}")
+                # 降级：直接保存原始文件
+                stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
                 stored_path = upload_dir / stored_name
                 stored_path.write_bytes(content)
-                logger.warning(f"Saved HEIC as-is (fallback): {stored_name}")
-            except Exception as convert_err:
-                logger.error(f"HEIC/HEIF conversion failed for {original_name}: {convert_err}")
-                raise HTTPException(status_code=400, detail=f"HEIC/HEIF 图片转换失败: {convert_err}")
+                logger.warning(f"Saved {original_name} as-is (error fallback): {stored_name}")
         else:
-            safe_stem = "".join(
-                ch if ch.isalnum() or ch in ("-", "_") else "_"
-                for ch in Path(original_name).stem
-            ).strip("_") or "upload"
-            stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{suffix}"
-            stored_path = upload_dir / stored_name
+            # 已是目标格式，直接保存
             stored_path.write_bytes(content)
+            logger.info(f"Saved {stored_name} ({_format_bytes(file_size)})")
 
         relative_path = stored_path.as_posix()
 
@@ -396,6 +417,7 @@ async def get_file(file_path: str):
             '.mp4': 'video/mp4',
             '.mp3': 'audio/mpeg',
             '.wav': 'audio/wav',
+            '.amr': 'audio/amr',
             '.png': 'image/png',
             '.jpg': 'image/jpeg',
             '.jpeg': 'image/jpeg',
