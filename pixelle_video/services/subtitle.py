@@ -91,12 +91,42 @@ class SubtitleService:
 
     # 默认字体路径（按优先级搜索）
     DEFAULT_FONT_PATHS = [
+        # ===== 最高优先级：思源黑体 / 思源宋体 (安装脚本 install_chinese_fonts.sh 安装到 /usr/share/fonts/chinese/) =====
+        "/usr/share/fonts/chinese/NotoSansSC-Regular.otf",
+        "/usr/share/fonts/chinese/NotoSansSC-Bold.otf",
+        "/usr/share/fonts/chinese/NotoSerifSC-Regular.otf",
+        "/usr/share/fonts/chinese/NotoSerifSC-Bold.otf",
+        # Ubuntu / Debian (apt install fonts-noto-cjk)
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf",
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc",
+        # CentOS / RHEL / Fedora (yum install google-noto-cjk-fonts)
+        "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/google-noto-cjk/NotoSerifCJK-Regular.ttc",
+        # Alpine Linux (apk add font-noto-cjk)
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc",
+        # Windows
         "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         "C:/Windows/Fonts/simhei.ttf",  # 黑体
+        "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑粗体
+        # macOS
         "/System/Library/Fonts/PingFang.ttc",
         "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/STSongti.ttc",
+        # Ubuntu / Debian 系统包 (apt install fonts-wqy-microhei)
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
+        # CentOS / RHEL / Fedora 系统包 (yum install wqy-microhei-fonts)
+        "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
+        "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
+        # 其他阿里/霞鹜字体安装位置
+        "/usr/share/fonts/chinese/AlibabaPuHuiTi-3-55-Regular.otf",
+        "/usr/share/fonts/chinese/LXGWWenKai-Regular.ttf",
+        "/usr/share/fonts/chinese/LXGWWenKai-Bold.ttf",
+        # 通用后备
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
 
     def __init__(self, font_path: Optional[str] = None):
@@ -109,21 +139,62 @@ class SubtitleService:
 
     def _find_font(self) -> str:
         """查找系统可用的中文字体"""
+        # 1. 按优先级检查默认路径
         for path in self.DEFAULT_FONT_PATHS:
             if os.path.exists(path):
+                logger.info(f"Using Chinese font: {path}")
                 return path
-        # 如果找不到，尝试动态搜索
+
+        # 2. 扩展递归搜索常见字体目录
+        search_dirs = [
+            "C:/Windows/Fonts",
+            "/System/Library/Fonts",
+            "/usr/share/fonts",
+            "/usr/local/share/fonts",
+            "/usr/X11R6/lib/X11/fonts",
+            "~/.fonts",
+            "~/.local/share/fonts",
+        ]
         candidates = []
-        for root_dir in ["C:/Windows/Fonts", "/System/Library/Fonts", "/usr/share/fonts"]:
-            if os.path.isdir(root_dir):
-                for f in os.listdir(root_dir):
+        for root_dir in search_dirs:
+            expanded = os.path.expanduser(root_dir)
+            if not os.path.isdir(expanded):
+                continue
+            for root, _dirs, files in os.walk(expanded):
+                for f in files:
                     if f.lower().endswith((".ttf", ".ttc", ".otf")):
-                        candidates.append(os.path.join(root_dir, f))
+                        candidates.append(os.path.join(root, f))
+
+        # 3. 优先选择包含中文关键词的字体
+        cjk_keywords = ["chinese", "cjk", "sc", "cn", "zh", "wqy", "noto", "han", "songti", "heiti", "ming", "fang", "kai", "yahei", "simhei", "simsun", "msyh", "deng"]
+        cjk_candidates = [c for c in candidates if any(kw in c.lower() for kw in cjk_keywords)]
+        if cjk_candidates:
+            logger.info(f"Using CJK font (auto-detected): {cjk_candidates[0]}")
+            return cjk_candidates[0]
         if candidates:
-            logger.warning(f"No default font found, using first available: {candidates[0]}")
+            logger.warning(f"No Chinese font found, using first available: {candidates[0]}")
             return candidates[0]
+
+        # 4. 使用 fc-match / fc-list 作为最后手段
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["fc-match", "-f", "%{file}", "sans-serif"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                font_path = result.stdout.strip()
+                if os.path.exists(font_path):
+                    logger.info(f"Using system font via fc-match: {font_path}")
+                    return font_path
+        except Exception:
+            pass
+
         raise FileNotFoundError(
-            "No Chinese font found. Please install a Chinese font or specify font_path."
+            "No Chinese font found. Please install a Chinese font or specify font_path. "
+            "On CentOS/RHEL: yum install wqy-microhei-fonts\n"
+            "On Ubuntu/Debian: apt install fonts-wqy-microhei\n"
+            "On Alpine: apk add font-noto-cjk"
         )
 
     def _hex_to_rgba(self, hex_color: str, opacity: float) -> tuple[int, int, int, int]:
