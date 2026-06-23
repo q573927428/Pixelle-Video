@@ -685,8 +685,10 @@ class PersistenceService:
             tasks = [t for t in tasks if t.get("status") == status]
         
         # Filter by user_id (only if specified)
+        # Normalize types for comparison: user_id from index may be int or str
+        # Tasks without user_id (legacy tasks) are only visible to admin (user_id=None)
         if user_id is not None:
-            tasks = [t for t in tasks if t.get("user_id") == user_id]
+            tasks = [t for t in tasks if t.get("user_id") is not None and str(t.get("user_id")) == str(user_id)]
         
         # Sort
         reverse = (sort_order == "desc")

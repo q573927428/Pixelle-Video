@@ -46,6 +46,8 @@ class Task(BaseModel):
     
     # User ownership (for user isolation)
     user_id: Optional[str] = None
+    username: Optional[str] = None
+    phone: Optional[str] = None
     
     # Progress tracking
     progress: Optional[TaskProgress] = None

@@ -16,6 +16,7 @@ from api.tasks import task_manager, Task, TaskStatus
 from api.dependencies import PixelleVideoDep
 from api.auth.dependencies import get_current_user
 from api.auth.schemas import UserInfo
+from api.auth.database import Database
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -54,6 +55,30 @@ async def list_tasks(
         if is_admin:
             user_id = None
         tasks = task_manager.list_tasks(status=status, limit=limit, user_id=user_id, is_admin=is_admin)
+        
+        # Populate username/phone for each task
+        user_ids = {t.user_id for t in tasks if t.user_id}
+        user_map = {}
+        if user_ids:
+            try:
+                # Convert all user_ids to int for SQL query
+                int_ids = [int(uid) for uid in user_ids if uid.isdigit()]
+                if int_ids:
+                    placeholders = ",".join(["%s"] * len(int_ids))
+                    rows = await Database.fetchall(
+                        f"SELECT id, username, phone FROM users WHERE id IN ({placeholders})",
+                        int_ids,
+                    )
+                    for row in rows:
+                        uid = str(row["id"])
+                        user_map[uid] = row
+            except Exception as e:
+                logger.warning(f"Failed to populate user info for tasks: {e}")
+        for t in tasks:
+            if t.user_id and t.user_id in user_map:
+                t.username = user_map[t.user_id]["username"]
+                t.phone = user_map[t.user_id]["phone"]
+        
         return tasks
         
     except Exception as e:
@@ -113,30 +138,42 @@ async def delete_task_history(
     Only the owner of the task can delete it.
     """
     try:
-        if not pixelle_video.history:
-            raise HTTPException(status_code=503, detail="History service not available")
-
         if current_user is None:
             raise HTTPException(status_code=401, detail="请先登录")
 
-        # Get task detail to verify ownership
-        detail = await pixelle_video.history.get_task_detail(task_id)
-        if not detail:
-            raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+        # Step 1: Try to delete from PersistenceService (filesystem + .index.json)
+        found_in_history = False
+        if pixelle_video.history:
+            detail = await pixelle_video.history.get_task_detail(task_id)
+            if detail:
+                found_in_history = True
+                # Check ownership: only task owner or admin can delete
+                task_metadata = detail.get("metadata", {})
+                task_user_id = task_metadata.get("user_id")
+                is_owner = task_user_id is None or (task_user_id == current_user.id)
+                if not is_owner and current_user.role != "admin":
+                    raise HTTPException(
+                        status_code=403,
+                        detail="您没有权限删除此任务",
+                    )
+                await pixelle_video.history.delete_task(task_id)
 
-        # Check ownership: only task owner or admin can delete
-        task_metadata = detail.get("metadata", {})
-        task_user_id = task_metadata.get("user_id")
-        is_owner = task_user_id is None or (task_user_id == current_user.id)
-        if not is_owner and current_user.role != "admin":
-            raise HTTPException(
-                status_code=403,
-                detail="您没有权限删除此任务",
-            )
+        # Step 2: Always remove from TaskManager (memory + .tasks_index.json)
+        from api.tasks import task_manager
+        task = task_manager.get_task(task_id)
+        if task:
+            # Check ownership for in-memory tasks
+            task_user_id = task.user_id
+            is_owner = task_user_id is None or str(task_user_id) == str(current_user.id)
+            if not is_owner and current_user.role != "admin":
+                raise HTTPException(
+                    status_code=403,
+                    detail="您没有权限删除此任务",
+                )
+            task_manager.remove_task(task_id)
 
-        success = await pixelle_video.history.delete_task(task_id)
-        if not success:
-            raise HTTPException(status_code=404, detail=f"Task {task_id} not found in history")
+        if not found_in_history and not task:
+            raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
         return {
             "success": True,

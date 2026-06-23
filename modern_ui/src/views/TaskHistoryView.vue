@@ -66,6 +66,16 @@
               </el-tag>
               <span class="small muted">{{ formatTime(task.created_at) }}</span>
               <span style="flex:1" />
+              <el-tooltip content="下载视频" placement="top" :show-after="300">
+                <el-button
+                  text
+                  size="small"
+                  class="download-btn"
+                  @click.stop="handleDownload(task)"
+                >
+                  <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></el-icon>
+                </el-button>
+              </el-tooltip>
               <el-tooltip content="删除此记录" placement="top" :show-after="300">
                 <el-button
                   text
@@ -276,6 +286,20 @@ function stopHover(e: Event) {
   if (video) { video.pause(); video.currentTime = 0 }
 }
 
+async function handleDownload(task: any) {
+  if (!task.video_path) {
+    ElMessage.warning('该任务无可下载的视频')
+    return
+  }
+  const url = previewUrl(task.video_path)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = task.title || `task_${task.task_id}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 async function handleDelete(task: any) {
   if (!task.task_id) return
   try {
@@ -447,11 +471,13 @@ async function handleDelete(task: any) {
   justify-content: flex-end;
   margin-top: 4px;
 }
-.delete-btn {
+.delete-btn,
+.download-btn {
   opacity: 0.5;
   transition: opacity 0.15s;
 }
-.history-item:hover .delete-btn {
+.history-item:hover .delete-btn,
+.history-item:hover .download-btn {
   opacity: 1;
 }
 
@@ -479,7 +505,8 @@ async function handleDelete(task: any) {
   .stats-value {
     font-size: 20px;
   }
-  .delete-btn {
+  .delete-btn,
+  .download-btn {
     opacity: 1;
     min-width: 36px;
     min-height: 36px;

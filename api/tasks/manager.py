@@ -540,6 +540,17 @@ class TaskManager:
         logger.info(f"Cancelled task {task_id}")
         return True
     
+    def remove_task(self, task_id: str):
+        """
+        Remove a task completely from TaskManager (memory + .tasks_index.json).
+        Unlike cancel_task, this works for any status including terminal ones.
+        """
+        self._tasks.pop(task_id, None)
+        self._task_futures.pop(task_id, None)
+        self._confirmation_events.pop(task_id, None)
+        self._save_tasks_index()
+        logger.info(f"Removed task {task_id} from manager")
+
     # ========================================================================
     # Index Persistence (similar to output/.index.json)
     # ========================================================================

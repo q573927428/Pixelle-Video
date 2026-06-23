@@ -22,6 +22,7 @@
           <div class="task-card-header">
             <span class="task-card-id mono">{{ shortId(task.task_id) }}</span>
             <div class="task-card-header-actions">
+              <span v-if="taskElapsedTimes[task.task_id]" style="font-weight:500;font-size:12px;margin-right:8px;white-space:nowrap;" :style="{ color: task.status === 'running' ? 'var(--el-color-warning)' : 'var(--el-color-success)' }">⏱ {{ taskElapsedTimes[task.task_id] }}</span>
               <el-tag :type="tagType(task.status)" effect="dark" size="small">{{ statusLabel(task.status) }}</el-tag>
               <el-button
                 v-if="canCancel(task.status)"
@@ -31,6 +32,16 @@
                 :loading="cancellingId === task.task_id"
                 @click="handleCancelTask(task.task_id)"
               >取消</el-button>
+              <el-button
+                v-if="!canCancel(task.status)"
+                size="small"
+                type="danger"
+                text
+                :loading="deletingId === task.task_id"
+                @click="handleDeleteTask(task.task_id)"
+              >
+              <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></el-icon>
+              </el-button>
             </div>
           </div>
 
@@ -51,6 +62,10 @@
 
             <!-- 右侧：信息 -->
             <div class="task-card-info">
+              <div class="info-row">
+                <span class="info-label">用户</span>
+                <span class="info-value">{{ getUserDisplay(task) }}</span>
+              </div>
               <div class="info-row">
                 <span class="info-label">类型</span>
                 <span class="info-value">{{ taskTypeLabel(task.task_type) }}</span>
@@ -104,15 +119,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
-import { loadTasks as apiLoadTasks, cancelTask as apiCancelTask, filePreviewUrl } from '../api'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { loadTasks as apiLoadTasks, cancelTask as apiCancelTask, deleteTaskHistory, filePreviewUrl } from '../api'
 import { useResources } from '../composables/useResources'
 import { getAuth } from '../composables/useAuth'
 
 
 const loadingTasks = ref(false)
 const cancellingId = ref('')
+const deletingId = ref('')
 const filterStatus = ref('')
 const { tasks } = useResources()
 const { isAdmin } = getAuth()
@@ -130,15 +146,85 @@ const pagedTasks = computed(() => {
   return filteredTasks.value.slice(start, start + pageSize.value)
 })
 
+const taskElapsedTimes = ref<Record<string, string>>({})
+let elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+function formatElapsed(seconds: number): string {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = seconds % 60
+  if (h > 0) return `${h}时${m}分${s}秒`
+  if (m > 0) return `${m}分${s}秒`
+  return `${s}秒`
+}
+
+function getTaskElapsed(task: any): string {
+  if (!task.created_at) return ''
+  const created = new Date(task.created_at).getTime()
+  let end: number
+  if (['completed', 'failed', 'cancelled'].includes(task.status)) {
+    end = task.completed_at ? new Date(task.completed_at).getTime() : Date.now()
+  } else if (task.status === 'running') {
+    end = Date.now()
+  } else {
+    return ''
+  }
+  const elapsed = Math.floor((end - created) / 1000)
+  if (elapsed <= 0) return ''
+  return formatElapsed(elapsed)
+}
+
+function getStatusText(task: any): string {
+  const labels: Record<string, string> = {
+    pending: '待处理',
+    running: '进行中',
+    pending_confirmation: '待确认',
+    completed: '已完成',
+    failed: '失败',
+    cancelled: '已取消',
+  }
+  return labels[task.status] || task.status
+}
+
+function updateElapsedTimes() {
+  const times: Record<string, string> = {}
+  for (const task of tasks.value) {
+    const elapsed = getTaskElapsed(task)
+    if (elapsed) times[task.task_id] = elapsed
+  }
+  taskElapsedTimes.value = times
+}
+
+function startElapsedTimer() {
+  stopElapsedTimer()
+  updateElapsedTimes()
+  elapsedTimer = setInterval(updateElapsedTimes, 1000)
+}
+
+function stopElapsedTimer() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = null
+  }
+}
+
 onMounted(() => {
   loadTasks()
+  startElapsedTimer()
+})
+
+onUnmounted(() => {
+  stopElapsedTimer()
 })
 
 async function loadTasks() {
   loadingTasks.value = true
   try { tasks.value = await apiLoadTasks(100, filterStatus.value || undefined) }
   catch { tasks.value = [] }
-  finally { loadingTasks.value = false }
+  finally {
+    loadingTasks.value = false
+    updateElapsedTimes()
+  }
 }
 
 function onFilterChange() {
@@ -159,7 +245,7 @@ function tagType(status: string): string {
 }
 
 function shortId(id: string): string {
-  return id.length > 28 ? id.slice(0, 28) + '...' : id
+  return id.length > 20 ? id.slice(0, 20) + '...' : id
 }
 
 function statusLabel(status: string): string {
@@ -194,6 +280,34 @@ function formatTime(iso: string): string {
 
 function canCancel(status: string): boolean {
   return ['pending', 'running', 'pending_confirmation'].includes(status)
+}
+
+async function handleDeleteTask(taskId: string) {
+  try {
+    await ElMessageBox.confirm('确定删除该任务？删除后不可恢复。', '确认删除', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
+  deletingId.value = taskId
+  try {
+    await deleteTaskHistory(taskId)
+  } catch (e: any) {
+    // 404 means the task exists in memory but not persisted to filesystem yet.
+    // The request() API throws new Error(detail), so e.message contains "not found in history"
+    const msg = typeof e === 'string' ? e : (e?.message || '')
+    if (!msg.includes('not found in history') && !msg.includes('404')) {
+      ElMessage.error(`删除失败：${msg}`)
+      deletingId.value = ''
+      return
+    }
+  }
+  tasks.value = tasks.value.filter((t: any) => t.task_id !== taskId)
+  ElMessage.success('已删除任务')
+  deletingId.value = ''
 }
 
 async function handleCancelTask(taskId: string) {
@@ -248,5 +362,9 @@ function getText(task: any): string {
   const params = task.request_params
   if (!params) return ''
   return params.goods_text || params.goods_title || ''
+}
+
+function getUserDisplay(task: any): string {
+  return task.phone || task.username || '-'
 }
 </script>

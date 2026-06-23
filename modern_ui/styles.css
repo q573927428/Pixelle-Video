@@ -386,7 +386,7 @@
 
     .task-card-thumbs {
       display: flex;
-      flex-direction: column;
+      flex-direction: row;
       gap: 6px;
       flex-shrink: 0;
     }

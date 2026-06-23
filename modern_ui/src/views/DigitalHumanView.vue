@@ -116,7 +116,7 @@ import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, currentTaskId, submitted, cancelCurrentTask } = useTaskRunner()
-const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource } = useResources()
+const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
 
 const batchResults = ref<any[]>([])
 const batchSubmitted = ref(false)
@@ -203,9 +203,14 @@ function stopTimer() {
 }
 
 // 监听 running 状态：开始生成时启动计时器，结束生成时停止
-watch(running, (val) => {
+// 当任务结束（running 从 true → false）时，刷新共享任务列表供 TaskCenterView 同步更新
+watch(running, (val, oldVal) => {
   if (val) {
     startTimer()
+  } else if (oldVal) {
+    // running 从 true → false，说明任务已结束（完成/失败/取消），刷新任务列表
+    stopTimer()
+    refreshTaskList()
   } else {
     stopTimer()
   }
