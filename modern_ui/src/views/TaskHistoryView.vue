@@ -37,7 +37,6 @@
           <el-option label="失败" value="failed" />
         </el-select>
         <el-button @click="loadData" :loading="loading">刷新</el-button>
-        <span class="admin-hint" v-if="isAdmin">管理员视角：显示所有用户的历史记录</span>
       </div>
 
       <!-- 任务列表 -->
