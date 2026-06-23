@@ -106,6 +106,14 @@ const userVipExpiry = computed(() => {
 const usage = ref<{ remaining: number; is_unlimited: boolean } | null>(null)
 let usageTimer: ReturnType<typeof setInterval> | null = null
 
+async function refreshUserInfo() {
+  try {
+    await auth.fetchMe()
+  } catch {
+    // ignore
+  }
+}
+
 async function refreshUsage() {
   try {
     const u = await auth.fetchUsage()
@@ -124,6 +132,7 @@ async function refreshUsage() {
 }
 
 onMounted(() => {
+  refreshUserInfo()
   refreshUsage()
   usageTimer = setInterval(refreshUsage, 5000)
 })

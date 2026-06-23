@@ -97,9 +97,9 @@
               <el-checkbox v-model="form.voxcpm_normalize">归一化 Normalize</el-checkbox>
               <el-checkbox v-model="form.voxcpm_denoise">降噪 Denoise</el-checkbox>
             </div> -->
-            <el-form-item label="参考音频">
+              <el-form-item label="参考音频">
               <div class="upload-field-container">
-                <UploadBox category="ref_audio" accept="audio/*" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
+                <UploadBox category="ref_audio" accept="audio/*,.amr" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
                 <FilePreview v-if="form.ref_audio" :items="refAudioItems" @remove="form.ref_audio = ''" />
               </div>
             </el-form-item>
@@ -140,7 +140,7 @@
           </el-form-item> -->
           <el-form-item label="参考音频">
             <div class="upload-field-container">
-               <UploadBox category="ref_audio" accept="audio/*" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
+               <UploadBox category="ref_audio" accept="audio/*,.amr" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
               <FilePreview v-if="form.ref_audio" :items="refAudioItems" @remove="form.ref_audio = ''" />
             </div>
           </el-form-item>
@@ -313,7 +313,7 @@
           </div>
 
           <!-- 短视频导入弹窗 -->
-          <el-dialog v-model="mediaDialogVisible" title="从短视频导入口播文案" width="480px" :close-on-click-modal="false" class="media-dialog">
+          <el-dialog v-model="mediaDialogVisible" title="从短视频导入口播文案" :close-on-click-modal="false" class="media-dialog">
             <div style="margin-bottom:12px;font-size:13px;color:var(--el-text-color-secondary);">
               粘贴抖音/快手/小红书/B站等短视频分享信息，系统将自动提取视频中的口播文案。
             </div>
@@ -929,10 +929,14 @@ async function handleMediaParse() {
 </script>
 
 <style scoped>
-/* 短视频导入弹窗：PC 固定 480px，手机自适应 90% */
+/* 短视频导入弹窗：PC 固定 480px，手机自适应 92% */
 @media (max-width: 640px) {
-  .media-dialog {
-    --el-dialog-width: 90%;
+  :deep(.media-dialog) {
+    --el-dialog-width: 92%;
+  }
+  :deep(.media-dialog .el-dialog) {
+    width: 92% !important;
+    max-width: 92vw !important;
   }
 }
 
