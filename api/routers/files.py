@@ -18,13 +18,14 @@ Each user can only view/use their own uploaded files.
 """
 
 import uuid
+import os
 import subprocess
 import tempfile
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, Depends, Request
+from fastapi.responses import FileResponse, Response
 from loguru import logger
 
 from api.config import api_config
@@ -265,10 +266,9 @@ async def upload_file(
             new_suffix = ".mp3"
             need_convert = True
 
-        safe_stem = "".join(
-            ch if ch.isalnum() or ch in ("-", "_") else "_"
-            for ch in Path(original_name).stem
-        ).strip("_") or "upload"
+        # 安全文件名：仅保留 ASCII 字母数字，去掉中文等非 ASCII 字符（避免 URL 中文问题导致手机端播放失败）
+        import re
+        safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', Path(original_name).stem).strip('_') or "audio"
         stored_name = f"{safe_stem}_{uuid.uuid4().hex[:8]}{new_suffix}"
         stored_path = upload_dir / stored_name
 
@@ -345,9 +345,9 @@ async def upload_file(
 
 
 @router.get("/{file_path:path}")
-async def get_file(file_path: str):
+async def get_file(file_path: str, request: Request):
     """
-    Get file by path
+    Get file by path (supports HTTP Range Requests for mobile playback)
     
     Serves files from allowed directories:
     - output/ - Generated files (videos, images, audio)
@@ -429,12 +429,73 @@ async def get_file(file_path: str):
         }
         media_type = media_types.get(suffix, 'application/octet-stream')
         
-        # Use inline disposition for browser preview
-        return FileResponse(
-            path=str(abs_path),
+        file_size = abs_path.stat().st_size
+        
+        # 对 Content-Disposition 中的文件名做 URL 编码（兼容中文文件名，否则手机端无法播放）
+        import urllib.parse
+        encoded_filename = urllib.parse.quote(abs_path.name)
+        content_disposition = f'inline; filename="{abs_path.name}"; filename*=UTF-8\'\'{encoded_filename}'
+        
+        # Handle HTTP Range Requests (required by mobile Safari/Chrome for audio playback)
+        range_header = request.headers.get("range")
+        if range_header:
+            # Parse range header: "bytes=<start>-<end>"
+            try:
+                range_val = range_header.strip().replace("bytes=", "")
+                if "-" in range_val:
+                    parts = range_val.split("-")
+                    start = int(parts[0]) if parts[0] else 0
+                    end = int(parts[1]) if parts[1] else file_size - 1
+                else:
+                    start = int(range_val)
+                    end = file_size - 1
+                
+                # Clamp values
+                if start >= file_size:
+                    # unsatisfiable range
+                    return Response(
+                        status_code=416,
+                        headers={
+                            "Content-Range": f"bytes */{file_size}",
+                            "Accept-Ranges": "bytes",
+                        }
+                    )
+                end = min(end, file_size - 1)
+                content_length = end - start + 1
+                
+                # Read the partial content
+                with open(abs_path, "rb") as f:
+                    f.seek(start)
+                    chunk = f.read(content_length)
+                
+                return Response(
+                    content=chunk,
+                    status_code=206,
+                    media_type=media_type,
+                    headers={
+                        "Content-Range": f"bytes {start}-{end}/{file_size}",
+                        "Content-Length": str(content_length),
+                        "Accept-Ranges": "bytes",
+                        "Content-Disposition": content_disposition,
+                        "Cache-Control": "public, max-age=3600",
+                    }
+                )
+            except (ValueError, IndexError):
+                # Invalid range, serve full file
+                pass
+        
+        # Full file response (non-range request)
+        with open(abs_path, "rb") as f:
+            content = f.read()
+        
+        return Response(
+            content=content,
             media_type=media_type,
             headers={
-                "Content-Disposition": f'inline; filename="{abs_path.name}"'
+                "Content-Disposition": content_disposition,
+                "Accept-Ranges": "bytes",
+                "Content-Length": str(file_size),
+                "Cache-Control": "public, max-age=3600",
             }
         )
         

@@ -1,6 +1,6 @@
 <template>
   <!-- VIP Purchase Dialog -->
-  <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="420px" class="vip-dialog" append-to-body @closed="handleDialogClose">
+  <el-dialog v-model="vipDialogVisible" title="🌟 升级 VIP 会员" width="340px" class="vip-dialog" append-to-body @closed="handleDialogClose">
     <div class="vip-body">
       <!-- Plan Tabs: VIP / SVIP -->
       <div class="vip-plan-tabs">
@@ -26,7 +26,7 @@
           </div>
           <div class="vip-plan-name hot">SVIP 会员 🔥</div>
           <template v-if="auth.isVip.value && currentPlanType === 'svip' && upgradePriceForCurrentDialog !== null">
-            <div class="vip-plan-price svip" style="font-size:20px;">补差价 ¥{{ upgradePriceForCurrentDialog }}</div>
+            <div class="vip-plan-price svip" style="font-size:18px;">补差价 ¥{{ upgradePriceForCurrentDialog }}</div>
             <div class="vip-plan-unit" style="text-decoration:line-through; color:#666;">原价 ¥1588/年</div>
           </template>
           <template v-else>
@@ -117,7 +117,7 @@
   </el-dialog>
 
   <!-- Upgrade to SVIP Dialog -->
-  <el-dialog v-model="upgradeDialogVisible" title="🚀 升级到 SVIP 会员" width="420px" class="vip-dialog" append-to-body @closed="handleUpgradeDialogClose">
+  <el-dialog v-model="upgradeDialogVisible" title="🚀 升级到 SVIP 会员" width="340px" class="vip-dialog" append-to-body @closed="handleUpgradeDialogClose">
     <div class="vip-body">
       <!-- 报价信息 -->
       <div v-if="upgradeQuote" class="upgrade-quote-section">
@@ -464,19 +464,24 @@ defineExpose({
 
 <style scoped>
 /* VIP Dialog Styles */
+:deep(.vip-dialog) {
+  overflow: hidden;
+}
 :deep(.vip-dialog .el-dialog__body) {
   padding: 0;
 }
 
 .vip-body {
-  padding: 20px 24px;
+  padding: 16px 12px;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* Plan Tabs */
 .vip-plan-tabs {
   display: flex;
-  gap: 10px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .vip-plan-tab {
@@ -484,8 +489,8 @@ defineExpose({
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 14px 12px;
-  border-radius: 10px;
+  padding: 10px 6px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   cursor: pointer;
@@ -504,17 +509,17 @@ defineExpose({
 
 .vip-plan-check {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  font-size: 18px;
+  top: 6px;
+  right: 6px;
+  font-size: 16px;
   color: #22c55e;
 }
 
 .vip-plan-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #ddd;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .vip-plan-name.hot {
@@ -522,7 +527,7 @@ defineExpose({
 }
 
 .vip-plan-price {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 800;
   color: #e6a23c;
 }
@@ -532,15 +537,15 @@ defineExpose({
 }
 
 .vip-plan-unit {
-  font-size: 11px;
+  font-size: 10px;
   color: #999;
   margin-top: 2px;
 }
 
 /* Features Comparison */
 .vip-compare {
-  margin-bottom: 16px;
-  border-radius: 10px;
+  margin-bottom: 14px;
+  border-radius: 8px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -548,18 +553,18 @@ defineExpose({
 .vip-compare-header {
   display: flex;
   font-weight: 800;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .vip-compare-header .plan-col-free {
   color: #94a3b8;
-  padding: 10px 12px;
+  padding: 8px;
   background: rgba(100, 116, 139, 0.1);
 }
 
 .vip-compare-header .plan-col-vip {
   color: #d8b4fe;
-  padding: 10px 12px;
+  padding: 8px;
   background: rgba(124, 58, 237, 0.18);
 }
 
@@ -570,9 +575,11 @@ defineExpose({
 
 .vip-compare-col {
   flex: 1;
-  padding: 8px 12px;
-  font-size: 13px;
+  padding: 6px;
+  font-size: 12px;
   color: #ccc;
+  word-break: break-word;
+  box-sizing: border-box;
 }
 
 .plan-col-free {
@@ -602,7 +609,7 @@ defineExpose({
 
 .text-vip {
   color: #d8b4fe;
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .vip-compare-row-word {
@@ -610,10 +617,10 @@ defineExpose({
 }
 
 .word-duration {
-  font-size: 11px;
+  font-size: 10px;
   color: #888;
   margin-top: 2px;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 /* Payment Section */
@@ -625,62 +632,64 @@ defineExpose({
 
 .vip-pay-btn {
   width: 100%;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
-  padding: 14px;
-  border-radius: 10px;
+  padding: 12px;
+  border-radius: 8px;
 }
 
 .vip-pay-section {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.02);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .vip-pay-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #07c160;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .vip-qr-img {
-  width: 200px;
-  height: 200px;
+  width: 160px;
+  height: 160px;
   border-radius: 8px;
   border: 2px solid #07c160;
-  padding: 5px;
+  padding: 4px;
 }
 
 .vip-pay-hint {
   display: flex;
   align-items: center;
-  font-size: 13px;
+  font-size: 12px;
   color: #999;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .vip-pay-amount {
-  font-size: 14px;
+  font-size: 13px;
   color: #ccc;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .vip-pay-status {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 13px;
   color: #e6a23c;
-  margin-top: 8px;
-  padding: 8px 16px;
+  margin-top: 4px;
+  padding: 6px 12px;
   background: rgba(230, 162, 60, 0.08);
   border-radius: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .vip-pay-status.success {
@@ -700,33 +709,33 @@ defineExpose({
 
 .upgrade-quote-icon {
   text-align: center;
-  font-size: 40px;
-  margin-bottom: 8px;
+  font-size: 36px;
+  margin-bottom: 6px;
 }
 
 .upgrade-quote-title {
   text-align: center;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   color: #ddd;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .upgrade-detail-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .upgrade-detail-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #999;
 }
 
 .upgrade-detail-value {
-  font-size: 13px;
+  font-size: 12px;
   color: #ddd;
   font-weight: 600;
 }
@@ -739,18 +748,18 @@ defineExpose({
 .upgrade-divider {
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.4), transparent);
-  margin: 16px 0;
+  margin: 14px 0;
 }
 
 .upgrade-price-area {
   text-align: center;
-  padding: 8px 0;
+  padding: 6px 0;
 }
 
 .upgrade-original-price {
-  font-size: 13px;
+  font-size: 12px;
   color: #888;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .upgrade-original-price s {
@@ -758,32 +767,32 @@ defineExpose({
 }
 
 .upgrade-need-pay {
-  font-size: 16px;
+  font-size: 15px;
   color: #ddd;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .upgrade-price-num {
   color: #e6a23c;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 800;
   margin-left: 6px;
 }
 
 .upgrade-new-expiry {
-  font-size: 12px;
+  font-size: 11px;
   color: #888;
   margin-top: 4px;
 }
 
 .upgrade-tip {
-  margin-top: 12px;
-  padding: 8px 12px;
+  margin-top: 10px;
+  padding: 8px 10px;
   background: rgba(139, 92, 246, 0.08);
   border-radius: 8px;
-  font-size: 12px;
+  font-size: 11px;
   color: #a78bfa;
-  line-height: 1.5;
+  line-height: 1.4;
   text-align: left;
 }
 </style>

@@ -149,18 +149,23 @@ export function filePreviewUrl(path: string): string {
   const outputIndex = normalized.indexOf('output/')
   const uploadIndex = normalized.indexOf('temp/uploads/')
   const apiResultIndex = normalized.indexOf('pixelle_video/services/code/result/')
-  if (outputIndex >= 0) return `/api/files/${normalized.slice(outputIndex)}`
-  if (uploadIndex >= 0) return `/api/files/${normalized.slice(uploadIndex)}`
-  if (apiResultIndex >= 0) return `/api/files/${normalized.slice(apiResultIndex)}`
+  if (outputIndex >= 0) return `/api/files/${_encodePath(normalized.slice(outputIndex))}`
+  if (uploadIndex >= 0) return `/api/files/${_encodePath(normalized.slice(uploadIndex))}`
+  if (apiResultIndex >= 0) return `/api/files/${_encodePath(normalized.slice(apiResultIndex))}`
   return `/api/files/${encodeURIComponent(normalized)}`
+}
+
+/** 对路径中每一段做 URL 编码（兼容中文文件名） */
+function _encodePath(p: string): string {
+  return p.split('/').map(seg => encodeURIComponent(seg)).join('/')
 }
 
 export function makePreviewUrl(rec: { url?: string; relative_path?: string; path?: string }): string {
   if (rec.url) return rec.url
-  if (rec.relative_path) return `/api/files/${rec.relative_path}`
+  if (rec.relative_path) return `/api/files/${_encodePath(rec.relative_path)}`
   const parts = (rec.path || '').replace(/\\\\/g, '/').replace(/\\/g, '/').split('/')
   const idx = parts.indexOf('temp')
-  if (idx >= 0) return '/api/files/' + parts.slice(idx).join('/')
+  if (idx >= 0) return '/api/files/' + parts.slice(idx).map(seg => encodeURIComponent(seg)).join('/')
   return filePreviewUrl(rec.path || '')
 }
 

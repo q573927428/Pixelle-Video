@@ -7,9 +7,9 @@
       <div class="form-section-wrapper">
         <div class="form-section">
         <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-          <span>🧑 人物形象上传</span>
+          <span>🧑 人物上传</span>
           <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:13px;font-weight:400;">批量模式</span>
+            <span style="font-size:13px;font-weight:400;">批量</span>
             <el-switch v-model="form.batch_mode" @change="onBatchModeChange" />
             <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
           </div>
@@ -466,12 +466,12 @@
           <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
             <span>📝 字幕配置</span>
             <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:13px;font-weight:400;">开启字幕</span>
+              <span style="font-size:13px;font-weight:400;">开关</span>
               <el-switch v-model="form.subtitle_enabled" @change="onSubtitleEnabledChange" />
               <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
             </div>
           </div>
-          <div class="form-section-body">
+          <div class="form-section-body" v-if="form.subtitle_enabled">
             <el-collapse v-model="subtitleActiveNames">
               <el-collapse-item name="subtitle-advanced">
                 <template #title>

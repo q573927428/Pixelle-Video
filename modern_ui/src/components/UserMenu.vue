@@ -134,7 +134,7 @@ async function refreshUsage() {
 onMounted(() => {
   refreshUserInfo()
   refreshUsage()
-  usageTimer = setInterval(refreshUsage, 5000)
+  usageTimer = setInterval(refreshUsage, 30000)
 })
 
 onUnmounted(() => {
