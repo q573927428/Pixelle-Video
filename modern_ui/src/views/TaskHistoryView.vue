@@ -70,30 +70,42 @@
               <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
                 {{ task.status === 'completed' ? '已完成' : '失败' }}
               </el-tag>
-              <span class="small muted">{{ formatTime(task.created_at) }}</span>
-              <span style="flex:1" />
-              <el-tooltip content="下载视频" placement="top" :show-after="300">
-                <el-button
-                  text
-                  size="small"
-                  type="primary"
-                  class="download-btn"
-                  @click.stop="handleDownload(task)"
-                >
-                  <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="删除此记录" placement="top" :show-after="300">
-                <el-button
-                  text
-                  size="small"
-                  type="danger"
-                  class="delete-btn"
-                  @click.stop="handleDelete(task)"
-                >
-                  <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></el-icon>
-                </el-button>
-              </el-tooltip>
+              <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
+              <span class="meta-actions">
+                <el-tooltip content="复制文案" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    size="small"
+                    type="warning"
+                    class="action-btn"
+                    @click.stop="handleCopyPrompt(task)"
+                  >
+                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="下载视频" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    size="small"
+                    type="primary"
+                    class="action-btn"
+                    @click.stop="handleDownload(task)"
+                  >
+                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="删除此记录" placement="top" :show-after="300">
+                  <el-button
+                    text
+                    size="small"
+                    type="danger"
+                    class="action-btn"
+                    @click.stop="handleDelete(task)"
+                  >
+                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></el-icon>
+                  </el-button>
+                </el-tooltip>
+              </span>
             </div>
           </div>
         </div>
@@ -294,6 +306,52 @@ function playHover(e: Event) {
 function stopHover(e: Event) {
   const video = (e.currentTarget as HTMLElement).querySelector('video')
   if (video) { video.pause(); video.currentTime = 0 }
+}
+
+async function handleCopyPrompt(task: any) {
+  // 尝试从列表中已有的字段提取文案
+  let content = task.goods_text || ''
+  if (!content && task.input) {
+    let input: any = task.input
+    if (typeof input === 'string') {
+      try { input = JSON.parse(input) } catch { /* ignore */ }
+    }
+    content = input.goods_text || input.prompt || input.text || ''
+  }
+  // 如果列表数据没有，则调用详情接口获取完整 input
+  if (!content && task.task_id) {
+    try {
+      const data = await getTaskHistoryDetail(task.task_id)
+      const meta = data?.metadata || data
+      const input = meta.input
+      if (input) {
+        let obj: any = input
+        if (typeof obj === 'string') {
+          try { obj = JSON.parse(obj) } catch { /* ignore */ }
+        }
+        content = obj.goods_text || obj.prompt || obj.text || ''
+      }
+    } catch { /* ignore */ }
+  }
+  if (!content) {
+    ElMessage.warning('该任务无可用文案')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(content)
+    ElMessage.success('文案已复制到剪贴板')
+  } catch {
+    // Fallback
+    const textarea = document.createElement('textarea')
+    textarea.value = content
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    ElMessage.success('文案已复制到剪贴板')
+  }
 }
 
 async function handleDownload(task: any) {
@@ -505,13 +563,21 @@ async function handleDelete(task: any) {
   justify-content: flex-end;
   margin-top: 4px;
 }
-.delete-btn,
-.download-btn {
+.meta-actions {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.action-btn {
   opacity: 0.5;
   transition: opacity 0.15s;
+  padding: 4px 5px !important;
+  min-width: unset !important;
+  min-height: unset !important;
 }
-.history-item:hover .delete-btn,
-.history-item:hover .download-btn {
+.history-item:hover .action-btn {
   opacity: 1;
 }
 
@@ -539,13 +605,12 @@ async function handleDelete(task: any) {
   .stats-value {
     font-size: 20px;
   }
-  .delete-btn,
-  .download-btn {
+  .meta-actions {
+    margin-left: 0;
+  }
+  .action-btn {
     opacity: 1;
-    min-width: 36px;
-    min-height: 36px;
     font-size: 13px;
-    padding: 8px 16px !important;
   }
 }
 </style>

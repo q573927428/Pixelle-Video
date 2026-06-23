@@ -61,11 +61,25 @@
                     <span v-else class="small muted">暂无</span>
                   </template>
                 </el-table-column>
+                <el-table-column label="操作" width="110" fixed="right">
+                  <template #default="{ row }">
+                    <div v-if="row.success && row.video_url" style="display:flex;gap:4px;flex-wrap:wrap;">
+                      <el-button size="small" plain @click="copyText">📋复制</el-button>
+                      <el-button size="small" type="primary" plain @click="downloadVideo(row.video_url)">⬇️下载</el-button>
+                    </div>
+                  </template>
+                </el-table-column>
               </el-table>
             </template>
 
             <!-- 单次模式结果 -->
-            <video v-else-if="result.video_url" class="result-video" controls :src="result.video_url" />
+            <template v-else-if="result.video_url">
+              <video class="result-video" controls :src="result.video_url" />
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                <el-button size="small" plain @click="copyText">📋 复制文案</el-button>
+                <el-button size="small" type="primary" plain @click="downloadVideo(result.video_url)">⬇️ 下载视频</el-button>
+              </div>
+            </template>
 
             <!-- 字幕预览（开启字幕且不在运行/提交状态时显示） -->
             <div v-else-if="digitalForm.subtitle_enabled && !running && !submitted && !batchSubmitted" style="margin-bottom:12px;">
@@ -895,6 +909,38 @@ function pollTaskOnce(taskId: string): Promise<{ success: boolean; error?: strin
 
 function previewAsset(path: string) {
   window.open(filePreviewUrl(path), '_blank')
+}
+
+/** 一键复制文案 */
+function copyText() {
+  const text = digitalForm.value.goods_text?.trim()
+  if (!text) {
+    ElMessage.warning('没有可复制的文案')
+    return
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    ElMessage.success('文案已复制到剪贴板')
+  }).catch(() => {
+    ElMessage.error('复制失败，请手动复制')
+  })
+}
+
+/** 一键下载视频 */
+function downloadVideo(url: string) {
+  if (!url) {
+    ElMessage.warning('没有可下载的视频')
+    return
+  }
+  // 从 URL 中提取文件名，或使用默认名称
+  const fileName = url.split('/').pop() || `digital_human_${Date.now()}.mp4`
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.target = '_blank'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  ElMessage.success('正在下载视频...')
 }
 </script>
 
