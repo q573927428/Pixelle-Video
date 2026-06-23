@@ -56,5 +56,3 @@ pnpm approve-builds esbuild
 ## 待完成
 
 生成好的视频，添加可以分发到其他短视频平台的功能。
-
-上传音频需要支持amr音频格式。
