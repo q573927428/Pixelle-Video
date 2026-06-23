@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZuoSuo AI 宣传② 三步流程</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 390px;
+      height: 683px;
+      margin: 5px 2px;
+      overflow: hidden;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(180deg, #0a0a1a 0%, #12122a 50%, #0d0d24 100%);
+      color: #fff;
+    }
+    .page {
+      width: 390px;
+      height: 683px;
+      padding: 6px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #3296ff, #00c896, #3296ff, #00c896, #7c3aed);
+      background-size: 400% 400%;
+      animation: borderMove 5s ease infinite;
+    }
+    @keyframes borderMove {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 100% 0%; }
+      50% { background-position: 100% 100%; }
+      75% { background-position: 0% 100%; }
+      100% { background-position: 0% 50%; }
+    }
+    .inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 21px;
+      background: linear-gradient(180deg, #0d0d1e 0%, #151535 50%, #0d0d1e 100%);
+      padding: 36px 28px 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .title {
+      text-align: center;
+    }
+    .title h2 {
+      font-size: 24px;
+      font-weight: 800;
+    }
+    .title .bar {
+      display: block;
+      width: 34px;
+      height: 3px;
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+      border-radius: 2px;
+      margin: 10px auto 0;
+    }
+    .title p {
+      font-size: 13px;
+      color: rgba(255,255,255,0.3);
+      margin-top: 6px;
+      margin-bottom: 12px;
+    }
+
+    /* ====== 步骤 ====== */
+    .steps { display: flex; flex-direction: column; gap: 0; }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 22px 20px;
+    }
+    .num {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      box-shadow: 0 4px 14px rgba(255,215,0,0.25);
+    }
+    .info { flex: 1; min-width: 0; }
+    .info h3 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .info > p { font-size: 14px; color: rgba(255,255,255,0.5); line-height: 1.5; }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .tag {
+      display: inline-flex;
+      padding: 4px 12px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 500;
+      background: rgba(255,215,0,0.08);
+      color: #ffd200;
+      border: 1px solid rgba(255,215,0,0.12);
+    }
+    .tag.purple { background: rgba(160,100,255,0.08); color: #a064ff; border-color: rgba(160,100,255,0.12); }
+    .tag.green { background: rgba(0,200,150,0.08); color: #00c896; border-color: rgba(0,200,150,0.12); }
+    .tag.blue { background: rgba(50,150,255,0.08); color: #3296ff; border-color: rgba(50,150,255,0.12); }
+    .tag.pink { background: rgba(255,80,150,0.08); color: #ff5096; border-color: rgba(255,80,150,0.12); }
+
+    .connector {
+      text-align: center;
+      color: rgba(255,215,0,0.15);
+      font-size: 22px;
+      padding: 2px 0;
+    }
+
+    .highlight-text {
+      color: #ffd200;
+      font-weight: 700;
+      font-size: 14px;
+    }
+
+    .footer-tip {
+      text-align: center;
+      font-size: 11px;
+      color: rgba(255,255,255,0.15);
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="inner">
+
+    <div class="title">
+      <h2>三步生成专属视频</h2>
+      <span class="bar"></span>
+      <p>3 Steps · 1 分钟上手</p>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <div class="info">
+          <h3>📸 上传素材</h3>
+          <p>上传角色照片，可选商品图、音频</p>
+          <div class="tags">
+            <span class="tag">🖼️ 角色照片</span>
+            <span class="tag purple">🎵 参考音频</span>
+            <span class="tag green">🛒 商品图片</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">⬇</div>
+
+      <div class="step">
+        <div class="num">2</div>
+        <div class="info">
+          <h3>✍️ 输入文案</h3>
+          <p class="highlight-text">不会写？👇 三种方式供你选</p>
+          <div class="tags">
+            <span class="tag pink">📱 粘贴抖音/快手/小红书链接提取</span>
+            <span class="tag">🤖 AI 自动生成</span>
+            <span class="tag blue">✏️ 手动输入</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="connector">⬇</div>
+
+      <div class="step">
+        <div class="num">3</div>
+        <div class="info">
+          <h3>🎬 一键生成</h3>
+          <p>选好声音，点击生成，几十秒出片</p>
+          <div class="tags">
+            <span class="tag green">🎯 自动字幕</span>
+            <span class="tag blue">📥 MP4 下载</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-tip">ZuoSuo AI · AI 驱动数字人口播</div>
+
+  </div>
+</div>
+</body>
+</html>

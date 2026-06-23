@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ZuoSuo AI  宣传③ 模式与亮点</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 390px;
+      height: 683px;
+      margin: 5px 2px;
+      overflow: hidden;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(180deg, #0a0a1a 0%, #12122a 50%, #0d0d24 100%);
+      color: #fff;
+    }
+    .page {
+      width: 390px;
+      height: 683px;
+      padding: 6px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #f7971e, #a064ff, #ffd200, #7c3aed, #f7971e);
+      background-size: 400% 400%;
+      animation: borderMove 5s ease infinite;
+    }
+    @keyframes borderMove {
+      0% { background-position: 0% 50%; }
+      25% { background-position: 100% 0%; }
+      50% { background-position: 100% 100%; }
+      75% { background-position: 0% 100%; }
+      100% { background-position: 0% 50%; }
+    }
+    .inner {
+      width: 100%;
+      height: 100%;
+      border-radius: 21px;
+      background: linear-gradient(180deg, #0d0d1e 0%, #151535 50%, #0d0d1e 100%);
+      padding: 30px 26px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+    }
+    .title .bar {
+      display: block;
+      width: 32px;
+      height: 3px;
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+      border-radius: 2px;
+      margin: 8px auto 0;
+    }
+
+    /* ====== 双模式 ====== */
+    .modes { display: flex; flex-direction: column; gap: 14px; }
+
+    .mode {
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+    .mode.cus {
+      background: linear-gradient(135deg, #1a1040 0%, #2a1060 50%, #1a1040 100%);
+      border: 1px solid rgba(160,100,255,0.12);
+    }
+    .mode.dig {
+      background: linear-gradient(135deg, #1a1040 0%, #2a2020 50%, #1a1040 100%);
+      border: 1px solid rgba(255,165,0,0.12);
+    }
+
+    .mode-hd {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .mode-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+    .mode.cus .mode-icon { background: linear-gradient(135deg, #7c3aed, #a064ff); }
+    .mode.dig .mode-icon { background: linear-gradient(135deg, #f7971e, #ffd200); }
+    .mode-hd h3 { font-size: 16px; font-weight: 700; }
+    .mode-hd .tag {
+      margin-left: auto;
+      font-size: 10px;
+      padding: 2px 10px;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    .mode.cus .tag { background: rgba(160,100,255,0.12); color: #a064ff; border: 1px solid rgba(160,100,255,0.12); }
+    .mode.dig .tag { background: rgba(255,165,0,0.12); color: #ffa500; border: 1px solid rgba(255,165,0,0.12); }
+
+    .mode-desc {
+      font-size: 13px;
+      color: rgba(255,255,255,0.5);
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    .mode-fs { display: flex; flex-direction: column; gap: 5px; }
+    .mode-f {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+    }
+    .mode-f .ck {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+    .mode.cus .ck { background: rgba(160,100,255,0.15); color: #a064ff; }
+    .mode.dig .ck { background: rgba(255,165,0,0.15); color: #ffa500; }
+    .mode-f strong { font-weight: 700; }
+    .mode.cus .mode-f strong { color: #a064ff; }
+    .mode.dig .mode-f strong { color: #ffa500; }
+
+    /* ====== 亮点 ====== */
+    .highlights {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+    .hl-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .hl-item .emoji { font-size: 16px; }
+
+    /* ====== CTA ====== */
+    .cta { text-align: center; }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 12px 36px;
+      border-radius: 26px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      background: linear-gradient(135deg, #f7971e, #ffd200);
+      box-shadow: 0 4px 18px rgba(255,215,0,0.2);
+    }
+    .cta-sub {
+      font-size: 11px;
+      color: rgba(255,255,255,0.2);
+      margin-top: 8px;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="inner">
+
+    <div class="title">
+      两大创作模式
+      <span class="bar"></span>
+    </div>
+
+    <div class="modes">
+      <div class="mode cus">
+        <div class="mode-hd">
+          <div class="mode-icon">🧐</div>
+          <h3>口播模式</h3>
+          <span class="tag">个人IP · 知识分享</span>
+        </div>
+        <div class="mode-desc">数字人替你出镜，适合口播、评测、个人品牌。</div>
+        <div class="mode-fs">
+          <div class="mode-f"><span class="ck">✓</span> <strong>AI 一键改写</strong>，文案更流畅</div>
+          <div class="mode-f"><span class="ck">✓</span> <strong>抖音/小红书/B站链接</strong>一键提取文案</div>
+        </div>
+      </div>
+
+      <div class="mode dig">
+        <div class="mode-hd">
+          <div class="mode-icon">💻</div>
+          <h3>带货模式</h3>
+          <span class="tag">电商带货 · 商品推广</span>
+        </div>
+        <div class="mode-desc">数字人+商品，AI 自动生成推广文案，批量产出。</div>
+        <div class="mode-fs">
+          <div class="mode-f"><span class="ck">✓</span> 输入商品名 → <strong>AI 自动写带货文案</strong></div>
+          <div class="mode-f"><span class="ck">✓</span> 批量导入，一次生成 <strong>多条带货视频</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;">
+      <div class="highlights">
+        <span class="hl-item"><span class="emoji">📱</span> 文案提取</span>
+        <span class="hl-item"><span class="emoji">✨</span> AI 改写</span>
+        <span class="hl-item"><span class="emoji">📦</span> 批量生产</span>
+        <span class="hl-item"><span class="emoji">📝</span> 自动字幕</span>
+        <span class="hl-item"><span class="emoji">🎤</span> 声音克隆</span>
+        <span class="hl-item"><span class="emoji">🔊</span> 声音预览</span>
+      </div>
+
+      <div class="cta">
+        <div class="cta-btn">🚀 ZuoSuo AI</div>
+        <div class="cta-sub">无需真人出镜 · 1 分钟生成专属数字人视频</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
