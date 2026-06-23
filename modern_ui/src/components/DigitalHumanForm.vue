@@ -324,6 +324,7 @@
               placeholder="粘贴短视频分享链接/信息&#10;&#10;支持：抖音、快手、小红书、B站&#10;例如：https://v.douyin.com/OOgNGe6Ln20/"
             />
             <template #footer>
+              <el-button @click="handlePasteFromClipboard">📋 粘贴</el-button>
               <el-button @click="mediaDialogVisible = false">取消</el-button>
               <el-button
                 type="primary"
@@ -894,6 +895,26 @@ async function handleRewrite() {
   } finally {
     rewriteLoading.value = false
   }
+}
+
+// ---- 剪贴板粘贴 ----
+async function handlePasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText()
+    if (text) {
+      mediaShareText.value = text
+      ElMessage.success('已粘贴剪贴板内容')
+      return
+    }
+  } catch {
+    // Clipboard API 不可用（非 HTTPS/非 localhost 环境）
+  }
+  // 聚焦输入框，提示用户按 Ctrl+V 粘贴
+  ElMessage.info('请点击输入框后按 Ctrl+V 粘贴')
+  nextTick(() => {
+    const el = document.querySelector('.media-dialog textarea') as HTMLTextAreaElement
+    el?.focus()
+  })
 }
 
 // ---- 短视频导入口播文案 ----
