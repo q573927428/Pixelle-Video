@@ -21,6 +21,7 @@ comfykit 0.1.12 补丁 - RunningHub 文件上传修复
     apply_patches()
 """
 
+import os
 import logging
 from typing import Any, Dict, List, Optional
 
