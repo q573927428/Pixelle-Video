@@ -7,6 +7,8 @@ UV_CACHE_DIR=/www/wwwroot/zuosuoai/Pixelle-Video/.uv_cache
 # 终端2: 启动 Vite 开发服务器（热加载）
 cd modern_ui; pnpm run dev
 
+cd modern_ui; pnpm run dev  --host 0.0.0.0 --port 5173
+
 net start MySQL97
 
 # 访问: http://localhost:5173/
