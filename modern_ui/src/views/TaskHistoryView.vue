@@ -4,7 +4,7 @@
       <span class="page-icon">📋</span>
       <div>
         <h3 class="page-title">历史记录</h3>
-        <p class="page-desc">所有已完成任务的持久化记录，重启服务器后依然保留</p>
+        <p class="page-desc">所有已完成任务的保存90天，超时自动删除，请及时下载到本地</p>
       </div>
     </div>
 
@@ -188,7 +188,7 @@ const { isAdmin } = useAuth()
 const loading = ref(false)
 const tasks = ref<any[]>([])
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 const totalPages = ref(0)
 const filterStatus = ref('')
