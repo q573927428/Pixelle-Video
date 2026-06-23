@@ -48,6 +48,8 @@ from api.dependencies import shutdown_pixelle_video
 from api.auth.database import Database
 
 # Import routers
+from pixelle_video.patches.comfykit_patch import apply_patches
+
 from api.routers import (
     config_router,
     health_router,
@@ -78,6 +80,7 @@ async def lifespan(app: FastAPI):
     """
     # Startup
     logger.info("🚀 Starting Pixelle-Video API...")
+    apply_patches()  # Apply comfykit monkey patches
     await task_manager.start()
     
     # Initialize MySQL database connection and auto-create tables
