@@ -37,6 +37,7 @@
           <el-option label="失败" value="failed" />
         </el-select>
         <el-button @click="loadData" :loading="loading">刷新</el-button>
+        <span class="admin-hint" v-if="isAdmin">管理员视角：显示所有用户的历史记录</span>
       </div>
 
       <!-- 任务列表 -->
@@ -59,7 +60,13 @@
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
           <div class="history-item-info">
-          <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
+            <div class="history-item-title-row">
+              <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
+              <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
+                <el-icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></el-icon>
+                {{ task.username || task.phone }}
+              </span>
+            </div>
             <div class="history-item-meta">
               <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
                 {{ task.status === 'completed' ? '已完成' : '失败' }}
@@ -70,6 +77,7 @@
                 <el-button
                   text
                   size="small"
+                  type="primary"
                   class="download-btn"
                   @click.stop="handleDownload(task)"
                 >
@@ -162,6 +170,9 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadTaskHistory, deleteTaskHistory, getTaskHistoryDetail } from '../api'
 import { ElMessageBox } from 'element-plus'
+import { useAuth } from '../composables/useAuth'
+
+const { isAdmin } = useAuth()
 
 const loading = ref(false)
 const tasks = ref<any[]>([])
@@ -354,6 +365,23 @@ async function handleDelete(task: any) {
   margin-bottom: 14px;
   align-items: center;
 }
+.user-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--primary, #6366f1);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 1px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.admin-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-left: auto;
+  opacity: 0.7;
+}
 
 .history-list {
   display: grid;
@@ -415,12 +443,19 @@ async function handleDelete(task: any) {
   flex-direction: column;
   gap: 6px;
 }
+.history-item-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .history-item-title {
   font-weight: 700;
   font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .history-item-meta {
   display: flex;

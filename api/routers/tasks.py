@@ -120,6 +120,33 @@ async def list_task_history(
             status=status or None,
             user_id=user_id,
         )
+
+        # 管理员查看所有历史记录时，补充用户名/手机号信息
+        if current_user.role == "admin" and result.get("tasks"):
+            tasks_list = result["tasks"]
+            # 收集所有有 user_id 的任务
+            user_ids = {t.get("user_id") for t in tasks_list if t.get("user_id")}
+            user_map = {}
+            if user_ids:
+                try:
+                    # 转为 int 做 SQL 查询
+                    int_ids = [int(uid) for uid in user_ids if str(uid).isdigit()]
+                    if int_ids:
+                        placeholders = ",".join(["%s"] * len(int_ids))
+                        rows = await Database.fetchall(
+                            f"SELECT id, username, phone FROM users WHERE id IN ({placeholders})",
+                            int_ids,
+                        )
+                        for row in rows:
+                            uid = str(row["id"])
+                            user_map[uid] = row
+                except Exception as e:
+                    logger.warning(f"Failed to populate user info for task history: {e}")
+            for t in tasks_list:
+                if t.get("user_id") and str(t["user_id"]) in user_map:
+                    t["username"] = user_map[str(t["user_id"])]["username"]
+                    t["phone"] = user_map[str(t["user_id"])]["phone"]
+
         return result
 
     except Exception as e:
