@@ -179,7 +179,7 @@
         <!-- 模式选择：始终可见 -->
         <el-form-item label="模式">
           <el-radio-group v-model="form.mode">
-            <el-radio-button value="customize">🧐 自定义模式</el-radio-button>
+            <el-radio-button value="customize">🧐 口播模式</el-radio-button>
             <el-radio-button value="digital">💻 带货模式</el-radio-button>
           </el-radio-group>
         </el-form-item>
@@ -884,7 +884,7 @@ async function handleRewrite() {
       body: JSON.stringify({ prompt, temperature: 0.7, max_tokens: 1024 }),
     })
     if (res.content) {
-      props.form.goods_text = res.content.trim()
+      props.form.goods_text = res.content.trim().slice(0, textMaxLength.value)
       ElMessage.success('改写完成')
     } else {
       ElMessage.warning('改写失败，请重试')
@@ -914,7 +914,7 @@ async function handleMediaParse() {
       body: JSON.stringify({ share_text: mediaShareText.value.trim() }),
     })
     if (res.success && res.text) {
-      props.form.goods_text = res.text
+      props.form.goods_text = res.text.slice(0, textMaxLength.value)
       mediaDialogVisible.value = false
       ElMessage.success('口播文案导入成功')
     } else {
