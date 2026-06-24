@@ -447,36 +447,22 @@ class PersistenceService:
             return {"version": "1.0", "tasks": []}
     
     def _save_index(self, index_data: Dict[str, Any]):
-        """Save index to file and clean up incomplete task folders"""
+        """Save index to file"""
         try:
             index_data["last_updated"] = datetime.now().isoformat()
             with open(self.index_file, "w", encoding="utf-8") as f:
                 json.dump(index_data, f, ensure_ascii=False, indent=2)
-            # Clean up incomplete task folders (no metadata.json)
-            self._cleanup_incomplete_dirs()
         except Exception as e:
             logger.error(f"Failed to save index: {e}")
-    
-    def _cleanup_incomplete_dirs(self):
-        """Remove task directories without metadata.json"""
-        try:
-            import shutil
-            for task_dir in self.output_dir.iterdir():
-                if not task_dir.is_dir() or task_dir.name.startswith("."):
-                    continue
-                if task_dir.name in ("api", "api_images"):
-                    continue
-                if not (task_dir / "metadata.json").exists():
-                    shutil.rmtree(task_dir)
-                    logger.info(f"Deleted incomplete folder: {task_dir.name}")
-        except Exception as e:
-            logger.error(f"Failed to clean up incomplete dirs: {e}")
     
     async def cleanup_old_tasks(self, retention_days: int = 90):
         """
         Clean up tasks older than retention_days
         
-        Also cleans up incomplete task folders (no metadata.json).
+        Only deletes directories that have a metadata.json file.
+        Directories without metadata.json are NEVER deleted by cleanup,
+        because they may belong to tasks that are still being processed
+        (e.g., waiting in the RunningHub queue or mid-execution).
         
         Args:
             retention_days: Number of days to retain tasks (default: 90)
@@ -484,22 +470,10 @@ class PersistenceService:
         from datetime import timedelta
         
         try:
-            # ---- Step 1: Clean up incomplete task folders (no metadata.json) ----
             import shutil
             deleted_count = 0
-            for task_dir in self.output_dir.iterdir():
-                if not task_dir.is_dir() or task_dir.name.startswith("."):
-                    continue
-                # Skip known system directories
-                if task_dir.name in ("api", "api_images"):
-                    continue
-                metadata_path = task_dir / "metadata.json"
-                if not metadata_path.exists():
-                    shutil.rmtree(task_dir)
-                    deleted_count += 1
-                    logger.info(f"Deleted incomplete folder: {task_dir.name}")
 
-            # ---- Step 2: Clean up expired tasks from index ----
+            # ---- Clean up expired tasks from index ----
             index = self._load_index()
             tasks = index.get("tasks", [])
             
@@ -550,9 +524,10 @@ class PersistenceService:
     
     async def _update_index_for_task(self, task_id: str, metadata: Dict[str, Any]):
         """Update index entry for a specific task"""
-        # Cleanup old tasks before updating index
-        await self.cleanup_old_tasks()
-        
+        # NOTE: intentionally NOT calling cleanup_old_tasks() here to avoid
+        # deleting task directories that belong to concurrently running tasks
+        # (they may not have metadata.json yet). Cleanup is done only in the
+        # periodic cleanup loop and on explicit calls to cleanup_old_tasks().
         index = self._load_index()
         
         # Try to get title from multiple sources

@@ -211,10 +211,12 @@ function stopElapsedTimer() {
 onMounted(() => {
   loadTasks()
   startElapsedTimer()
+  startTaskPolling()
 })
 
 onUnmounted(() => {
   stopElapsedTimer()
+  stopTaskPolling()
 })
 
 async function loadTasks() {
@@ -224,6 +226,29 @@ async function loadTasks() {
   finally {
     loadingTasks.value = false
     updateElapsedTimes()
+  }
+}
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function startTaskPolling() {
+  stopTaskPolling()
+  // 每 10 秒轮询一次任务状态，确保状态变化时 UI 自动更新
+  // 组件销毁时 stopTaskPolling 会清除定时器，防止内存泄漏
+  pollTimer = setInterval(() => {
+    apiLoadTasks(100, filterStatus.value || undefined)
+      .then((newTasks) => {
+        tasks.value = newTasks
+        updateElapsedTimes()
+      })
+      .catch(() => { /* 静默处理轮询失败 */ })
+  }, 10000)
+}
+
+function stopTaskPolling() {
+  if (pollTimer !== null) {
+    clearInterval(pollTimer)
+    pollTimer = null
   }
 }
 
