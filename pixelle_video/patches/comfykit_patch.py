@@ -21,7 +21,9 @@ comfykit 0.1.12 补丁 - RunningHub 文件上传修复
     apply_patches()
 """
 
+import asyncio
 import os
+import time
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -280,6 +282,72 @@ def patch_execute_by_id():
     logger.info("✅ Patch applied: RunningHubExecutor.execute_by_id (workflow_json passthrough)")
 
 
+def patch_wait_interval():
+    """修补 RunningHubExecutor._wait_for_task_completion 的轮询间隔为 10 秒"""
+    try:
+        from comfykit.comfyui.runninghub_executor import RunningHubExecutor
+    except ImportError:
+        logger.warning("comfykit not installed, skip wait_interval patch")
+        return
+
+    original_wait = RunningHubExecutor._wait_for_task_completion
+
+    async def patched_wait(self, task_id, output_id_2_var=None, max_wait_time=None):
+        """修补版 _wait_for_task_completion，轮询间隔改为 10 秒"""
+        # Use provided max_wait_time, or fall back to self.timeout
+        if max_wait_time is None:
+            max_wait_time = self.timeout
+
+        check_interval = 10
+        start_time = time.time()
+
+        timeout_msg = f"{max_wait_time}s" if max_wait_time else "unlimited"
+        logger.info(f"Waiting for RunningHub task completion: {task_id} (timeout: {timeout_msg})")
+
+        while True:
+            elapsed_time = time.time() - start_time
+
+            if max_wait_time is not None and elapsed_time >= max_wait_time:
+                break
+
+            try:
+                status_info = await self.client.query_task_status(task_id)
+                task_status = status_info['status']
+                status_msg = status_info['msg']
+
+                logger.debug(f"Task {task_id} status: {task_status}, msg: {status_msg}")
+
+                if task_status == 'SUCCESS':
+                    result_data = await self.client.query_task_result(task_id)
+                    return await self._process_task_result(task_id, result_data, output_id_2_var)
+
+                elif task_status == 'FAILED':
+                    error_msg = f"RunningHub task {task_id} failed"
+                    if status_msg:
+                        error_msg += f": {status_msg}"
+                    logger.error(error_msg)
+                    from comfykit.comfyui.models import ExecuteResult
+                    return ExecuteResult(status="error", prompt_id=task_id, msg=error_msg)
+
+                elif task_status in ['QUEUED', 'RUNNING']:
+                    logger.info(f"Task {task_id} status: {task_status}, waiting {check_interval}s...")
+                    await asyncio.sleep(check_interval)
+                    continue
+
+            except Exception as e:
+                logger.error(f"Error checking task status {task_id}: {e}", exc_info=True)
+                await asyncio.sleep(check_interval)
+                continue
+
+        error_msg = f"RunningHub task {task_id} timeout after {max_wait_time} seconds"
+        logger.error(error_msg)
+        from comfykit.comfyui.models import ExecuteResult
+        return ExecuteResult(status="error", prompt_id=task_id, msg=error_msg)
+
+    RunningHubExecutor._wait_for_task_completion = patched_wait
+    logger.info("✅ Patch applied: RunningHubExecutor._wait_for_task_completion (check_interval: 2s → 10s)")
+
+
 def apply_patches():
     """应用所有 comfykit 补丁"""
     # 仅在 comfykit 0.1.12 时应用补丁
@@ -295,6 +363,7 @@ def apply_patches():
 
     logger.info("🔧 Applying comfykit 0.1.12 patches...")
     patch_runninghub_executor()
+    patch_wait_interval()
     patch_execute_by_id()
     patch_executor_execute()
     logger.info("✅ All comfykit patches applied")
