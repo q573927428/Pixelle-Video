@@ -477,6 +477,16 @@ async function handleDelete(task: any) {
   height: 100%;
   object-fit: cover;
 }
+.history-item-preview video:fullscreen,
+.history-item-preview video:-webkit-full-screen {
+  object-fit: contain !important;
+  background: #000;
+}
+.detail-video:fullscreen,
+.detail-video:-webkit-full-screen {
+  object-fit: contain !important;
+  background: #000;
+}
 .history-item-placeholder {
   font-size: 42px;
 }
