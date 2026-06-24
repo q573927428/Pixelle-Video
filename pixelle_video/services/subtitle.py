@@ -407,7 +407,7 @@ class SubtitleService:
         - 长句按 max_chars_per_line 换行
         """
         # 按分隔符分句
-        sentences = re.split(r"(?<=[。！？；，.!?;\s])", text)
+        sentences = re.split(r"(?<=[。！？；，、，.!?;\s])", text)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         if not sentences:

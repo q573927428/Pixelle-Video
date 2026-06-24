@@ -345,7 +345,7 @@ function renderSubtitlePreview() {
   // 预览时只取第一句文案显示
   let rawText = digitalForm.value.goods_text?.trim() || '这是一个字幕样式预览'
   if (rawText.length > 3) {
-    const sentences = rawText.split(/(?<=[。！？；，.!?;\s])/)
+    const sentences = rawText.split(/(?<=[。！？；，、，.!?;\s])/)
     rawText = sentences[0] || rawText
   }
   // 去除标点符号，与后端 subtitle.py._clean_punctuation 保持一致
