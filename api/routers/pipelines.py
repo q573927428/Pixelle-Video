@@ -361,6 +361,14 @@ def _burn_subtitles_sync(
         audio_duration = video_service._get_audio_duration(audio_path)
         logger.info(f"🎬 音频时长={audio_duration:.2f}s, 字幕文本前30字={generated_text[:30]!r}")
 
+        # 生成 SRT 字幕文件
+        srt_path = subtitle_service.generate_srt_file(
+            text=generated_text,
+            audio_duration=audio_duration,
+            output_dir=task_dir,
+        )
+        logger.info(f"✅ SRT subtitle file generated: {srt_path}")
+
         # 获取实际视频分辨率，不再硬编码
         import ffmpeg
         probe = ffmpeg.probe(video_path)

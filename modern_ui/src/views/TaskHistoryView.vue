@@ -47,15 +47,14 @@
       <div v-loading="loading" class="history-list">
         <div v-for="task in tasks" :key="task.task_id" class="history-item" @click="showDetail(task)">
           <div class="history-item-preview" @click.stop>
-            <video v-if="task.video_path" controls :src="previewUrl(task.video_path)" />
-            <!-- <video
+            <video
               v-if="task.video_path"
               :src="previewUrl(task.video_path)"
               muted
               controls
               playsinline
               preload="metadata"
-            /> -->
+            />
             <div v-else class="history-item-placeholder">🎬</div>
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
@@ -557,6 +556,8 @@ async function handleDelete(task: any) {
   width: 100%;
   max-height: 400px;
   border-radius: 10px;
+  object-fit: contain;
+  background: #000;
 }
 
 .history-item-actions {
