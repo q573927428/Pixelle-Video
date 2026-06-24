@@ -474,9 +474,9 @@
           </div>
           <div class="form-section-body" v-if="form.subtitle_enabled">
             <el-collapse v-model="subtitleActiveNames">
-              <el-collapse-item name="subtitle-advanced">
+              <el-collapse-item name="subtitle-basic">
                 <template #title>
-                  <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">⚙️ 高级设置</span>
+                  <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">📐 普通设置</span>
                 </template>
                 <el-form-item label="文字大小">
                   <el-slider v-model="form.subtitle_config.font_size" :min="22" :max="96" :step="2" show-input />
@@ -484,15 +484,33 @@
                 <el-form-item label="文字颜色">
                   <el-color-picker v-model="form.subtitle_config.font_color" show-alpha />
                 </el-form-item>
+                <el-form-item label="文字间距">
+                  <el-slider v-model="form.subtitle_config.letter_spacing" :min="0" :max="50" :step="1" show-input />
+                </el-form-item>
+                <el-divider style="margin:8px 0;" />
+                <el-form-item label="文字边框粗细">
+                  <el-slider v-model="form.subtitle_config.font_border_width" :min="0" :max="10" :step="1" show-input />
+                </el-form-item>
+                <el-form-item label="文字边框颜色">
+                  <el-color-picker v-model="form.subtitle_config.font_border_color" show-alpha />
+                </el-form-item>
+                <el-divider style="margin:8px 0;" />
                 <el-form-item label="位置 X">
                   <el-slider v-model="form.subtitle_config.position_x" :min="-500" :max="500" :step="10" show-input />
                 </el-form-item>
                 <el-form-item label="位置 Y">
                   <el-slider v-model="form.subtitle_config.position_y" :min="-1700" :max="100" :step="10" show-input />
                 </el-form-item>
+              </el-collapse-item>
+              <div style="height:15px;"></div>
+              <el-collapse-item name="subtitle-advanced">
+                <template #title>
+                  <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">⚙️ 高级设置</span>
+                </template>
                 <el-form-item label="最大宽度">
                   <el-slider v-model="form.subtitle_config.max_width" :min="100" :max="1980" :step="20" show-input />
                 </el-form-item>
+                <el-divider style="margin:8px 0;" />
                 <el-form-item label="背景颜色">
                   <el-color-picker v-model="form.subtitle_config.background_color" show-alpha />
                 </el-form-item>
@@ -505,17 +523,6 @@
                 </el-form-item>
                 <el-form-item label="背景圆角">
                   <el-input-number v-model="form.subtitle_config.background_radius" :min="0" :max="50" :step="2" style="width:100%;" />
-                </el-form-item>
-                <el-divider style="margin:8px 0;" />
-                <el-form-item label="文字边框粗细">
-                  <el-slider v-model="form.subtitle_config.font_border_width" :min="0" :max="10" :step="1" show-input />
-                </el-form-item>
-                <el-form-item label="文字边框颜色">
-                  <el-color-picker v-model="form.subtitle_config.font_border_color" show-alpha />
-                </el-form-item>
-                <el-divider style="margin:8px 0;" />
-                <el-form-item label="文字间距">
-                  <el-slider v-model="form.subtitle_config.letter_spacing" :min="0" :max="50" :step="1" show-input />
                 </el-form-item>
               </el-collapse-item>
             </el-collapse>
@@ -624,7 +631,7 @@ function onSubtitleEnabledChange(val: boolean) {
 
 const videoApiParamsActiveNames = ref<string[]>([])
 
-const subtitleActiveNames = ref<string[]>([])
+const subtitleActiveNames = ref<string[]>(['subtitle-basic'])
 
 // === 实时字幕预览 Canvas ===
 const previewCanvasRef = ref<HTMLCanvasElement | null>(null)

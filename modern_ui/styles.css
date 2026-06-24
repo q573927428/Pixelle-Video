@@ -1358,6 +1358,18 @@
       padding-top: 12px;
     }
 
+    /* ====== ElDivider 深色主题适配 ====== */
+    .el-divider {
+      --el-border-color: rgba(148, 163, 184, 0.18);
+    }
+    .el-divider--horizontal {
+      border-top: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .el-divider__text {
+      color: #94a3b8;
+      background: transparent;
+    }
+
     /* ====== ElSwitch 深色主题适配 ====== */
     .el-switch {
       --el-switch-on-color: #8b5cf6;
