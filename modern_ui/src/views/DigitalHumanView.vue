@@ -171,7 +171,7 @@ const digitalForm = ref<DigitalForm>({
   subtitle_enabled: false,
   subtitle_config: {
     enabled: false,
-    font_size: 50,
+    font_size: 56,
     font_color: '#FFFFFF',
     font_family: 'PingFang SC',
     position_x: 0,

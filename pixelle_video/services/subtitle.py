@@ -96,10 +96,10 @@ class SubtitleService:
     # 默认字体路径（按优先级搜索）
     DEFAULT_FONT_PATHS = [
         # ===== 最高优先级：思源黑体 / 思源宋体 (安装脚本 install_chinese_fonts.sh 安装到 /usr/share/fonts/chinese/) =====
-        "/usr/share/fonts/chinese/NotoSansSC-Regular.otf",
         "/usr/share/fonts/chinese/NotoSansSC-Bold.otf",
-        "/usr/share/fonts/chinese/NotoSerifSC-Regular.otf",
+        "/usr/share/fonts/chinese/NotoSansSC-Regular.otf",
         "/usr/share/fonts/chinese/NotoSerifSC-Bold.otf",
+        "/usr/share/fonts/chinese/NotoSerifSC-Regular.otf",
         # Ubuntu / Debian (apt install fonts-noto-cjk)
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf",
