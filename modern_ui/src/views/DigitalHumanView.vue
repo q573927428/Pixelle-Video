@@ -172,7 +172,7 @@ const digitalForm = ref<DigitalForm>({
   subtitle_config: {
     enabled: false,
     font_size: 50,
-    font_color: '#FF0000',
+    font_color: '#FFFFFF',
     font_family: 'PingFang SC',
     position_x: 0,
     position_y: -390,
@@ -182,8 +182,8 @@ const digitalForm = ref<DigitalForm>({
     background_opacity: 0,
     background_padding: '10 20',
     background_radius: 20,
-    font_border_width: 4,
-    font_border_color: '#FFFFFF',
+    font_border_width: 6,
+    font_border_color: '#000000',
   },
 })
 
