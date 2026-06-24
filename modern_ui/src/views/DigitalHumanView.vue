@@ -417,8 +417,9 @@ function renderSubtitlePreview() {
   }
   if (currentLine) lines.push(currentLine)
 
-  // 行高 = 字号 + 4px（与后端一致）
-  const lineHeight = fontSize + Math.round(2 * scale)
+  // 行高 = ascent + descent (与后端 Pillow font.getmetrics() 保持一致)
+  // 对于中文字体，ascent + descent ≈ fontSize * 1.2
+  const lineHeight = Math.round(fontSize * 1.2)
   const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB

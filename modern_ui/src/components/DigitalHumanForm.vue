@@ -728,8 +728,9 @@ function renderSubtitlePreview() {
   }
   if (curLine) lines.push(curLine)
 
-  // 行高
-  const lineHeight = fontSize + Math.round(4 * scale)
+  // 行高 = ascent + descent (与后端 Pillow 字幕服务的 font.getmetrics() 保持一致)
+  // 对于中文字体，ascent + descent ≈ fontSize * 1.2
+  const lineHeight = Math.round(fontSize * 1.2)
 
   // 背景尺寸（使用带间距的宽度）
   const lineWidths = lines.map(l => getLineWidth(l))

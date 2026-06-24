@@ -395,6 +395,7 @@ def _burn_subtitles_sync(
         cfg_model.position_x = int(cfg_model.position_x * scale_factor)
         cfg_model.position_y = int(cfg_model.position_y * scale_factor)
         cfg_model.background_radius = max(0, int(cfg_model.background_radius * scale_factor))
+        cfg_model.letter_spacing = max(0, int(cfg_model.letter_spacing * scale_factor))
         if cfg_model.font_border_width > 0:
             cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * scale_factor))
         
@@ -929,7 +930,7 @@ async def subtitle_preview(
         # 将 SubtitleRequestConfig 转换为 SubtitleConfigModel
         cfg_model = SubtitleConfigModel.from_dict(request_body.subtitle_config.model_dump())
 
-        # 缩放到 540x960 时需要按比例缩放字号和最大宽度
+        # 缩放到 540x960 时需要按比例缩放字号、间距、内边距等参数
         # 原配置是针对 1080x1920 设计的，缩放比例 = 540/1080 = 0.5
         scale_factor = preview_video_width / request_body.video_width if request_body.video_width > 0 else 0.5
         cfg_model.font_size = max(12, int(cfg_model.font_size * scale_factor))
@@ -937,8 +938,18 @@ async def subtitle_preview(
         cfg_model.position_x = int(cfg_model.position_x * scale_factor)
         cfg_model.position_y = int(cfg_model.position_y * scale_factor)
         cfg_model.background_radius = max(0, int(cfg_model.background_radius * scale_factor))
+        cfg_model.letter_spacing = max(0, int(cfg_model.letter_spacing * scale_factor))
         if cfg_model.font_border_width > 0:
             cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * scale_factor))
+        # 缩放 padding
+        pad_parts = (cfg_model.background_padding or '10 20').split(' ')
+        scaled_pad = []
+        for p in pad_parts:
+            p = p.strip()
+            if p.isdigit():
+                scaled_pad.append(str(max(1, int(int(p) * scale_factor))))
+        if scaled_pad:
+            cfg_model.background_padding = ' '.join(scaled_pad)
 
         # 生成字幕帧图像（缩小分辨率）
         frames_dir = subtitle_service.generate_subtitle_frames(
