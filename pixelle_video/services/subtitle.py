@@ -112,6 +112,10 @@ class SubtitleService:
         "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc",
         # Windows
+        "C:/Windows/Fonts/NotoSansSC-Bold.otf", 
+        "C:/Windows/Fonts/NotoSansSC-Regular.otf", 
+        "C:/Windows/Fonts/NotoSerifSC-Bold.otf",
+        "C:/Windows/Fonts/NotoSerifSC-Regular.otf",
         "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         "C:/Windows/Fonts/simhei.ttf",  # 黑体
         "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑粗体
