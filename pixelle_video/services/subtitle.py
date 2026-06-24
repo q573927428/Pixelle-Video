@@ -401,9 +401,10 @@ class SubtitleService:
             else:
                 final_segments.append(sent)
 
-        # 每段时长
-        seg_count = len(final_segments)
-        seg_duration = audio_duration / seg_count if seg_count > 0 else 1.0
+        # 计算总字符数，按字符占比加权分配时长
+        total_chars = sum(len(seg) for seg in final_segments)
+        if total_chars <= 0:
+            total_chars = len(final_segments)
 
         def to_srt_time(seconds: float) -> str:
             h = int(seconds // 3600)
@@ -415,6 +416,8 @@ class SubtitleService:
         current_time = 0.0
         for i, seg in enumerate(final_segments):
             start = current_time
+            # 按字符数占比分配时长：长句分配更多时间，短句分配更少时间
+            seg_duration = (len(seg) / total_chars) * audio_duration
             end = current_time + seg_duration
             lines.append(str(i + 1))
             lines.append(f"{to_srt_time(start)} --> {to_srt_time(end)}")

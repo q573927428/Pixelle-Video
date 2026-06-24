@@ -1145,6 +1145,10 @@ class VideoService:
         try:
             import subprocess
 
+            # 获取视频时长，用于 -t 参数强制限制输出时长
+            # 避免 -loop 1 无限图片流导致 FFmpeg 卡死
+            video_duration = self._get_video_duration(video)
+
             cmd = ["ffmpeg", "-y"]
             # 输入视频
             cmd.extend(["-i", video])
@@ -1157,6 +1161,8 @@ class VideoService:
             cmd.extend(["-filter_complex", filter_complex])
             cmd.extend(["-map", "[v_out]"])
             cmd.extend(["-map", "0:a"])  # 保留原音频
+            # -t 强制限制输出时长，防止无限循环图片流导致卡死
+            cmd.extend(["-t", str(video_duration)])
             cmd.extend([
                 "-c:v", "libx264",
                 "-c:a", "copy",
@@ -1165,7 +1171,7 @@ class VideoService:
                 output,
             ])
 
-            logger.info(f"Running FFmpeg subtitle burn command (filter: {filter_complex})")
+            logger.info(f"Running FFmpeg subtitle burn command (duration={video_duration:.2f}s, filter={filter_complex})")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
