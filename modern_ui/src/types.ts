@@ -132,6 +132,7 @@ export interface SubtitleConfig {
   position_x: number
   position_y: number
   max_width: number
+  letter_spacing: number
   background_color: string
   background_opacity: number
   background_padding: string

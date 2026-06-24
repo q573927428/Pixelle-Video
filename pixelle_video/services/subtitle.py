@@ -7,6 +7,7 @@
 此方案能完全支持：
   - 背景颜色、透明度、内边距、圆角
   - 文字大小/颜色、X/Y 轴位置、最大宽度
+  - 文字间距 (letter_spacing)
   - 像素级精确控制，预览与实际完全一致
 """
 
@@ -43,6 +44,7 @@ class SubtitleConfigModel:
         position_x: int = 0,
         position_y: int = 0,
         max_width: int = 900,
+        letter_spacing: int = 0,
         background_color: str = "#000000",
         background_opacity: float = 0.6,
         background_padding: str = "10 20",
@@ -57,6 +59,7 @@ class SubtitleConfigModel:
         self.position_x = position_x
         self.position_y = position_y
         self.max_width = max_width
+        self.letter_spacing = letter_spacing
         self.background_color = background_color
         self.background_opacity = background_opacity
         self.background_padding = background_padding
@@ -75,6 +78,7 @@ class SubtitleConfigModel:
             position_x=d.get("position_x", 0),
             position_y=d.get("position_y", 0),
             max_width=d.get("max_width", 900),
+            letter_spacing=d.get("letter_spacing", 0),
             background_color=d.get("background_color", "#000000"),
             background_opacity=d.get("background_opacity", 0.6),
             background_padding=d.get("background_padding", "10 20"),
@@ -254,12 +258,13 @@ class SubtitleService:
             return (10, 20, 10, 20)  # 默认
 
     def _split_text_into_lines(
-        self, text: str, font: ImageFont.FreeTypeFont, max_width: int
+        self, text: str, font: ImageFont.FreeTypeFont, max_width: int, letter_spacing: int = 0
     ) -> list[str]:
         """
         将文本按最大宽度分割成多行
         - 优先按标点符号换行
         - 超出宽度则强制截断
+        - 考虑文字间距对宽度的影响
         """
         # 先按标点分割成短句
         sentences = re.split(r"([。！？；，、，.!?;,\s])", text)
@@ -277,13 +282,19 @@ class SubtitleService:
 
         lines: list[str] = []
         for chunk in chunks:
+            # 计算带有 letter_spacing 的宽度
+            def get_text_width(txt: str) -> float:
+                if letter_spacing > 0 and len(txt) > 1:
+                    return font.getlength(txt) + letter_spacing * (len(txt) - 1)
+                return font.getlength(txt)
+
             # 如果单个 chunk 已经超过最大宽度，需要进一步拆分
-            if font.getlength(chunk) > max_width:
+            if get_text_width(chunk) > max_width:
                 # 按字符拆分
                 current_line = ""
                 for char in chunk:
                     test_line = current_line + char
-                    if font.getlength(test_line) > max_width and current_line:
+                    if get_text_width(test_line) > max_width and current_line:
                         lines.append(current_line)
                         current_line = char
                     else:
@@ -294,7 +305,7 @@ class SubtitleService:
                 # 尝试合并到当前行
                 if lines:
                     test_line = lines[-1] + chunk
-                    if font.getlength(test_line) <= max_width:
+                    if get_text_width(test_line) <= max_width:
                         lines[-1] = test_line
                     else:
                         lines.append(chunk)
@@ -323,6 +334,40 @@ class SubtitleService:
     def _clean_punctuation(text: str) -> str:
         """去除字幕文本中的标点符号"""
         return re.sub(r"[。！？；，、：；“”‘’—…（）【】《》〈〉.!?,;:()\[\]{}<>\"\'\-]", "", text)
+
+    def _draw_text_with_letter_spacing(
+        self,
+        draw: ImageDraw.ImageDraw,
+        xy: tuple[int, int],
+        text: str,
+        font: ImageFont.FreeTypeFont,
+        fill: tuple[int, int, int, int],
+        letter_spacing: int = 0,
+        anchor: str = 'lt',
+        stroke_width: int = 0,
+        stroke_fill: Optional[tuple[int, int, int, int]] = None,
+    ):
+        """
+        绘制支持文字间距的文本
+        如果 letter_spacing <= 0，使用标准 draw.text 绘制
+        否则逐字符绘制，每个字符之间增加 letter_spacing 像素间距
+        """
+        x, y = xy
+        if letter_spacing <= 0:
+            if stroke_width > 0 and stroke_fill:
+                draw.text((x, y), text, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor=anchor)
+            else:
+                draw.text((x, y), text, fill=fill, font=font, anchor=anchor)
+            return
+
+        current_x = x
+        for char in text:
+            if stroke_width > 0 and stroke_fill:
+                draw.text((current_x, y), char, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor='lt')
+            else:
+                draw.text((current_x, y), char, fill=fill, font=font, anchor='lt')
+            char_width = font.getlength(char)
+            current_x += char_width + letter_spacing
 
     def generate_srt(
         self, text: str, audio_duration: float, max_chars_per_line: int = 20
@@ -418,6 +463,9 @@ class SubtitleService:
         pad_top, pad_right, pad_bottom, pad_left = self._parse_padding(config.background_padding)
         bg_color = self._hex_to_rgba(config.background_color, config.background_opacity)
         fg_color = self._hex_to_rgba(config.font_color, 1.0)
+        border_color = self._hex_to_rgba(config.font_border_color, 1.0) if config.font_border_width > 0 else None
+        border_width = config.font_border_width
+        letter_spacing = config.letter_spacing
 
         # 计算 X/Y 位置
         # position_x: 0 = 居中, 负数 = 偏左, 正数 = 偏右
@@ -425,6 +473,14 @@ class SubtitleService:
         base_x = video_width // 2
         offset_x = config.position_x
         base_y = video_height - 50 + config.position_y  # 默认距底边 150px，与前端预览完全对齐
+
+        # 计算带 letter_spacing 的文本宽度
+        def get_text_width(txt: str) -> int:
+            if not txt:
+                return 0
+            if letter_spacing > 0 and len(txt) > 1:
+                return int(font.getlength(txt)) + letter_spacing * (len(txt) - 1)
+            return int(font.getlength(txt))
 
         frame_files: list[dict] = []  # [{path, start_frame, end_frame}]
 
@@ -434,16 +490,16 @@ class SubtitleService:
             end_time = seg["end"]
 
             # 将文本按 max_width 分割成多行
-            lines = self._split_text_into_lines(seg_text, font, config.max_width)
+            lines = self._split_text_into_lines(seg_text, font, config.max_width, letter_spacing)
 
             # 计算每行高度：与前端保持一致
-            line_height = font_size 
+            line_height = font_size
 
             text_height = len(lines) * line_height
 
             # 计算背景尺寸
-            # 每行宽度取最大行宽
-            line_widths = [int(font.getlength(line)) for line in lines]
+            # 每行宽度取最大行宽（考虑 letter_spacing）
+            line_widths = [get_text_width(line) for line in lines]
             max_line_width = max(line_widths) if line_widths else 0
             bg_width = max_line_width + pad_left + pad_right
             bg_height = text_height + pad_top + pad_bottom
@@ -466,32 +522,28 @@ class SubtitleService:
                     bg_color,
                 )
 
-            # 边框颜色
-            border_color = self._hex_to_rgba(config.font_border_color, 1.0) if config.font_border_width > 0 else None
-            border_width = config.font_border_width
-
-            # 计算字体基线偏移：Pillow 默认 anchor='la'（基线对齐），
-            # 而我们需要 textBaseline='top' 效果，因此 y 要加上 ascent
-            try:
-                ascent, _descent = font.getmetrics()
-            except Exception:
-                ascent = font_size
-
-            # 逐行绘制文字
+            # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
-                line_x = base_x + offset_x - int(font.getlength(line)) // 2
-                # 与前端Canvas textBaseline='top'保持完全一致，移除ascent偏移
+                line_x = base_x + offset_x - get_text_width(line) // 2
                 line_y = bg_y1 + pad_top + j * line_height
                 if border_width > 0 and border_color:
-                    draw.text(
+                    self._draw_text_with_letter_spacing(
+                        draw,
                         (line_x, line_y), line,
-                        fill=fg_color, font=font,
+                        font=font, fill=fg_color,
+                        letter_spacing=letter_spacing,
+                        anchor='lt',
                         stroke_width=border_width,
                         stroke_fill=border_color,
-                        anchor='lt'
                     )
                 else:
-                    draw.text((line_x, line_y), line, fill=fg_color, font=font, anchor='lt')
+                    self._draw_text_with_letter_spacing(
+                        draw,
+                        (line_x, line_y), line,
+                        font=font, fill=fg_color,
+                        letter_spacing=letter_spacing,
+                        anchor='lt',
+                    )
 
             # 生成帧图像文件名（使用 uuid 避免并发冲突）
             frame_filename = f"subtitle_{uuid.uuid4().hex[:8]}_{seg['index']:04d}.png"

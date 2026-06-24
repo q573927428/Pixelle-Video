@@ -94,6 +94,7 @@ class SubtitleRequestConfig(BaseModel):
     position_x: int = 0
     position_y: int = 0
     max_width: int = 900
+    letter_spacing: int = 0
     background_color: str = "#000000"
     background_opacity: float = 0.6
     background_padding: str = "10 20"

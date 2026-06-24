@@ -513,6 +513,10 @@
                 <el-form-item label="文字边框颜色">
                   <el-color-picker v-model="form.subtitle_config.font_border_color" show-alpha />
                 </el-form-item>
+                <el-divider style="margin:8px 0;" />
+                <el-form-item label="文字间距">
+                  <el-slider v-model="form.subtitle_config.letter_spacing" :min="0" :max="50" :step="1" show-input />
+                </el-form-item>
               </el-collapse-item>
             </el-collapse>
           </div>
@@ -685,28 +689,43 @@ function renderSubtitlePreview() {
   ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
   ctx.textBaseline = 'top'
 
-  // 计算文字行（按最大宽度换行）
+  // 文字边框
+  const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
+  const borderColor = cfg.font_border_color || '#000000'
+
+  // 文字间距（缩放后）
+  const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
+
+  // 计算带间距的文本宽度
+  const ctxSafe = ctx as CanvasRenderingContext2D
+  function getLineWidth(txt: string): number {
+    if (!txt) return 0
+    if (letterSpacing > 0 && txt.length > 1) {
+      return ctxSafe.measureText(txt).width + letterSpacing * (txt.length - 1)
+    }
+    return ctxSafe.measureText(txt).width
+  }
+
+  // 重新计算文字行（考虑文字间距）
   const lines: string[] = []
-  let currentLine = ''
+  let curLine = ''
   for (const char of demoText) {
-    const test = currentLine + char
-    if (ctx.measureText(test).width > maxWidth && currentLine) {
-      lines.push(currentLine)
-      currentLine = char
+    const test = curLine + char
+    if (getLineWidth(test) > maxWidth && curLine) {
+      lines.push(curLine)
+      curLine = char
     } else {
-      currentLine = test
+      curLine = test
     }
   }
-  if (currentLine) lines.push(currentLine)
+  if (curLine) lines.push(curLine)
 
   // 行高
   const lineHeight = fontSize + Math.round(4 * scale)
 
-  // 计算每行宽度
-  const lineWidths = lines.map(l => ctx.measureText(l).width)
+  // 背景尺寸（使用带间距的宽度）
+  const lineWidths = lines.map(l => getLineWidth(l))
   const maxLineWidth = Math.max(...lineWidths)
-
-  // 背景尺寸
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB
 
@@ -716,46 +735,62 @@ function renderSubtitlePreview() {
   const bgX = baseX - bgWidth / 2
   const bgY = baseY - bgHeight
 
-  // 绘制圆角背景
-  const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
-  ctx.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
+  // 绘制圆角背景（用新尺寸）
+  ctxSafe.clearRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
+  ctxSafe.fillStyle = '#1a1a2e'
+  ctxSafe.fillRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
 
+  const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
+  ctxSafe.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
   const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
   if (r > 0) {
-    ctx.beginPath()
-    ctx.moveTo(bgX + r, bgY)
-    ctx.lineTo(bgX + bgWidth - r, bgY)
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
-    ctx.lineTo(bgX + bgWidth, bgY + bgHeight - r)
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
-    ctx.lineTo(bgX + r, bgY + bgHeight)
-    ctx.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
-    ctx.lineTo(bgX, bgY + r)
-    ctx.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
-    ctx.closePath()
-    ctx.fill()
+    ctxSafe.beginPath()
+    ctxSafe.moveTo(bgX + r, bgY)
+    ctxSafe.lineTo(bgX + bgWidth - r, bgY)
+    ctxSafe.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
+    ctxSafe.lineTo(bgX + bgWidth, bgY + bgHeight - r)
+    ctxSafe.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
+    ctxSafe.lineTo(bgX + r, bgY + bgHeight)
+    ctxSafe.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
+    ctxSafe.lineTo(bgX, bgY + r)
+    ctxSafe.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
+    ctxSafe.closePath()
+    ctxSafe.fill()
   } else {
-    ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+    ctxSafe.fillRect(bgX, bgY, bgWidth, bgHeight)
   }
 
-  // 文字边框
-  const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
-  const borderColor = cfg.font_border_color || '#000000'
-
-  // 绘制文字
-  ctx.fillStyle = cfg.font_color || '#FFFFFF'
+  // 绘制文字（每行居中，与后端 Pillow 渲染一致）
+  ctxSafe.fillStyle = cfg.font_color || '#FFFFFF'
   for (let i = 0; i < lines.length; i++) {
-    const lineWidth = ctx.measureText(lines[i]).width
-    const x = baseX - lineWidth / 2
+    const line = lines[i]
     const y = bgY + padT + i * lineHeight
-    if (borderWidth > 0) {
-      ctx.strokeStyle = borderColor
-      ctx.lineWidth = borderWidth
-      ctx.lineJoin = 'round'
-      ctx.miterLimit = 2
-      ctx.strokeText(lines[i], x, y)
+    const lineWidth = getLineWidth(line)
+    // 每行在背景框内居中
+    const startX = bgX + (bgWidth - lineWidth) / 2
+    if (letterSpacing > 0 && line.length > 1) {
+      let currentX = startX
+      for (const char of line) {
+        if (borderWidth > 0) {
+          ctxSafe.strokeStyle = borderColor
+          ctxSafe.lineWidth = borderWidth
+          ctxSafe.lineJoin = 'round'
+          ctxSafe.miterLimit = 2
+          ctxSafe.strokeText(char, currentX, y)
+        }
+        ctxSafe.fillText(char, currentX, y)
+        currentX += ctxSafe.measureText(char).width + letterSpacing
+      }
+    } else {
+      if (borderWidth > 0) {
+        ctxSafe.strokeStyle = borderColor
+        ctxSafe.lineWidth = borderWidth
+        ctxSafe.lineJoin = 'round'
+        ctxSafe.miterLimit = 2
+        ctxSafe.strokeText(line, startX, y)
+      }
+      ctxSafe.fillText(line, startX, y)
     }
-    ctx.fillText(lines[i], x, y)
   }
 }
 
@@ -767,6 +802,7 @@ watch(
     props.form.subtitle_config.position_x,
     props.form.subtitle_config.position_y,
     props.form.subtitle_config.max_width,
+    props.form.subtitle_config.letter_spacing,
     props.form.subtitle_config.background_color,
     props.form.subtitle_config.background_opacity,
     props.form.subtitle_config.background_padding,

@@ -110,6 +110,7 @@ export function buildDigitalPayload(form: DigitalForm): Record<string, any> {
         position_x: form.subtitle_config.position_x,
         position_y: form.subtitle_config.position_y,
         max_width: form.subtitle_config.max_width,
+        letter_spacing: form.subtitle_config.letter_spacing,
         background_color: form.subtitle_config.background_color,
         background_opacity: form.subtitle_config.background_opacity,
         background_padding: form.subtitle_config.background_padding,

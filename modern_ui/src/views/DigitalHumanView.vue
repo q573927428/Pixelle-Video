@@ -177,6 +177,7 @@ const digitalForm = ref<DigitalForm>({
     position_x: 0,
     position_y: -390,
     max_width: 900,
+    letter_spacing: 3,
     background_color: '#000000',
     background_opacity: 0,
     background_padding: '10 20',
@@ -387,12 +388,27 @@ function renderSubtitlePreview() {
   ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
   ctx.textBaseline = 'top'
 
-  // 按最大宽度换行
+  // 文字间距
+  const letterSpacing = Math.round((cfg.letter_spacing || 0) * 2 * scale)
+
+  // safe reference to ctx (non-null)
+  const c = ctx as CanvasRenderingContext2D
+
+  // 计算带间距的文本宽度
+  function getLineWidth(txt: string): number {
+    if (!txt) return 0
+    if (letterSpacing > 0 && txt.length > 1) {
+      return c.measureText(txt).width + letterSpacing * (txt.length - 1)
+    }
+    return c.measureText(txt).width
+  }
+
+  // 按最大宽度换行（考虑文字间距）
   const lines: string[] = []
   let currentLine = ''
   for (const char of text) {
     const test = currentLine + char
-    if (ctx.measureText(test).width > maxWidth && currentLine) {
+    if (getLineWidth(test) > maxWidth && currentLine) {
       lines.push(currentLine)
       currentLine = char
     } else {
@@ -403,7 +419,7 @@ function renderSubtitlePreview() {
 
   // 行高 = 字号 + 4px（与后端一致，4px也放大2倍）
   const lineHeight = fontSize + Math.round(1 * 2 * scale)
-  const maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width))
+  const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB
 
@@ -415,44 +431,61 @@ function renderSubtitlePreview() {
 
   // 绘制圆角背景
   const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
-  ctx.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
+  c.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
 
   const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
   if (r > 0) {
-    ctx.beginPath()
-    ctx.moveTo(bgX + r, bgY)
-    ctx.lineTo(bgX + bgWidth - r, bgY)
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
-    ctx.lineTo(bgX + bgWidth, bgY + bgHeight - r)
-    ctx.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
-    ctx.lineTo(bgX + r, bgY + bgHeight)
-    ctx.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
-    ctx.lineTo(bgX, bgY + r)
-    ctx.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
-    ctx.closePath()
-    ctx.fill()
+    c.beginPath()
+    c.moveTo(bgX + r, bgY)
+    c.lineTo(bgX + bgWidth - r, bgY)
+    c.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
+    c.lineTo(bgX + bgWidth, bgY + bgHeight - r)
+    c.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
+    c.lineTo(bgX + r, bgY + bgHeight)
+    c.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
+    c.lineTo(bgX, bgY + r)
+    c.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
+    c.closePath()
+    c.fill()
   } else {
-    ctx.fillRect(bgX, bgY, bgWidth, bgHeight)
+    c.fillRect(bgX, bgY, bgWidth, bgHeight)
   }
 
   // 文字边框宽度（预览缩放）
   const borderWidth = Math.round((cfg.font_border_width || 0) * 2 * scale)
   const borderColor = cfg.font_border_color || '#000000'
 
-  // 绘制文字（注：Canvas2D 与 Pillow 字体度量存在差异，文字宽度/位置仅供参考）
-  ctx.fillStyle = cfg.font_color || '#FFFFFF'
+  // 绘制文字（每行在背景框内居中，与后端 Pillow 渲染一致）
+  c.fillStyle = cfg.font_color || '#FFFFFF'
   for (let i = 0; i < lines.length; i++) {
-    const lineWidth = ctx.measureText(lines[i]).width
-    const x = baseX - lineWidth / 2
+    const line = lines[i]
     const y = bgY + padT + i * lineHeight
-    if (borderWidth > 0) {
-      ctx.strokeStyle = borderColor
-      ctx.lineWidth = borderWidth
-      ctx.lineJoin = 'round'
-      ctx.miterLimit = 2
-      ctx.strokeText(lines[i], x, y)
+    const lineWidth = getLineWidth(line)
+    // 每行在背景框内居中
+    const startX = bgX + (bgWidth - lineWidth) / 2
+    if (letterSpacing > 0 && line.length > 1) {
+      let currentX = startX
+      for (const char of line) {
+        if (borderWidth > 0) {
+          c.strokeStyle = borderColor
+          c.lineWidth = borderWidth
+          c.lineJoin = 'round'
+          c.miterLimit = 2
+          c.strokeText(char, currentX, y)
+        }
+        c.fillText(char, currentX, y)
+        currentX += c.measureText(char).width + letterSpacing
+      }
+    } else {
+      if (borderWidth > 0) {
+        c.strokeStyle = borderColor
+        c.lineWidth = borderWidth
+        c.lineJoin = 'round'
+        c.miterLimit = 2
+        c.strokeText(line, startX, y)
+      }
+      c.fillText(line, startX, y)
     }
-    ctx.fillText(lines[i], x, y)
   }
 }
 
@@ -502,6 +535,7 @@ watch(
       px: digitalForm.value.subtitle_config.position_x,
       py: digitalForm.value.subtitle_config.position_y,
       mw: digitalForm.value.subtitle_config.max_width,
+      ls: digitalForm.value.subtitle_config.letter_spacing,
       bc: digitalForm.value.subtitle_config.background_color,
       bo: digitalForm.value.subtitle_config.background_opacity,
       bp: digitalForm.value.subtitle_config.background_padding,
@@ -558,6 +592,7 @@ async function handleSubtitlePreview() {
          position_x: digitalForm.value.subtitle_config.position_x,
          position_y: digitalForm.value.subtitle_config.position_y,
          max_width: digitalForm.value.subtitle_config.max_width,
+         letter_spacing: digitalForm.value.subtitle_config.letter_spacing,
          background_color: digitalForm.value.subtitle_config.background_color,
          background_opacity: digitalForm.value.subtitle_config.background_opacity,
          background_padding: digitalForm.value.subtitle_config.background_padding,
@@ -682,6 +717,7 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
      position_x: digitalForm.value.subtitle_config.position_x,
      position_y: digitalForm.value.subtitle_config.position_y,
      max_width: digitalForm.value.subtitle_config.max_width,
+     letter_spacing: digitalForm.value.subtitle_config.letter_spacing,
      background_color: digitalForm.value.subtitle_config.background_color,
      background_opacity: digitalForm.value.subtitle_config.background_opacity,
      background_padding: digitalForm.value.subtitle_config.background_padding,
