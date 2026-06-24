@@ -116,8 +116,8 @@ class SubtitleService:
         "C:/Windows/Fonts/NotoSansSC-Regular.otf", 
         "C:/Windows/Fonts/NotoSerifSC-Bold.otf",
         "C:/Windows/Fonts/NotoSerifSC-Regular.otf",
-        "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         "C:/Windows/Fonts/simhei.ttf",  # 黑体
+        "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑粗体
         # macOS
         "/System/Library/Fonts/PingFang.ttc",
@@ -347,7 +347,7 @@ class SubtitleService:
         font: ImageFont.FreeTypeFont,
         fill: tuple[int, int, int, int],
         letter_spacing: int = 0,
-        anchor: str = 'lt',
+        anchor: str = 'mm',
         stroke_width: int = 0,
         stroke_fill: Optional[tuple[int, int, int, int]] = None,
     ):
@@ -364,14 +364,36 @@ class SubtitleService:
                 draw.text((x, y), text, fill=fill, font=font, anchor=anchor)
             return
 
-        current_x = x
+        # 对于带 letter_spacing 的文本，需要手动计算居中位置
+        # 获取字体 metrics
+        ascent, descent = font.getmetrics()
+        text_width = self._get_text_width_with_spacing(text, font, letter_spacing)
+        
+        # 根据 anchor 调整起始位置
+        if anchor == 'mm':
+            # 居中锚点：x 是文本中心，y 是文本垂直中心
+            start_x = x - text_width / 2
+            # y 已经是垂直中心，不需要调整
+        else:
+            start_x = x
+        
+        current_x = start_x
         for char in text:
             if stroke_width > 0 and stroke_fill:
-                draw.text((current_x, y), char, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor='lt')
+                draw.text((current_x, y), char, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor='mm')
             else:
-                draw.text((current_x, y), char, fill=fill, font=font, anchor='lt')
+                draw.text((current_x, y), char, fill=fill, font=font, anchor='mm')
             char_width = font.getlength(char)
             current_x += char_width + letter_spacing
+
+    def _get_text_width_with_spacing(self, text: str, font: ImageFont.FreeTypeFont, letter_spacing: int) -> float:
+        """计算带 letter_spacing 的文本总宽度"""
+        if not text:
+            return 0
+        total_width = font.getlength(text)
+        if letter_spacing > 0 and len(text) > 1:
+            total_width += letter_spacing * (len(text) - 1)
+        return total_width
 
     def generate_srt(
         self, text: str, audio_duration: float, max_chars_per_line: int = 20
@@ -499,8 +521,9 @@ class SubtitleService:
             # 将文本按 max_width 分割成多行
             lines = self._split_text_into_lines(seg_text, font, config.max_width, letter_spacing)
 
-            # 计算每行高度：与前端保持一致
-            line_height = font_size
+            # 获取字体 metrics 来计算正确的行高
+            ascent, descent = font.getmetrics()
+            line_height = ascent + descent  # 实际字体高度
 
             text_height = len(lines) * line_height
 
@@ -531,15 +554,21 @@ class SubtitleService:
 
             # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
-                line_x = base_x + offset_x - get_text_width(line) // 2
-                line_y = bg_y1 + pad_top + j * line_height
+                # 水平居中：x 坐标是文本中心
+                line_x = base_x + offset_x
+                # 垂直居中：计算每行的中心位置
+                # 背景框的中心是 bg_y1 + bg_height / 2
+                # 多行文本时，第一行的中心位置是：
+                # bg_y1 + pad_top + line_height / 2 + j * line_height
+                line_y = bg_y1 + pad_top + line_height / 2 + j * line_height
+                
                 if border_width > 0 and border_color:
                     self._draw_text_with_letter_spacing(
                         draw,
                         (line_x, line_y), line,
                         font=font, fill=fg_color,
                         letter_spacing=letter_spacing,
-                        anchor='lt',
+                        anchor='mm',
                         stroke_width=border_width,
                         stroke_fill=border_color,
                     )
@@ -549,7 +578,7 @@ class SubtitleService:
                         (line_x, line_y), line,
                         font=font, fill=fg_color,
                         letter_spacing=letter_spacing,
-                        anchor='lt',
+                        anchor='mm',
                     )
 
             # 生成帧图像文件名（使用 uuid 避免并发冲突）
