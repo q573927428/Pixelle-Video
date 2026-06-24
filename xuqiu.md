@@ -21,9 +21,7 @@ uv run streamlit run web/app.py
 git pull origin modern_ui
 
 # 临时允许所有构建脚本
-cd modern_ui
-pnpm approve-builds esbuild
-pnpm build
+cd modern_ui; pnpm approve-builds esbuild; pnpm build
 
 
 担心海关查验会把你的心爱宝贝弄坏。真实情况是，海关比你想象的要专业，但也确实会有痕迹。
