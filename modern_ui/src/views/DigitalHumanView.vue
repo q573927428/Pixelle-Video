@@ -182,7 +182,7 @@ const digitalForm = ref<DigitalForm>({
     background_opacity: 0,
     background_padding: '10 20',
     background_radius: 20,
-    font_border_width: 6,
+    font_border_width: 3,
     font_border_color: '#000000',
   },
 })
@@ -368,29 +368,28 @@ function renderSubtitlePreview() {
     loadBackgroundImage()
   }
 
-  // 预览显示放大2倍，与实际生成效果匹配
+  // 计算缩放后的参数，与后端 subtitle.py 在 1080x1920 分辨率下的渲染保持一致
   const fontSize = Math.round(cfg.font_size * scale)
   const maxWidth = Math.round(cfg.max_width * scale)
   const offsetX = Math.round(cfg.position_x * scale)
   const offsetY = Math.round(cfg.position_y * scale)
   const radius = Math.round(cfg.background_radius * scale)
 
-  // 解析 padding（与后端 SubtitleService._parse_padding 逻辑一致，预览放大2倍）
+  // 解析 padding（与后端 SubtitleService._parse_padding 逻辑一致）
   const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
   let padT = 10, padR = 20, padB = 10, padL = 20
   if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
   else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
   else if (padParts.length === 4) { padT = padParts[0]; padR = padParts[1]; padB = padParts[2]; padL = padParts[3] }
-  // 内边距同样放大2倍，与字体匹配
-  padT = Math.round(padT * 2 * scale); padR = Math.round(padR * 2 * scale)
-  padB = Math.round(padB * 2 * scale); padL = Math.round(padL * 2 * scale)
+  padT = Math.round(padT * scale); padR = Math.round(padR * scale)
+  padB = Math.round(padB * scale); padL = Math.round(padL * scale)
 
-  // 使用普通字重（Pillow 默认无加粗），减少与 Pillow 渲染的差异
-  ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+  // 使用中等字重与后端 Pillow 渲染保持一致
+  ctx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
   ctx.textBaseline = 'top'
 
   // 文字间距
-  const letterSpacing = Math.round((cfg.letter_spacing || 0) * 2 * scale)
+  const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
 
   // safe reference to ctx (non-null)
   const c = ctx as CanvasRenderingContext2D
@@ -418,8 +417,8 @@ function renderSubtitlePreview() {
   }
   if (currentLine) lines.push(currentLine)
 
-  // 行高 = 字号 + 4px（与后端一致，4px也放大2倍）
-  const lineHeight = fontSize + Math.round(1 * 2 * scale)
+  // 行高 = 字号 + 4px（与后端一致）
+  const lineHeight = fontSize + Math.round(2 * scale)
   const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB
@@ -452,8 +451,8 @@ function renderSubtitlePreview() {
     c.fillRect(bgX, bgY, bgWidth, bgHeight)
   }
 
-  // 文字边框宽度（预览缩放）
-  const borderWidth = Math.round((cfg.font_border_width || 0) * 2 * scale)
+  // 文字边框宽度（与后端保持一致：直接使用 font_border_width 按比例缩放）
+  const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
   const borderColor = cfg.font_border_color || '#000000'
 
   // 绘制文字（每行在背景框内居中，与后端 Pillow 渲染一致）

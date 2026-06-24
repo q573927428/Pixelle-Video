@@ -145,6 +145,39 @@ class SubtitleService:
             )
         self._font_path = font_path or self._find_font()
 
+    def _find_bold_font(self, regular_font_path: str) -> Optional[str]:
+        """查找支持中文的 Bold 字体，优先查找原字体的 Bold 版本"""
+        if not regular_font_path:
+            return None
+        # 1. 从原路径推断 Bold 版本
+        if '-Regular' in regular_font_path:
+            bold_guess = regular_font_path.replace('-Regular', '-Bold')
+            if os.path.exists(bold_guess):
+                logger.info(f"Found bold font: {bold_guess}")
+                return bold_guess
+        if 'Regular' in regular_font_path:
+            bold_guess = regular_font_path.replace('Regular', 'Bold')
+            if os.path.exists(bold_guess):
+                logger.info(f"Found bold font: {bold_guess}")
+                return bold_guess
+        # 2. 从 DEFAULT_FONT_PATHS 中返回第一个存在的 Bold 中文字体
+        bold_fonts = [
+            # 思源黑体 Bold（最高优先级）
+            "/usr/share/fonts/chinese/NotoSansSC-Bold.otf",
+            "C:/Windows/Fonts/NotoSansSC-Bold.otf",
+            "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑 Bold
+            # 思源宋体 Bold
+            "/usr/share/fonts/chinese/NotoSerifSC-Bold.otf",
+            "C:/Windows/Fonts/NotoSerifSC-Bold.otf",
+            # 霞鹜文楷 Bold
+            "/usr/share/fonts/chinese/LXGWWenKai-Bold.ttf",
+        ]
+        for path in bold_fonts:
+            if os.path.exists(path):
+                logger.info(f"Using bold Chinese font: {path}")
+                return path
+        return None
+
     def _find_font(self) -> str:
         """查找系统可用的中文字体"""
         # 1. 按优先级检查默认路径
@@ -384,7 +417,9 @@ class SubtitleService:
             else:
                 draw.text((current_x, y), char, fill=fill, font=font, anchor='mm')
             char_width = font.getlength(char)
-            current_x += char_width + letter_spacing
+            # 当有描边时，getlength() 返回的是无描边宽度，需加上描边避免右侧字符重叠左移
+            advance = char_width + (stroke_width if stroke_width > 0 else 0)
+            current_x += advance + letter_spacing
 
     def _get_text_width_with_spacing(self, text: str, font: ImageFont.FreeTypeFont, letter_spacing: int) -> float:
         """计算带 letter_spacing 的文本总宽度"""
@@ -480,12 +515,18 @@ class SubtitleService:
         frames_dir = os.path.join(output_dir, "subtitle_frames")
         os.makedirs(frames_dir, exist_ok=True)
 
-        # 字体
+        # 字体：优先使用粗体（Bold），以匹配 Canvas 预览的 font-weight 效果
         font_size = config.font_size
+        font_path = self._font_path
+        if config.font_border_width > 0:
+            # 尝试加载 Bold 版本的字体
+            bold_path = self._find_bold_font(font_path)
+            if bold_path:
+                font_path = bold_path
         try:
-            font = ImageFont.truetype(self._font_path, font_size)
+            font = ImageFont.truetype(font_path, font_size)
         except Exception as e:
-            logger.warning(f"Failed to load font '{self._font_path}', using default: {e}")
+            logger.warning(f"Failed to load font '{font_path}', using default: {e}")
             font = ImageFont.load_default()
 
         # 解析 padding
