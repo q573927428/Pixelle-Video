@@ -163,7 +163,7 @@ const digitalForm = ref<DigitalForm>({
   tts_speed: 1.2, tts_workflow: 'runninghub/tts_index2.json', ref_audio: '', voxcpm_cfg: 2.0,
   voxcpm_normalize: false, voxcpm_denoise: false,
   voxcpm_control_instruction: '', voxcpm_use_prompt_text: false,
-  voxcpm_prompt_text: '',
+  voxcpm_prompt_text: '担心海关查验会把你的心爱宝贝弄坏。真实情况是，海关比你想象的要专业，但也确实会有痕迹。',
   image_service_mode: 'runninghub', image_api_model: '',
   video_service_mode: 'runninghub', video_api_model: '',
   video_api_params: { duration: 10, resolution: '1280x720', aspect_ratio: '9:16', negative_prompt: '', watermark: false },
@@ -348,7 +348,8 @@ function renderSubtitlePreview() {
     const sentences = rawText.split(/(?<=[。！？；，.!?;\s])/)
     rawText = sentences[0] || rawText
   }
-  const text = rawText
+  // 去除标点符号，与后端 subtitle.py._clean_punctuation 保持一致
+  const text = rawText.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-]/g, '')
 
   const cw = canvasWidth.value
   const ch = canvasHeight.value
