@@ -91,7 +91,7 @@
 
           <!-- 顶部：RunningHub 任务 ID -->
           <div class="task-card-footer" v-if="getRunninghubId(task)">
-            <span class="footer-label">RunningHub ID</span>
+            <span class="footer-label">ID</span>
             <span class="footer-text mono">{{ getRunninghubId(task) }}</span>
           </div>
 
