@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS `recharge_orders` (
     `username` VARCHAR(50) NOT NULL,
     `amount_rmb` DECIMAL(10,2) NOT NULL COMMENT '充值金额（人民币）',
     `amount_zs` INT NOT NULL COMMENT '到账ZS币数量（整数）',
+    `code_url` VARCHAR(512) DEFAULT NULL COMMENT '微信支付二维码链接',
     `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
     `wechat_transaction_id` VARCHAR(64) DEFAULT NULL,
     `paid_at` DATETIME DEFAULT NULL,
