@@ -58,9 +58,13 @@
                 <span>预估时长</span>
                 <span><strong>{{ estimatedSeconds }}</strong> 秒</span>
               </div>
+              <div class="cost-row" style="font-size:11px;color:#888;">
+                <span>扣费说明</span>
+                <span>按实际视频时长 × 5 ZS币/秒 结算，多退少补</span>
+              </div>
               <div class="cost-row">
                 <span>预估消耗</span>
-                <span><strong style="color:#fbbf24;">{{ estimatedCost }}</strong> ZS币</span>
+                <span><strong style="color:#fbbf24;">{{ estimatedCost }}</strong> ZS币（预冻结）</span>
               </div>
               <div class="cost-row">
                 <span>当前余额</span>
@@ -183,26 +187,28 @@ const batchTaskIds = ref<string[]>([])
 
 const auth = getAuth()
 
-// ZS币计费：根据文案字数自动计算预估时长（1秒=4字）
+// ZS币计费：根据文案字数自动计算预估时长（1秒=4字，计入语速因子）
 const estimatedSeconds = computed(() => {
   let text = digitalForm.value.goods_text?.trim() || ''
+  const speed = digitalForm.value.tts_speed || 1.0
   if (!text && digitalForm.value.mode === 'digital' && digitalForm.value.goods_title?.trim()) {
     // 带货模式：填了标题没填文案 → AI会生成约60字文案
     text = digitalForm.value.goods_title
     // AI生成约60字，取标题字数与60字较大值
     const cleanTitle = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
-    return Math.ceil(Math.max(cleanTitle.length, 60) / 4) || 0
+    return Math.ceil(Math.max(cleanTitle.length, 60) / 4 / speed) || 0
   }
   if (!text) return 0
   // 去掉标点只算有效字数
   const cleanText = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
-  return Math.ceil(cleanText.length / 4) || 0
+  return Math.ceil(cleanText.length / 4 / speed) || 0
 })
 const estimatedCost = computed(() => estimatedSeconds.value * 5)
 
 // 批量模式：计算每个文案/主题的费用
 const batchCostPreview = computed(() => {
   if (!digitalForm.value.batch_mode) return null
+  const speed = digitalForm.value.tts_speed || 1.0
   const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
   if (!topics.length) return null
   const isCustomize = digitalForm.value.mode === 'customize'
@@ -226,7 +232,7 @@ const batchCostPreview = computed(() => {
     // 带货模式且该行没填文案时AI生成约60字
     const isAiGenerated = !isCustomize && (!batchTexts[idx] || !batchTexts[idx].trim())
     const effectiveLen = isAiGenerated ? Math.max(cleanText.length, 60) : cleanText.length
-    const secs = Math.ceil(effectiveLen / 4) || 0
+    const secs = Math.ceil(effectiveLen / 4 / speed) || 0
     return { topic, seconds: secs, cost: secs * 5, isAiGenerated }
   })
   const totalCost = costs.reduce((sum, t) => sum + t.cost, 0)

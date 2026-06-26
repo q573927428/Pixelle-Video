@@ -87,8 +87,11 @@
                 {{ rec.label }}
               </el-tag>
             </span>
-            <span class="record-amount" :class="rec.change_amount >= 0 ? 'amount-in' : 'amount-out'">
+            <span class="record-amount" :class="rec.change_amount >= 0 ? 'amount-in' : 'amount-out'" style="display:flex;align-items:center;gap:4px;">
               {{ rec.change_amount >= 0 ? '+' : '' }}{{ rec.change_amount }}
+              <el-tag v-if="rec.type === 'consumption' && rec.status === 'frozen'" type="warning" size="small" effect="dark" style="font-size:10px;height:18px;line-height:18px;padding:0 4px;">冻结</el-tag>
+              <el-tag v-else-if="rec.type === 'consumption' && rec.status === 'deducted'" type="danger" size="small" effect="dark" style="font-size:10px;height:18px;line-height:18px;padding:0 4px;">已扣</el-tag>
+              <el-tag v-else-if="rec.type === 'consumption' && rec.status === 'refunded'" type="info" size="small" effect="dark" style="font-size:10px;height:18px;line-height:18px;padding:0 4px;">已退</el-tag>
             </span>
           </div>
           <div class="record-body">

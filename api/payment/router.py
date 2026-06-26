@@ -342,7 +342,7 @@ async def get_balance_records(
         all_rows.extend(rows)
 
     # ---------- 2a. 消耗记录（frozen/deducted/refunded 都展示） ----------
-    # 即使后来取消了退款，预扣款记录也应该展示给用户看
+    # 显示实际扣除金额（deducted_zs），未结算时显示冻结金额（frozen_zs）
     if not type_filter or type_filter == 'consumption':
         rows = await Database.fetchall(
             f"""SELECT 'consumption' as type, created_at,

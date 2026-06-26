@@ -13,20 +13,27 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
+import re
 from pathlib import Path
 from typing import Any, Literal, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
 from pydantic import BaseModel, Field
 
 from datetime import datetime
-from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage, freeze_balance, settle_generation
+from api.auth.dependencies import (
+    check_daily_limit,
+    increment_daily_usage,
+    decrement_daily_usage,
+    freeze_balance,
+    settle_generation,
+)
 from api.auth.schemas import UserInfo
 from api.auth.database import Database
-from fastapi import status
 from api.dependencies import PixelleVideoDep
 from api.routers.video import path_to_url
 from api.tasks import TaskType, task_manager
@@ -36,6 +43,9 @@ from api.utils.history_persistence import save_web_generation_history
 from pixelle_video.services.subtitle import SubtitleService, SubtitleConfigModel
 from pixelle_video.services.video import VideoService
 from pixelle_video.utils.os_util import get_temp_path
+
+# 统一文字清理正则（与前端 DigitalHumanView.vue 保持一致）
+PATTERN_CLEAN_TEXT = r'[。！？；，、：；“”\'\'—…（）【】《》〈〉.!?,;:()\[\]{}<>""\'\'\-/\s]'
 
 router = APIRouter(prefix="/pipelines", tags=["Modern Pipelines"])
 
@@ -1020,12 +1030,15 @@ async def generate_digital_human_async(
     # Pre-deduct daily usage immediately at submission time
     await increment_daily_usage(user_id)
 
-    # ZS币预冻结：根据文案字数自动计算预估时长（1秒=4字）
+    # ====== ZS币预冻结：使用统一正则去除标点，计算预估时长（1秒=4字，计入语速因子） ======
+    # 必须与前端 DigitalHumanView.vue 中 estimatedSeconds computed 逻辑完全一致
     frozen_zs = 0
     task_id_for_log = None
     goods_text = request_body.goods_text or request_body.goods_title or ""
-    clean_text = "".join(c for c in goods_text if c.isalnum() or '\u4e00' <= c <= '\u9fff')
-    estimated_seconds = max(0, (len(clean_text) + 3) // 4)  # ceil(字数/4)
+    clean_text = re.sub(PATTERN_CLEAN_TEXT, '', goods_text)
+    tts_speed = max(0.5, min(3.0, getattr(request_body, 'tts_speed', 1.0)))
+    # 基础：ceil(有效字数 / 4 / 语速) = 预估秒数（与前端公式完全一致）
+    estimated_seconds = max(1, math.ceil(len(clean_text) / 4 / tts_speed)) if clean_text else 0
     if estimated_seconds > 0:
         ok, frozen, msg = await freeze_balance(user_id, estimated_seconds)
         if not ok:
@@ -1061,11 +1074,27 @@ async def generate_digital_human_async(
                 await decrement_daily_usage(user_id)
                 raise
 
-            # ZS币结算（生成成功）
+            # ====== ZS币结算（生成成功）：读取实际音频时长，按实际时长多退少补 ======
             deducted_zs = 0
             if task_id_for_log and frozen_zs > 0:
-                # 估算实际视频时长（暂时用预估时长，实际应读取视频metadata）
-                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, estimated_seconds, success=True)
+                actual_seconds = estimated_seconds  # 后备值
+                # 获取 TTS 生成的音频文件路径，读出实际音频时长进行结算
+                task_dir = None
+                if os.path.exists(final_path):
+                    task_dir = os.path.dirname(final_path)
+                audio_path_candidate = os.path.join(task_dir, "narration.mp3") if task_dir else ""
+                if audio_path_candidate and os.path.exists(audio_path_candidate):
+                    try:
+                        vs = VideoService()
+                        audio_duration = vs._get_audio_duration(audio_path_candidate)
+                        actual_seconds = max(1, round(audio_duration))
+                        logger.info(f"💰 [ZS币结算] 读取实际音频时长={audio_duration:.2f}s → actual_seconds={actual_seconds}")
+                    except Exception as e:
+                        logger.warning(f"💰 [ZS币结算] 读取音频时长失败，使用预估时长: {e}")
+                else:
+                    logger.warning(f"💰 [ZS币结算] 音频文件不存在: {audio_path_candidate}，使用预估时长")
+
+                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True)
                 deducted_zs = settle_result.get("deducted_zs", 0)
 
             await save_web_generation_history(
