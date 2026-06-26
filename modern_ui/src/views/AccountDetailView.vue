@@ -30,6 +30,10 @@
           <span class="stat-label">消耗次数</span>
         </div>
         <div class="stat-item">
+          <span class="stat-num refund-num">{{ summary.totalRefund }}</span>
+          <span class="stat-label">退款次数</span>
+        </div>
+        <div class="stat-item">
           <span class="stat-num consume-num">{{ summary.totalDeducted }} ZS</span>
           <span class="stat-label">总消耗 ZS</span>
         </div>
@@ -134,6 +138,7 @@ const summary = reactive({
   totalRechargeAmount: 0,
   totalConsumption: 0,
   totalDeducted: 0,
+  totalRefund: 0,
   totalInvite: 0,
   totalInviteReward: 0,
   totalAdjustment: 0,
@@ -202,6 +207,10 @@ async function loadSummary() {
     const inviteRes = await request<any>('/api/auth/invite-info')
     summary.totalInvite = inviteRes.total_invites || 0
     summary.totalInviteReward = inviteRes.total_reward_zs || 0
+
+    // 退款统计
+    const refundRes = await request<any>('/api/payment/balance/records?page=1&page_size=9999&type_filter=refund')
+    summary.totalRefund = refundRes.total || 0
 
     // 调整统计
     const adjRes = await request<any>('/api/payment/balance/records?page=1&page_size=9999&type_filter=adjustment')
@@ -287,7 +296,7 @@ onMounted(() => {
 .balance-value {
   font-size: 36px;
   font-weight: 900;
-  color: #fbbf24;
+  color: #22c55e;
   text-shadow: 0 0 16px rgba(251, 191, 36, 0.2);
   margin-bottom: 12px;
 }
@@ -322,6 +331,7 @@ onMounted(() => {
 
 .stat-num.recharge-num { color: #22c55e; }
 .stat-num.consume-num { color: #fb923c; }
+.stat-num.refund-num { color: #6366f1; }
 .stat-num.invite-num { color: #38bdf8; }
 .stat-num.adjust-num { color: #fbbf24; }
 

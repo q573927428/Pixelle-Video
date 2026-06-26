@@ -328,114 +328,80 @@ async def get_balance_records(
     limit = page_size
     offset = (page - 1) * page_size
 
-    # 构建联合查询 — 按条件组装 UNION ALL
-    union_parts = []
-    count_parts = []
+    # 分别查询各类型数据，在 Python 中合并排序分页
+    all_rows = []
 
     # ---------- 1. 充值记录（仅已支付的） ----------
-    recharge_where = f"user_id = {user.id} AND status = 'paid'"
-    if type_filter and type_filter != 'recharge':
-        pass  # 跳过不匹配的类型
-    else:
-        union_parts.append(f"""
-            SELECT 'recharge' as type, created_at as sort_time,
-                   amount_zs as change_amount, status, NULL as extra_info
-            FROM recharge_orders
-            WHERE {recharge_where}
-        """)
-        if not type_filter:
-            count_parts.append(f"SELECT COUNT(*) as cnt FROM recharge_orders WHERE {recharge_where}")
+    if not type_filter or type_filter == 'recharge':
+        rows = await Database.fetchall(
+            f"""SELECT 'recharge' as type, created_at, amount_zs as change_amount, status, NULL as extra_info
+                FROM recharge_orders
+                WHERE user_id = {user.id} AND status = 'paid'
+                ORDER BY created_at DESC"""
+        )
+        all_rows.extend(rows)
 
-    # ---------- 2a. 消耗记录（frozen/deducted） ----------
-    consume_where = f"user_id = {user.id} AND status IN ('frozen', 'deducted')"
-    if type_filter and type_filter != 'consumption':
-        pass
-    else:
-        union_parts.append(f"""
-            SELECT 'consumption' as type, created_at as sort_time,
-                   -COALESCE(deducted_zs, frozen_zs, 0) as change_amount, status, task_id as extra_info
-            FROM generation_log
-            WHERE {consume_where}
-        """)
-        if not type_filter:
-            count_parts.append(f"SELECT COUNT(*) as cnt FROM generation_log WHERE {consume_where}")
+    # ---------- 2a. 消耗记录（frozen/deducted/refunded 都展示） ----------
+    # 即使后来取消了退款，预扣款记录也应该展示给用户看
+    if not type_filter or type_filter == 'consumption':
+        rows = await Database.fetchall(
+            f"""SELECT 'consumption' as type, created_at,
+                       -COALESCE(deducted_zs, frozen_zs, 0) as change_amount, status, task_id as extra_info
+                FROM generation_log
+                WHERE user_id = {user.id} AND status IN ('frozen', 'deducted', 'refunded')
+                ORDER BY created_at DESC"""
+        )
+        all_rows.extend(rows)
 
     # ---------- 2b. 退款记录（refunded） ----------
-    refund_where = f"user_id = {user.id} AND status = 'refunded'"
-    if type_filter and type_filter != 'refund':
-        pass
-    else:
-        union_parts.append(f"""
-            SELECT 'refund' as type, updated_at as sort_time,
-                   COALESCE(frozen_zs, 0) as change_amount, status, task_id as extra_info
-            FROM generation_log
-            WHERE {refund_where}
-        """)
-        if not type_filter:
-            count_parts.append(f"SELECT COUNT(*) as cnt FROM generation_log WHERE {refund_where}")
+    if not type_filter or type_filter == 'refund':
+        rows = await Database.fetchall(
+            f"""SELECT 'refund' as type, updated_at as created_at,
+                       COALESCE(frozen_zs, 0) as change_amount, status, task_id as extra_info
+                FROM generation_log
+                WHERE user_id = {user.id} AND status = 'refunded'
+                ORDER BY updated_at DESC"""
+        )
+        all_rows.extend(rows)
 
     # ---------- 3. 管理员调整记录 ----------
-    adj_where = f"bcl.user_id = {user.id}"
-    if type_filter and type_filter != 'adjustment':
-        pass
-    else:
-        union_parts.append(f"""
-            SELECT 'adjustment' as type, bcl.created_at as sort_time,
-                   bcl.change_amount, 'done' as status, bcl.reason as extra_info
-            FROM balance_change_log bcl
-            WHERE {adj_where}
-        """)
-        if not type_filter:
-            count_parts.append(f"SELECT COUNT(*) as cnt FROM balance_change_log WHERE user_id = {user.id}")
+    if not type_filter or type_filter == 'adjustment':
+        rows = await Database.fetchall(
+            f"""SELECT 'adjustment' as type, bcl.created_at,
+                       bcl.change_amount, 'done' as status, bcl.reason as extra_info
+                FROM balance_change_log bcl
+                WHERE bcl.user_id = {user.id}
+                ORDER BY bcl.created_at DESC"""
+        )
+        all_rows.extend(rows)
 
     # ---------- 4. 邀请奖励记录 ----------
-    invite_where = f"il.inviter_id = {user.id}"
-    if type_filter and type_filter != 'invite':
-        pass
-    else:
-        union_parts.append(f"""
-            SELECT 'invite' as type, il.created_at as sort_time,
-                   il.reward_zs as change_amount, 'done' as status,
-                   u.username as extra_info
-            FROM invite_log il
-            LEFT JOIN users u ON u.id = il.invitee_id
-            WHERE {invite_where}
-        """)
-        if not type_filter:
-            count_parts.append(f"SELECT COUNT(*) as cnt FROM invite_log WHERE inviter_id = {user.id}")
+    if not type_filter or type_filter == 'invite':
+        rows = await Database.fetchall(
+            f"""SELECT 'invite' as type, il.created_at,
+                       il.reward_zs as change_amount, 'done' as status, u.username as extra_info
+                FROM invite_log il
+                LEFT JOIN users u ON u.id = il.invitee_id
+                WHERE il.inviter_id = {user.id}
+                ORDER BY il.created_at DESC"""
+        )
+        all_rows.extend(rows)
 
-    # ---------- 构建最终 SQL ----------
-    if type_filter:
-        # 筛选模式下：直接对 UNION ALL 做 ORDER BY + LIMIT，无嵌套子查询
-        union_sql = " UNION ALL ".join(union_parts)
-        count_sql = f"SELECT COUNT(*) as cnt FROM ({union_sql}) AS unified"
-        full_sql = f"""
-            SELECT * FROM ({union_sql}) AS unified
-            ORDER BY sort_time DESC
-            LIMIT {limit} OFFSET {offset}
-        """
-    else:
-        # 全部模式：UNION ALL + 外层合计
-        union_sql = " UNION ALL ".join(union_parts)
-        count_sql = " SELECT SUM(cnt) as cnt FROM (" + " UNION ALL ".join(count_parts) + ") AS tc"
-        full_sql = f"""
-            SELECT * FROM ({union_sql}) AS unified
-            ORDER BY sort_time DESC
-            LIMIT {limit} OFFSET {offset}
-        """
+    # ---------- 在 Python 中排序、分页 ----------
+    # 按 created_at 降序排序
+    all_rows.sort(key=lambda r: r["created_at"] if r["created_at"] else datetime.min, reverse=True)
 
-    total_row = await Database.fetchone(count_sql)
-    total = total_row["cnt"] if total_row else 0
+    total = len(all_rows)
 
-    # 分页查询
-    rows = await Database.fetchall(full_sql)
+    # 分页截取
+    page_rows = all_rows[offset:offset + limit]
 
     records = []
-    for row in rows:
+    for row in page_rows:
         r = {
             "type": row["type"],
             "change_amount": row["change_amount"],
-            "created_at": row["sort_time"].isoformat() if hasattr(row["sort_time"], 'isoformat') else str(row["sort_time"]),
+            "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], 'isoformat') else str(row["created_at"]),
             "status": row.get("status", ""),
             "extra_info": row.get("extra_info") or "",
         }
