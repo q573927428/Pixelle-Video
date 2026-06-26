@@ -345,6 +345,8 @@ async function handleCancelTask(taskId: string) {
       task.completed_at = new Date().toISOString()
     }
     ElMessage.success(resp?.message || '已取消任务')
+    // Refresh user balance (zs-coins refund) after cancellation
+    getAuth().fetchMe()
     // Refresh after a short delay to reflect server-side status
     setTimeout(() => { loadTasks() }, 800)
   } catch (e: any) {
