@@ -35,11 +35,6 @@
               {{ row.phone || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="email" label="邮箱" min-width="160">
-            <template #default="{ row }">
-              {{ row.email || '-' }}
-            </template>
-          </el-table-column>
           <el-table-column prop="role" label="角色" width="100">
             <template #default="{ row }">
               <el-tag :type="roleTagType(row.role)" effect="dark">
@@ -47,17 +42,9 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="VIP 到期" width="150">
+          <el-table-column prop="zs_balance" label="ZS币余额" width="100">
             <template #default="{ row }">
-              <span v-if="(row.role === 'vip' || row.role === 'svip') && row.vip_expires_at" class="vip-expiry-cell">
-                {{ formatDate(row.vip_expires_at) }}
-              </span>
-              <span v-else class="muted">-</span>
-            </template>
-          </el-table-column>
-          <el-table-column prop="daily_limit" label="每日上限" width="100">
-            <template #default="{ row }">
-              {{ row.daily_limit === -1 ? '无限制' : row.daily_limit }}
+              {{ row.zs_balance ?? 0 }}
             </template>
           </el-table-column>
           <el-table-column prop="created_at" label="注册时间" min-width="160">
@@ -67,7 +54,8 @@
           </el-table-column>
           <el-table-column label="操作" width="280" fixed="right">
             <template #default="{ row }">
-              <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+                <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+                <el-button size="small" type="warning" plain @click="openAdjustBalanceDialog(row)">调整余额</el-button>
               <el-button
                 size="small"
                 :type="row.status === 0 ? 'primary' : 'danger'"
@@ -93,6 +81,40 @@
             layout="prev, pager, next"
             @current-change="loadUsers"
           />
+        </div>
+      </div>
+    </div>
+
+    <!-- ZS币 系统配置 -->
+    <div class="card" style="margin-top: 20px;">
+      <div class="card-header">
+        <h3 class="card-title">⚙️ ZS币 系统配置</h3>
+      </div>
+      <div class="card-body">
+        <div class="config-grid">
+          <div class="config-item">
+            <label>每秒消耗 ZS币</label>
+            <el-input-number v-model.number="sysConfig.zs_per_second" :min="1" :max="100" />
+          </div>
+          <div class="config-item">
+            <label>人民币汇率（1元=？ZS币）</label>
+            <el-input-number v-model.number="sysConfig.exchange_rate" :min="1" :max="10000" />
+          </div>
+          <div class="config-item">
+            <label>注册赠送 ZS币</label>
+            <el-input-number v-model.number="sysConfig.register_bonus" :min="0" :max="100000" />
+          </div>
+          <div class="config-item">
+            <label>邀请奖励 ZS币</label>
+            <el-input-number v-model.number="sysConfig.invite_bonus" :min="0" :max="100000" />
+          </div>
+          <div class="config-item">
+            <label>最低充值金额（元）</label>
+            <el-input-number v-model.number="sysConfig.min_recharge" :min="1" :max="10000" />
+          </div>
+        </div>
+        <div style="margin-top: 14px; text-align: right;">
+          <el-button type="primary" :loading="configSaving" @click="saveSysConfig">保存配置</el-button>
         </div>
       </div>
     </div>
@@ -149,6 +171,34 @@
         <el-button type="primary" :loading="saving" @click="handleSaveEdit">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- Adjust Balance Dialog -->
+    <el-dialog v-model="adjustBalanceDialogVisible" title="调整 ZS币余额" width="400px">
+      <el-form v-if="adjustBalanceUser" label-position="top">
+        <el-form-item label="用户">
+          <el-input :model-value="adjustBalanceUser.username" disabled />
+        </el-form-item>
+        <el-form-item label="当前余额">
+          <el-input :model-value="String(adjustBalanceUser.zs_balance ?? 0)" disabled />
+        </el-form-item>
+        <el-form-item label="调整类型">
+          <el-radio-group v-model="adjustBalanceType">
+            <el-radio value="add">增加</el-radio>
+            <el-radio value="deduct">减少</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="调整数量（ZS币）">
+          <el-input-number v-model.number="adjustBalanceAmount" :min="1" :max="1000000" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="调整原因">
+          <el-input v-model="adjustBalanceReason" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="请输入调整原因" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustBalanceDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="adjustBalanceSaving" @click="handleAdjustBalance">确认调整</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -185,8 +235,76 @@ const editForm = ref<{ role: string; daily_limit: number; status: number; vip_ex
 })
 const saving = ref(false)
 
+const adjustBalanceDialogVisible = ref(false)
+const adjustBalanceUser = ref<UserInfo | null>(null)
+const adjustBalanceType = ref<'add' | 'deduct'>('add')
+const adjustBalanceAmount = ref(100)
+const adjustBalanceReason = ref('')
+const adjustBalanceSaving = ref(false)
+
+// ZS币 系统配置
+const sysConfig = ref({
+  zs_per_second: 5,
+  exchange_rate: 100,
+  register_bonus: 600,
+  invite_bonus: 200,
+  min_recharge: 10,
+})
+const configSaving = ref(false)
+
+async function loadSysConfig() {
+  try {
+    const auth = getAuth()
+    const res = await request<any>('/api/auth/admin/config', {
+      headers: auth._authHeaders(),
+    })
+    sysConfig.value = {
+      zs_per_second: parseInt(res.zs_per_second) || 5,
+      exchange_rate: parseInt(res.exchange_rate) || 100,
+      register_bonus: parseInt(res.register_bonus) || 600,
+      invite_bonus: parseInt(res.invite_bonus) || 200,
+      min_recharge: parseInt(res.min_recharge) || 10,
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function saveSysConfig() {
+  configSaving.value = true
+  try {
+    const auth = getAuth()
+    const headers = {
+      'Content-Type': 'application/json',
+      ...auth._authHeaders(),
+    }
+    const config = sysConfig.value
+    await request(`/api/auth/admin/config/zs_per_second`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.zs_per_second) }),
+    })
+    await request(`/api/auth/admin/config/exchange_rate`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.exchange_rate) }),
+    })
+    await request(`/api/auth/admin/config/register_bonus`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.register_bonus) }),
+    })
+    await request(`/api/auth/admin/config/invite_bonus`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.invite_bonus) }),
+    })
+    await request(`/api/auth/admin/config/min_recharge`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.min_recharge) }),
+    })
+    ElMessage.success('ZS币 系统配置已更新')
+  } catch (e: any) {
+    ElMessage.error(`保存失败：${e.message}`)
+  } finally {
+    configSaving.value = false
+  }
+}
+
 onMounted(() => {
   loadUsers()
+  loadSysConfig()
 })
 
 function handleSearch() {
@@ -222,7 +340,7 @@ function roleTagType(role: string): string {
 }
 
 function roleLabel(role: string): string {
-  if (role === 'admin') return '管理员'
+  if (role === 'admin') return '管理'
   if (role === 'vip') return 'VIP'
   if (role === 'svip') return 'SVIP'
   return '普通'
@@ -314,6 +432,60 @@ async function handleToggleStatus(user: UserInfo) {
   }
 }
 
+function openAdjustBalanceDialog(user: UserInfo) {
+  adjustBalanceUser.value = user
+  adjustBalanceType.value = 'add'
+  adjustBalanceAmount.value = 100
+  adjustBalanceReason.value = ''
+  adjustBalanceDialogVisible.value = true
+}
+
+async function handleAdjustBalance() {
+  if (!adjustBalanceUser.value) return
+  const userId = adjustBalanceUser.value.id
+  const amount = adjustBalanceAmount.value
+  if (amount <= 0) {
+    ElMessage.warning('调整数量必须大于0')
+    return
+  }
+  const changeAmount = adjustBalanceType.value === 'add' ? amount : -amount
+  const reason = adjustBalanceReason.value.trim()
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要${adjustBalanceType.value === 'add' ? '增加' : '减少'}用户「${adjustBalanceUser.value.username}」${amount} ZS币吗？${reason ? `\n原因：${reason}` : ''}`,
+      '确认调整余额',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  adjustBalanceSaving.value = true
+  try {
+    const auth = getAuth()
+    await request('/api/auth/admin/adjust-balance', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...auth._authHeaders(),
+      },
+      body: JSON.stringify({
+        user_id: userId,
+        change_amount: changeAmount,
+        reason,
+      }),
+    })
+    ElMessage.success(`已${adjustBalanceType.value === 'add' ? '增加' : '减少'}用户「${adjustBalanceUser.value.username}」${amount} ZS币`)
+    adjustBalanceDialogVisible.value = false
+    loadUsers()
+  } catch (e: any) {
+    ElMessage.error(`调整失败：${e.message}`)
+  } finally {
+    adjustBalanceSaving.value = false
+  }
+}
+
 async function handleRemoveVipById(user: UserInfo) {
   try {
     await ElMessageBox.confirm(
@@ -351,5 +523,23 @@ async function handleRemoveVipById(user: UserInfo) {
 
 .small {
   font-size: 12px;
+}
+
+.config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.config-item label {
+  font-size: 13px;
+  color: #aaa;
+  font-weight: 600;
 }
 </style>

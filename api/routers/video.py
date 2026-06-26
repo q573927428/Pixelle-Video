@@ -16,8 +16,10 @@ Video generation endpoints
 Supports both synchronous and asynchronous video generation.
 """
 
+import asyncio
 import os
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
 
 from api.dependencies import PixelleVideoDep
@@ -29,8 +31,12 @@ from api.schemas.video import (
     VideoBatchGenerateResponse,
 )
 from api.tasks import task_manager, TaskType
-from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage
+from api.auth.dependencies import (
+    check_daily_limit, increment_daily_usage, decrement_daily_usage,
+    freeze_balance, settle_generation, get_sys_config
+)
 from api.auth.schemas import UserInfo, UserDailyUsage
+from api.auth.database import Database
 
 router = APIRouter(prefix="/video", tags=["Video Generation"])
 
@@ -112,6 +118,21 @@ async def generate_video_sync(
     user_id = _user.id
     # Pre-deduct daily usage immediately at submission time
     await increment_daily_usage(user_id)
+    # ZS币预冻结
+    frozen_zs = 0
+    task_id_for_log = None
+    if request_body.estimated_seconds:
+        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds)
+        if not ok:
+            await decrement_daily_usage(user_id)
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
+        frozen_zs = frozen
+        task_id_for_log = f"sync_{int(datetime.now().timestamp())}_{user_id}"
+        await Database.execute(
+            "INSERT INTO generation_log (task_id, user_id, estimated_seconds, frozen_zs, status) "
+            "VALUES (%s, %s, %s, %s, 'frozen')",
+            (task_id_for_log, user_id, request_body.estimated_seconds, frozen_zs)
+        )
     try:
         logger.info(f"Sync video generation: {request_body.text[:50]}...")
         
@@ -198,6 +219,11 @@ async def generate_video_sync(
         # Convert path to URL
         video_url = path_to_url(request, result.video_path)
         
+        # ZS币结算（生成成功）
+        if task_id_for_log and frozen_zs > 0:
+            actual_seconds = int(result.duration)  # 向下取整到秒
+            await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True)
+        
         return VideoGenerateResponse(
             video_url=video_url,
             duration=result.duration,
@@ -205,7 +231,10 @@ async def generate_video_sync(
         )
         
     except Exception as e:
-        # Refund on unexpected errors
+        # ZS币退款（生成失败）
+        if task_id_for_log and frozen_zs > 0:
+            await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
+        # Refund daily usage on unexpected errors
         await decrement_daily_usage(user_id)
         logger.error(f"Sync video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -238,6 +267,21 @@ async def generate_video_async(
     user_id = _user.id
     # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
     await increment_daily_usage(user_id)
+    # ZS币预冻结
+    frozen_zs = 0
+    task_id_for_log = None
+    if request_body.estimated_seconds:
+        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds)
+        if not ok:
+            await decrement_daily_usage(user_id)
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
+        frozen_zs = frozen
+        task_id_for_log = f"async_{int(datetime.now().timestamp())}_{user_id}"
+        await Database.execute(
+            "INSERT INTO generation_log (task_id, user_id, estimated_seconds, frozen_zs, status) "
+            "VALUES (%s, %s, %s, %s, 'frozen')",
+            (task_id_for_log, user_id, request_body.estimated_seconds, frozen_zs)
+        )
     try:
         logger.info(f"Async video generation: {request_body.text[:50]}...")
         
@@ -250,6 +294,7 @@ async def generate_video_async(
         # Define async execution function
         async def execute_video_generation():
             """Execute video generation in background"""
+            nonlocal frozen_zs, task_id_for_log
             # Auto-determine media_width and media_height from template meta tags (required)
             if not request_body.frame_template:
                 raise ValueError("frame_template is required to determine media size")
@@ -326,7 +371,16 @@ async def generate_video_async(
             
             try:
                 result = await pixelle_video.generate_video(**video_params)
+            except asyncio.CancelledError:
+                # ZS币退款（取消任务时全额退还）
+                if task_id_for_log and frozen_zs > 0:
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
+                await decrement_daily_usage(user_id)
+                raise
             except Exception:
+                # ZS币退款（生成失败）
+                if task_id_for_log and frozen_zs > 0:
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
                 # Generation failed, refund the deducted daily usage
                 await decrement_daily_usage(user_id)
                 raise
@@ -337,10 +391,30 @@ async def generate_video_async(
             # Convert path to URL
             video_url = path_to_url(request, result.video_path)
             
+            # ZS币结算（生成成功）
+            deducted_zs = 0
+            if task_id_for_log and frozen_zs > 0:
+                actual_seconds = int(result.duration)  # 向下取整到秒
+                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True)
+                deducted_zs = settle_result.get("deducted_zs", 0)
+            
+            # 将实际扣除的ZS币写入元数据
+            try:
+                metadata = await pixelle_video.persistence.load_task_metadata(task.task_id)
+                if metadata:
+                    if "result" not in metadata:
+                        metadata["result"] = {}
+                    metadata["result"]["deducted_zs"] = deducted_zs
+                    metadata["result"]["frozen_zs"] = frozen_zs
+                    await pixelle_video.persistence.save_task_metadata(task.task_id, metadata)
+            except Exception as e:
+                logger.warning(f"Failed to save ZS deduction info to metadata: {e}")
+            
             return {
                 "video_url": video_url,
                 "duration": result.duration,
-                "file_size": file_size
+                "file_size": file_size,
+                "deducted_zs": deducted_zs,
             }
         
         # Start execution

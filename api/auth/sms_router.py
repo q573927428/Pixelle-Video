@@ -16,13 +16,13 @@ from api.auth.schemas import (
     TokenResponse,
     UserInfo,
 )
-from api.auth.utils import hash_password, create_access_token, create_refresh_token
-from api.auth.dependencies import require_user
+from api.auth.utils import hash_password, create_access_token, create_refresh_token, generate_invite_code
+from api.auth.dependencies import require_user, get_sys_config, handle_invite_reward
 
 router = APIRouter(prefix="/auth", tags=["SMS Authentication"])
 
-# Column list for user queries (include phone)
-_USER_COLUMNS = "id, username, email, phone, role, daily_limit, vip_expires_at, created_at"
+# Column list for user queries (include phone, zs_balance, invite_code)
+_USER_COLUMNS = "id, username, email, phone, role, daily_limit, vip_expires_at, zs_balance, invite_code, created_at"
 
 
 def _row_to_userinfo(row: dict) -> UserInfo:
@@ -35,6 +35,8 @@ def _row_to_userinfo(row: dict) -> UserInfo:
         role=row["role"],
         daily_limit=row["daily_limit"],
         vip_expires_at=row.get("vip_expires_at"),
+        zs_balance=row.get("zs_balance", 0),
+        invite_code=row.get("invite_code"),
         created_at=row["created_at"],
     )
 
@@ -52,15 +54,12 @@ async def send_sms_code(body: SendSmsCodeRequest):
         "SELECT id FROM users WHERE phone = %s", (phone,)
     )
     if existing:
-        logger.warning(f"手机号 {phone} 已被绑定")
-        # 不暴露手机号是否已注册，直接返回成功（安全考虑）
-        # 但我们可以返回一个更明确的提示
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="该手机号已被其他账号绑定",
         )
 
-    # Check 60-second rate limit: query the most recent sms_code for this phone
+    # Check 60-second rate limit
     last_code = await Database.fetchone(
         "SELECT created_at FROM sms_codes WHERE phone = %s ORDER BY created_at DESC LIMIT 1",
         (phone,),
@@ -104,6 +103,7 @@ async def register_by_phone(body: RegisterByPhoneRequest):
     """
     Register a new user using phone number and SMS code.
     Auto-generates username from phone number.
+    Supports invite_code for invitation rewards.
     """
     phone = body.phone
     code = body.code
@@ -161,16 +161,23 @@ async def register_by_phone(body: RegisterByPhoneRequest):
         "SELECT id FROM users WHERE username = %s", (username,)
     )
     if name_exists:
-        # Append timestamp to avoid collision
         import time
         username = f"user_{phone[-8:]}_{int(time.time()) % 10000}"
 
-    # Create user
+    # Create user with invite code and registration bonus
     password_hash = hash_password(body.password)
+    user_invite_code = generate_invite_code()
+    register_bonus = int(await get_sys_config("register_bonus", "600"))
+
     user_id = await Database.execute(
-        "INSERT INTO users (username, password_hash, phone, role, daily_limit) VALUES (%s, %s, %s, 'normal', 1)",
-        (username, password_hash, phone),
+        "INSERT INTO users (username, password_hash, phone, role, daily_limit, zs_balance, invite_code) "
+        "VALUES (%s, %s, %s, 'normal', -1, %s, %s)",
+        (username, password_hash, phone, register_bonus, user_invite_code),
     )
+
+    # Process invite reward
+    if body.invite_code:
+        await handle_invite_reward(body.invite_code, user_id)
 
     # Generate tokens
     access_token = create_access_token(user_id, "normal")
@@ -187,10 +194,11 @@ async def register_by_phone(body: RegisterByPhoneRequest):
         phone=phone,
         role="normal",
         daily_limit=1,
+        zs_balance=register_bonus,
         created_at=datetime.now(),
     )
 
-    logger.info(f"新用户通过手机号注册: {username} (id={user_id}, phone={phone})")
+    logger.info(f"新用户通过手机号注册: {username} (id={user_id}, phone={phone}) zs_balance={register_bonus}")
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
 
 

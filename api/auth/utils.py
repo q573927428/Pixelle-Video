@@ -4,6 +4,7 @@ JWT & Password utilities
 
 import hashlib
 import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -83,3 +84,12 @@ def decode_refresh_token(token: str) -> Optional[dict]:
     except JWTError as e:
         logger.warning(f"JWT refresh token decode error: {e}")
         return None
+
+
+def generate_invite_code(length: int = 8) -> str:
+    """
+    Generate a unique invite code (uppercase letters + digits).
+    用于用户邀请码生成。
+    """
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(length))

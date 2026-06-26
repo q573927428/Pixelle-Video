@@ -11,6 +11,7 @@ the modern UI can run every existing tool without falling back to Streamlit.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -21,8 +22,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage
+from datetime import datetime
+from api.auth.dependencies import check_daily_limit, increment_daily_usage, decrement_daily_usage, freeze_balance, settle_generation
 from api.auth.schemas import UserInfo
+from api.auth.database import Database
+from fastapi import status
 from api.dependencies import PixelleVideoDep
 from api.routers.video import path_to_url
 from api.tasks import TaskType, task_manager
@@ -45,7 +49,7 @@ class AsyncTaskResponse(BaseModel):
 class AssetBasedRequest(BaseModel):
     assets: list[str] = Field(default_factory=list)
     video_title: str = Field("", max_length=30, description="视频标题，最长30字")
-    intent: Optional[str] = Field(None, max_length=398, description="创作意图，最长398字")
+    intent: Optional[str] = Field(None, max_length=368, description="创作意图，最长368字")
     duration: int = Field(30, ge=5, le=300)
     source: str = "runninghub"
     analysis_image_workflow: Optional[str] = None
@@ -62,7 +66,7 @@ class AssetBasedRequest(BaseModel):
 
 class ImageToVideoRequest(BaseModel):
     image_assets: list[str] = Field(default_factory=list)
-    prompt_text: str = Field(..., max_length=398, description="提示词，最长398字")
+    prompt_text: str = Field(..., max_length=368, description="提示词，最长368字")
     workflow_key: str
     api_video_params: dict[str, Any] = Field(default_factory=dict)
 
@@ -70,7 +74,7 @@ class ImageToVideoRequest(BaseModel):
 class ActionTransferRequest(BaseModel):
     video_assets: list[str] = Field(default_factory=list)
     image_assets: list[str] = Field(default_factory=list)
-    prompt_text: str = Field(..., max_length=398, description="提示词，最长398字")
+    prompt_text: str = Field(..., max_length=368, description="提示词，最长368字")
     duration: int = Field(5, ge=1, le=300)
     workflow_key: str
     api_video_params: dict[str, Any] = Field(default_factory=dict)
@@ -108,7 +112,7 @@ class DigitalHumanRequest(BaseModel):
     character_assets: list[str] = Field(default_factory=list)
     goods_assets: list[str] = Field(default_factory=list)
     goods_title: str = Field("", max_length=30, description="商品标题，最长30字")
-    goods_text: str = Field("", max_length=398, description="口播文案，最长398字")
+    goods_text: str = Field("", max_length=368, description="口播文案，最长368字")
     workflow_config: DigitalWorkflowConfig = Field(default_factory=DigitalWorkflowConfig)
 
     # TTS parameters compatible with the existing Streamlit UI.
@@ -1007,27 +1011,62 @@ async def generate_digital_human_async(
     _user: UserInfo = Depends(check_daily_limit),
 ):
     user_id = _user.id
-    # 🔍 入口日志：打印 request_body 中字幕配置，便于确认前端是否正确传递
+    # 🔍 入口日志
     logger.info(
         f"📨 [数字人请求入口] mode={request_body.mode}, "
         f"goods_text_len={len(request_body.goods_text)}, "
-        f"subtitle.enabled={request_body.subtitle_config.enabled}, "
-        f"subtitle_config={request_body.subtitle_config.model_dump()}"
+        f"subtitle.enabled={request_body.subtitle_config.enabled}"
     )
-    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
+    # Pre-deduct daily usage immediately at submission time
     await increment_daily_usage(user_id)
+
+    # ZS币预冻结：根据文案字数自动计算预估时长（1秒=4字）
+    frozen_zs = 0
+    task_id_for_log = None
+    goods_text = request_body.goods_text or request_body.goods_title or ""
+    clean_text = "".join(c for c in goods_text if c.isalnum() or '\u4e00' <= c <= '\u9fff')
+    estimated_seconds = max(0, (len(clean_text) + 3) // 4)  # ceil(字数/4)
+    if estimated_seconds > 0:
+        ok, frozen, msg = await freeze_balance(user_id, estimated_seconds)
+        if not ok:
+            await decrement_daily_usage(user_id)
+            raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
+        frozen_zs = frozen
+        task_id_for_log = f"dh_{int(datetime.now().timestamp())}_{user_id}"
+        await Database.execute(
+            "INSERT INTO generation_log (task_id, user_id, estimated_seconds, frozen_zs, status) "
+            "VALUES (%s, %s, %s, %s, 'frozen')",
+            (task_id_for_log, user_id, estimated_seconds, frozen_zs)
+        )
+
     try:
         task = task_manager.create_task(TaskType.VIDEO_GENERATION, request_body.model_dump(), user_id=str(user_id))
 
-
         async def execute():
+            nonlocal frozen_zs, task_id_for_log
             task_manager.update_progress(task.task_id, 80, 100, "preparing")
             try:
                 final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
-            except Exception:
-                # Generation failed, refund the deducted daily usage
+            except asyncio.CancelledError:
+                # ZS币退款（取消任务时全额退还）
+                if task_id_for_log and frozen_zs > 0:
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
                 await decrement_daily_usage(user_id)
                 raise
+            except Exception:
+                # ZS币退款（生成失败）
+                if task_id_for_log and frozen_zs > 0:
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
+                # Refund daily usage
+                await decrement_daily_usage(user_id)
+                raise
+
+            # ZS币结算（生成成功）
+            deducted_zs = 0
+            if task_id_for_log and frozen_zs > 0:
+                # 估算实际视频时长（暂时用预估时长，实际应读取视频metadata）
+                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, estimated_seconds, success=True)
+                deducted_zs = settle_result.get("deducted_zs", 0)
 
             await save_web_generation_history(
                 pixelle_video,
@@ -1037,6 +1076,8 @@ async def generate_digital_human_async(
                 title="数字人口播",
                 input_params=request_body.model_dump(),
                 user_id=user_id,
+                deducted_zs=deducted_zs,
+                frozen_zs=frozen_zs,
             )
 
             task_manager.update_progress(task.task_id, 100, 100, "completed")
@@ -1050,7 +1091,10 @@ async def generate_digital_human_async(
         return _task_response(task.task_id)
 
     except Exception as exc:
-        # Refund on unexpected errors during task creation / setup
+        # ZS币退款（生成失败）
+        if task_id_for_log and frozen_zs > 0:
+            await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
+        # Refund daily usage
         await decrement_daily_usage(user_id)
         logger.exception(exc)
         raise HTTPException(status_code=500, detail=str(exc))

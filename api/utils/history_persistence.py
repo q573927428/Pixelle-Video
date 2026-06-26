@@ -39,6 +39,8 @@ async def save_web_generation_history(
     title: str | None = None,
     n_frames: int = 1,
     user_id: int | None = None,
+    deducted_zs: int = 0,
+    frozen_zs: int = 0,
 ) -> None:
     """Save a minimal history record for workflows implemented directly in API."""
     if not getattr(pixelle_video, "persistence", None):
@@ -74,6 +76,8 @@ async def save_web_generation_history(
             "duration": duration,
             "file_size": path.stat().st_size,
             "n_frames": n_frames,
+            "deducted_zs": deducted_zs,
+            "frozen_zs": frozen_zs,
         },
         "config": {
             "llm_model": pixelle_video.config.get("llm", {}).get("model", "unknown"),

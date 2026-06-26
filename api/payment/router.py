@@ -1,18 +1,16 @@
 """
-支付相关 API 路由
+支付相关 API 路由 - 充值（人民币→ZS币）
 """
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
 from pydantic import BaseModel
-
 from api.auth.database import Database
-from api.auth.schemas import UserInfo
-from api.auth.dependencies import require_user
-from api.payment.config import PLANS
+from api.auth.schemas import UserInfo, RechargeCreateRequest, RechargeCreateResponse, BalanceResponse
+from api.auth.dependencies import require_user, get_sys_config
 from api.payment.wechat import (
     create_native_order,
     verify_notify,
@@ -25,314 +23,87 @@ from api.payment.wechat import (
 router = APIRouter(prefix="/payment", tags=["Payment"])
 
 
-# ========== Pydantic models ==========
+# ========== 充值 API ==========
 
 
-class CreateOrderRequest(BaseModel):
-    """创建订单请求"""
-    plan_type: str = "vip"  # vip / svip
-
-
-class OrderInfo(BaseModel):
-    """订单信息"""
-    order_no: str
-    plan_type: str
-    plan_name: str
-    amount: float
-    status: str
-    code_url: Optional[str] = None
-    created_at: datetime
-
-
-class OrderStatusResponse(BaseModel):
-    """订单状态响应"""
-    order_no: str
-    status: str
-    paid_at: Optional[datetime] = None
-    vip_expires_at: Optional[datetime] = None
-
-
-class UpgradeQuoteRequest(BaseModel):
-    """升级报价请求"""
-    target_plan: str = "svip"
-
-
-class UpgradeQuoteResponse(BaseModel):
-    """升级报价响应"""
-    need_pay: float                  # 需补金额
-    mode: str                        # "upgrade" 或 "full"
-    vip_remaining_days: int = 0      # VIP 剩余天数
-    original_price: float            # SVIP 原价
-    new_expiry: Optional[str] = None # 升级后到期时间（原VIP到期日 + SVIP购买天数）
-
-
-class PlanInfo(BaseModel):
-    """套餐信息"""
-    plan_type: str
-    name: str
-    price: float
-    duration_days: int
-    features: list[str]
-
-
-# ========== 升级补差价 API ==========
-
-
-@router.post("/upgrade-quote", response_model=UpgradeQuoteResponse)
-async def get_upgrade_quote(
-    body: UpgradeQuoteRequest,
+@router.post("/recharge/create", response_model=RechargeCreateResponse)
+async def create_recharge(
+    body: RechargeCreateRequest,
     user: UserInfo = Depends(require_user),
 ):
     """
-    计算 VIP → SVIP 升级需补差价
-    方案 A：按剩余天数补差价
-    公式：需补金额 = (SVIP日均价 - VIP日均价) × VIP剩余天数
-    """
-    # 1. 仅 VIP 可升级
-    if user.role != "vip":
-        raise HTTPException(status_code=400, detail="仅 VIP 会员可升级到 SVIP")
-
-    # 2. 校验目标套餐
-    target_plan = PLANS.get(body.target_plan)
-    if not target_plan:
-        raise HTTPException(status_code=400, detail=f"无效的套餐: {body.target_plan}")
-
-    # 3. 计算 VIP 剩余天数
-    now = datetime.now()
-    expires = user.vip_expires_at
-    if not expires:
-        raise HTTPException(status_code=400, detail="VIP 已过期或未开通 VIP")
-
-    if isinstance(expires, str):
-        expires = datetime.fromisoformat(expires)
-
-    remaining_days = max(0, (expires - now).days)
-    vip_plan = PLANS["vip"]
-
-    # 4. 如果 VIP 已过期，直接按全价
-    if remaining_days <= 0:
-        return UpgradeQuoteResponse(
-            need_pay=target_plan["price"],
-            mode="full",
-            original_price=target_plan["price"],
-            vip_remaining_days=0,
-        )
-
-    # 5. 计算日均价
-    vip_daily = vip_plan["price"] / vip_plan["duration_days"]
-    svip_daily = target_plan["price"] / target_plan["duration_days"]
-
-    # 日均差价（SVIP更贵则为正）
-    diff_daily = max(0, svip_daily - vip_daily)
-    need_pay = round(diff_daily * remaining_days, 2)
-
-    # 6. 升级后的到期日 = VIP原到期日 + SVIP购买天数（直接在原到期日基础上叠加）
-    new_expiry = expires + timedelta(days=target_plan["duration_days"])
-
-    return UpgradeQuoteResponse(
-        need_pay=need_pay,
-        mode="upgrade",
-        vip_remaining_days=remaining_days,
-        original_price=target_plan["price"],
-        new_expiry=new_expiry.isoformat(),
-    )
-
-
-# ========== 订单相关 API ==========
-
-
-@router.post("/create", response_model=OrderInfo)
-async def create_order(
-    body: CreateOrderRequest,
-    user: UserInfo = Depends(require_user),
-):
-    """
-    创建支付订单（微信支付Native模式）
-    1. 检查套餐是否有效
-    2. 生成商户订单号
-    3. 检查是否有未支付的同类型订单
-    4. 调用微信统一下单
+    创建充值订单（人民币→ZS币）
+    1. 读取汇率配置
+    2. 计算到账ZS币数量
+    3. 校验最低充值金额
+    4. 创建微信支付订单
     5. 保存订单到数据库
     """
-    # 1. 校验套餐
-    plan = PLANS.get(body.plan_type)
-    if not plan:
-        raise HTTPException(status_code=400, detail=f"无效的套餐类型: {body.plan_type}")
+    # 1. 读取配置
+    exchange_rate = int(await get_sys_config("exchange_rate", "100"))
+    min_recharge = float(await get_sys_config("min_recharge", "10"))
 
-    # 1.5 如果是 VIP 升级到 SVIP，按补差价下单
-    if body.plan_type == "svip" and user.role == "vip" and user.vip_expires_at:
-        try:
-            expires = user.vip_expires_at
-            if isinstance(expires, str):
-                expires = datetime.fromisoformat(expires)
-            now = datetime.now()
-            if expires > now:
-                # VIP 仍在有效期内，计算补差价
-                remaining_days = (expires - now).days
-                vip_plan = PLANS["vip"]
-                vip_daily = vip_plan["price"] / vip_plan["duration_days"]
-                svip_daily = plan["price"] / plan["duration_days"]
-                diff_daily = max(0, svip_daily - vip_daily)
-                need_pay = round(diff_daily * remaining_days, 2)
-                
-                if need_pay > 0:
-                    plan = {**plan}  # copy
-                    plan["price"] = need_pay  # 使用补差价作为订单金额
-                    plan["name"] = f"VIP→SVIP升级补差价"
-                    # 到期日直接用原到期日 + 365天（由下面的第5步计算）
-        except Exception:
-            pass
+    # 2. 校验最低充值金额
+    if body.amount_rmb < min_recharge:
+        raise HTTPException(
+            status_code=400,
+            detail=f"最低充值金额为 {min_recharge} 元",
+        )
 
-    # 2. 先过期所有超过30分钟未支付的订单
-    expire_cutoff = datetime.now() - timedelta(minutes=30)
-    await Database.execute(
-        "UPDATE payment_orders SET status = 'expired', updated_at = %s "
-        "WHERE user_id = %s AND status = 'pending' AND created_at < %s",
-        (datetime.now(), user.id, expire_cutoff),
-    )
+    # 3. 计算到账ZS币（整数）
+    amount_zs = int(body.amount_rmb * exchange_rate)
 
-    # 3. 检查是否已有未支付且未过期的同类型订单（防止重复下单）
-    # 注：第2步已自动过期超过30分钟仍未支付的订单
-    existing = await Database.fetchone(
-        "SELECT order_no, code_url, created_at FROM payment_orders "
-        "WHERE user_id = %s AND plan_type = %s AND status = 'pending' "
-        "ORDER BY created_at DESC LIMIT 1",
-        (user.id, body.plan_type),
-    )
-    if existing:
-        # 有未支付订单，检查是否创建超过30分钟（理论上已过期，但以防未清理）
-        created = existing["created_at"]
-        if created and (datetime.now() - created).total_seconds() < 1800:
-            row = await Database.fetchone(
-                "SELECT * FROM payment_orders WHERE order_no = %s",
-                (existing["order_no"],),
-            )
-            return OrderInfo(
-                order_no=row["order_no"],
-                plan_type=row["plan_type"],
-                plan_name=row["plan_name"],
-                amount=float(row["amount"]),
-                status=row["status"],
-                code_url=row["code_url"],
-                created_at=row["created_at"],
-            )
-        else:
-            # 已超30分钟，自动标记为过期
-            await Database.execute(
-                "UPDATE payment_orders SET status = 'expired', updated_at = %s WHERE order_no = %s",
-                (datetime.now(), existing["order_no"]),
-            )
-
-    # 5. 生成订单号
+    # 4. 生成订单号
     order_no = _gen_order_no()
-    amount_fen = int(plan["price"] * 100)  # 元转分
+    amount_fen = int(body.amount_rmb * 100)  # 元转分
 
-    # 6. 调用微信统一下单
+    # 5. 调用微信统一下单
+    description = f"ZS币充值 {body.amount_rmb}元"
     code_url = create_native_order(
         order_no=order_no,
         amount_fen=amount_fen,
-        description=plan["name"],
+        description=description,
         spbill_create_ip="127.0.0.1",
     )
+
     if not code_url:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="微信支付下单失败，请稍后重试",
         )
 
-    # 7. 计算本次开通后的到期时间
-    now = datetime.now()
-    # 如果用户当前已是VIP且在有效期内，则在原到期日基础上叠加
-    current_expiry = None
-    if user.role in ("vip", "svip") and user.vip_expires_at:
-        try:
-            expires = user.vip_expires_at
-            if isinstance(expires, str):
-                expires = datetime.fromisoformat(expires)
-            if expires > now:
-                current_expiry = expires
-        except Exception:
-            pass
-
-    base_date = current_expiry if current_expiry else now
-    new_expiry = base_date + timedelta(days=plan["duration_days"])
-
-    # 8. 保存订单到数据库
+    # 6. 保存订单到数据库
     await Database.execute(
-        """INSERT INTO payment_orders 
-           (order_no, user_id, username, plan_type, plan_name, amount, duration_days, 
-            code_url, vip_expires_at, status)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending')""",
+        """INSERT INTO recharge_orders 
+           (order_no, user_id, username, amount_rmb, amount_zs, code_url, status)
+           VALUES (%s, %s, %s, %s, %s, %s, 'pending')""",
         (
             order_no,
             user.id,
             user.username,
-            body.plan_type,
-            plan["name"],
-            plan["price"],
-            plan["duration_days"],
+            body.amount_rmb,
+            amount_zs,
             code_url,
-            new_expiry,
         ),
     )
 
-    logger.info(f"[支付] 用户 {user.username}({user.id}) 创建订单 {order_no}, 金额={plan['price']}元")
-    return OrderInfo(
+    logger.info(f"[充值] 用户 {user.username}({user.id}) 充值 {body.amount_rmb}元 = {amount_zs} ZS币")
+    return RechargeCreateResponse(
         order_no=order_no,
-        plan_type=body.plan_type,
-        plan_name=plan["name"],
-        amount=plan["price"],
-        status="pending",
+        amount_rmb=body.amount_rmb,
+        amount_zs=amount_zs,
         code_url=code_url,
-        created_at=datetime.now(),
+        status="pending",
     )
 
 
-@router.get("/order/{order_no}", response_model=OrderStatusResponse)
-async def get_order_status(
-    order_no: str,
-    user: UserInfo = Depends(require_user),
-):
+@router.post("/recharge/notify")
+async def wechat_recharge_notify(request: Request):
     """
-    查询订单状态（供前端轮询）
-    """
-    row = await Database.fetchone(
-        "SELECT * FROM payment_orders WHERE order_no = %s AND user_id = %s",
-        (order_no, user.id),
-    )
-    if not row:
-        raise HTTPException(status_code=404, detail="订单不存在")
-
-    # 如果状态仍是 pending，主动查询微信侧状态（防止回调延迟）
-    if row["status"] == "pending":
-        wx_result = query_order(order_no)
-        if wx_result and wx_result.get("trade_state") == "SUCCESS":
-            # 用户已付款但回调未到，手动处理
-            await _process_paid_order(row, wx_result)
-            row = await Database.fetchone(
-                "SELECT * FROM payment_orders WHERE order_no = %s",
-                (order_no,),
-            )
-
-    return OrderStatusResponse(
-        order_no=row["order_no"],
-        status=row["status"],
-        paid_at=row["paid_at"],
-        vip_expires_at=row["vip_expires_at"],
-    )
-
-
-# ========== 微信支付回调 ==========
-
-
-@router.post("/notify")
-async def wechat_pay_notify(request: Request):
-    """
-    微信支付异步通知回调
-    微信服务器以POST方式发送XML数据到此地址
+    微信支付异步通知回调（充值）
     """
     xml_data = (await request.body()).decode("utf-8")
-    logger.info(f"[支付回调] 收到微信通知: {xml_data[:200]}...")
+    logger.info(f"[充值回调] 收到微信通知: {xml_data[:200]}...")
 
     # 1. 验证签名
     result = verify_notify(xml_data)
@@ -345,98 +116,407 @@ async def wechat_pay_notify(request: Request):
 
     # 3. 查询订单
     row = await Database.fetchone(
-        "SELECT * FROM payment_orders WHERE order_no = %s",
+        "SELECT * FROM recharge_orders WHERE order_no = %s",
         (order_no,),
     )
     if not row:
-        logger.error(f"[支付回调] 订单不存在: {order_no}")
+        logger.error(f"[充值回调] 订单不存在: {order_no}")
         return Response(content=fail_xml(), media_type="application/xml")
 
     # 4. 防止重复处理
     if row["status"] == "paid":
-        logger.info(f"[支付回调] 订单已处理，跳过: {order_no}")
+        logger.info(f"[充值回调] 订单已处理，跳过: {order_no}")
         return Response(content=success_xml(), media_type="application/xml")
 
-    # 5. 处理支付成功逻辑
-    await _process_paid_order(row, result, transaction_id)
-
-    return Response(content=success_xml(), media_type="application/xml")
-
-
-async def _process_paid_order(order_row: dict, wx_result: dict, transaction_id: str = None):
-    """
-    处理支付成功订单：更新订单状态 + 自动开通VIP
-    """
-    order_no = order_row["order_no"]
-    user_id = order_row["user_id"]
-    plan_type = order_row["plan_type"]
-    vip_expires_at = order_row["vip_expires_at"]
-
-    if not transaction_id:
-        transaction_id = wx_result.get("transaction_id", "")
+    # 5. 处理充值成功逻辑
+    user_id = row["user_id"]
+    amount_zs = row["amount_zs"]
 
     now = datetime.now()
 
-    # 5.1 更新订单状态
+    # 更新订单状态
     await Database.execute(
-        """UPDATE payment_orders 
+        """UPDATE recharge_orders 
            SET status = 'paid', wechat_transaction_id = %s, paid_at = %s, 
                notify_raw = %s, updated_at = %s
            WHERE order_no = %s""",
         (
             transaction_id,
             now,
-            json.dumps(wx_result, ensure_ascii=False, default=str),
+            json.dumps(result, ensure_ascii=False, default=str),
             now,
             order_no,
         ),
     )
 
-    # 5.2 获取套餐配置
-    plan = PLANS.get(plan_type, PLANS["vip"])
-
-    # 5.3 开通/续费VIP
-    # 先查询用户当前信息
-    user_row = await Database.fetchone(
-        "SELECT role, vip_expires_at FROM users WHERE id = %s",
-        (user_id,),
-    )
-    if not user_row:
-        logger.error(f"[支付] 用户不存在: user_id={user_id}")
-        return
-
+    # 给用户增加ZS币
     await Database.execute(
-        "UPDATE users SET role = %s, daily_limit = %s, vip_expires_at = %s, updated_at = %s WHERE id = %s",
-        (plan["role"], plan["daily_limit"], vip_expires_at, now, user_id),
+        "UPDATE users SET zs_balance = zs_balance + %s WHERE id = %s",
+        (amount_zs, user_id),
     )
 
     logger.info(
-        f"[支付] ✅ 订单 {order_no} 处理完成！用户 {order_row['username']}({user_id}) "
-        f"已开通 {plan_type.upper()} 至 {vip_expires_at}"
+        f"[充值] ✅ 订单 {order_no} 处理完成！用户 {row['username']}({user_id}) "
+        f"充值 {row['amount_rmb']}元 到账 {amount_zs} ZS币"
+    )
+
+    return Response(content=success_xml(), media_type="application/xml")
+
+
+# ========== 余额 & 价格查询 ==========
+
+
+@router.get("/balance", response_model=BalanceResponse)
+async def get_balance(user: UserInfo = Depends(require_user)):
+    """
+    查询 ZS币 余额
+    """
+    zs_per_second = int(await get_sys_config("zs_per_second", "5"))
+    exchange_rate = int(await get_sys_config("exchange_rate", "100"))
+
+    return BalanceResponse(
+        zs_balance=user.zs_balance,
+        zs_per_second=zs_per_second,
+        exchange_rate=exchange_rate,
     )
 
 
-# ========== 商品列表（前端可选） ==========
+@router.get("/price")
+async def get_price():
+    """
+    查询每秒价格
+    """
+    zs_per_second = int(await get_sys_config("zs_per_second", "5"))
+    exchange_rate = int(await get_sys_config("exchange_rate", "100"))
+    register_bonus = int(await get_sys_config("register_bonus", "600"))
+    invite_bonus = int(await get_sys_config("invite_bonus", "200"))
+    min_recharge = float(await get_sys_config("min_recharge", "10"))
+
+    return {
+        "zs_per_second": zs_per_second,
+        "exchange_rate": exchange_rate,
+        "register_bonus": register_bonus,
+        "invite_bonus": invite_bonus,
+        "min_recharge": min_recharge,
+    }
 
 
-@router.get("/plans", response_model=list[PlanInfo])
-async def get_plans():
+# ========== 订单状态查询（供前端轮询） ==========
+
+
+@router.get("/recharge/order/{order_no}")
+async def get_recharge_order_status(
+    order_no: str,
+    user: UserInfo = Depends(require_user),
+):
     """
-    获取套餐列表（前端可用来动态渲染价格）
+    查询充值订单状态（供前端轮询）
     """
-    return [
-        PlanInfo(
-            plan_type="vip",
-            name="VIP会员年卡(测试)",
-            price=688,
-            duration_days=365,
-            features=["每日10次生成", "1080P超清画质", "全部模板", "优先队列"],
-        ),
-        PlanInfo(
-            plan_type="svip",
-            name="SVIP会员年卡(测试)",
-            price=1588,
-            duration_days=365,
-            features=["无限制生成", "1080P超清画质", "全部模板", "专属客服"],
-        ),
-    ]
+    row = await Database.fetchone(
+        "SELECT * FROM recharge_orders WHERE order_no = %s AND user_id = %s",
+        (order_no, user.id),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="订单不存在")
+
+    # 如果状态仍是 pending，主动查询微信侧状态
+    if row["status"] == "pending":
+        wx_result = query_order(order_no)
+        if wx_result and wx_result.get("trade_state") == "SUCCESS":
+            # 用户已付款但回调未到，手动处理
+            transaction_id = wx_result.get("transaction_id", "")
+            user_id = row["user_id"]
+            amount_zs = row["amount_zs"]
+
+            await Database.execute(
+                """UPDATE recharge_orders 
+                   SET status = 'paid', wechat_transaction_id = %s, paid_at = %s, 
+                       notify_raw = %s, updated_at = %s
+                   WHERE order_no = %s""",
+                (
+                    transaction_id,
+                    datetime.now(),
+                    json.dumps(wx_result, ensure_ascii=False, default=str),
+                    datetime.now(),
+                    order_no,
+                ),
+            )
+            await Database.execute(
+                "UPDATE users SET zs_balance = zs_balance + %s WHERE id = %s",
+                (amount_zs, user_id),
+            )
+            row = await Database.fetchone(
+                "SELECT * FROM recharge_orders WHERE order_no = %s",
+                (order_no,),
+            )
+
+    return {
+        "order_no": row["order_no"],
+        "status": row["status"],
+        "amount_rmb": float(row["amount_rmb"]),
+        "amount_zs": row["amount_zs"],
+        "paid_at": row["paid_at"],
+    }
+
+
+# ========== 充值记录查询 ==========
+
+
+@router.get("/recharge/records")
+async def get_recharge_records(
+    page: int = 1,
+    page_size: int = 10,
+    user: UserInfo = Depends(require_user),
+):
+    """
+    查询当前用户的充值记录（分页）
+    """
+    # 计算总数
+    count_row = await Database.fetchone(
+        "SELECT COUNT(*) as cnt FROM recharge_orders WHERE user_id = %s",
+        (user.id,),
+    )
+    total = count_row["cnt"] if count_row else 0
+
+    # 分页查询
+    offset = (page - 1) * page_size
+    rows = await Database.fetchall(
+        """SELECT order_no, amount_rmb, amount_zs, status, paid_at, created_at
+           FROM recharge_orders
+           WHERE user_id = %s
+           ORDER BY created_at DESC
+           LIMIT %s OFFSET %s""",
+        (user.id, page_size, offset),
+    )
+
+    records = []
+    for row in rows:
+        records.append({
+            "order_no": row["order_no"],
+            "amount_rmb": float(row["amount_rmb"]),
+            "amount_zs": row["amount_zs"],
+            "status": row["status"],
+            "paid_at": row["paid_at"].isoformat() if row["paid_at"] else None,
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+        })
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    return {
+        "records": records,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+# ========== 统一账变记录查询（合并充值/消耗/调整/邀请） ==========
+
+
+@router.get("/balance/records")
+async def get_balance_records(
+    page: int = 1,
+    page_size: int = 10,
+    type_filter: str = "",
+    user: UserInfo = Depends(require_user),
+):
+    """
+    查询当前用户的所有账变记录（合并充值、消耗、管理员调整、邀请奖励）
+    type_filter: ''=全部, recharge=充值, consumption=消耗, adjustment=调整, invite=邀请
+    """
+    limit = page_size
+    offset = (page - 1) * page_size
+
+    # 构建联合查询 — 按条件组装 UNION ALL
+    union_parts = []
+    count_parts = []
+
+    # ---------- 1. 充值记录（仅已支付的） ----------
+    recharge_where = f"user_id = {user.id} AND status = 'paid'"
+    if type_filter and type_filter != 'recharge':
+        pass  # 跳过不匹配的类型
+    else:
+        union_parts.append(f"""
+            SELECT 'recharge' as type, created_at as sort_time,
+                   amount_zs as change_amount, status, NULL as extra_info
+            FROM recharge_orders
+            WHERE {recharge_where}
+        """)
+        if not type_filter:
+            count_parts.append(f"SELECT COUNT(*) as cnt FROM recharge_orders WHERE {recharge_where}")
+
+    # ---------- 2a. 消耗记录（frozen/deducted） ----------
+    consume_where = f"user_id = {user.id} AND status IN ('frozen', 'deducted')"
+    if type_filter and type_filter != 'consumption':
+        pass
+    else:
+        union_parts.append(f"""
+            SELECT 'consumption' as type, created_at as sort_time,
+                   -COALESCE(deducted_zs, frozen_zs, 0) as change_amount, status, task_id as extra_info
+            FROM generation_log
+            WHERE {consume_where}
+        """)
+        if not type_filter:
+            count_parts.append(f"SELECT COUNT(*) as cnt FROM generation_log WHERE {consume_where}")
+
+    # ---------- 2b. 退款记录（refunded） ----------
+    refund_where = f"user_id = {user.id} AND status = 'refunded'"
+    if type_filter and type_filter != 'refund':
+        pass
+    else:
+        union_parts.append(f"""
+            SELECT 'refund' as type, updated_at as sort_time,
+                   COALESCE(frozen_zs, 0) as change_amount, status, task_id as extra_info
+            FROM generation_log
+            WHERE {refund_where}
+        """)
+        if not type_filter:
+            count_parts.append(f"SELECT COUNT(*) as cnt FROM generation_log WHERE {refund_where}")
+
+    # ---------- 3. 管理员调整记录 ----------
+    adj_where = f"bcl.user_id = {user.id}"
+    if type_filter and type_filter != 'adjustment':
+        pass
+    else:
+        union_parts.append(f"""
+            SELECT 'adjustment' as type, bcl.created_at as sort_time,
+                   bcl.change_amount, 'done' as status, bcl.reason as extra_info
+            FROM balance_change_log bcl
+            WHERE {adj_where}
+        """)
+        if not type_filter:
+            count_parts.append(f"SELECT COUNT(*) as cnt FROM balance_change_log WHERE user_id = {user.id}")
+
+    # ---------- 4. 邀请奖励记录 ----------
+    invite_where = f"il.inviter_id = {user.id}"
+    if type_filter and type_filter != 'invite':
+        pass
+    else:
+        union_parts.append(f"""
+            SELECT 'invite' as type, il.created_at as sort_time,
+                   il.reward_zs as change_amount, 'done' as status,
+                   u.username as extra_info
+            FROM invite_log il
+            LEFT JOIN users u ON u.id = il.invitee_id
+            WHERE {invite_where}
+        """)
+        if not type_filter:
+            count_parts.append(f"SELECT COUNT(*) as cnt FROM invite_log WHERE inviter_id = {user.id}")
+
+    # ---------- 构建最终 SQL ----------
+    if type_filter:
+        # 筛选模式下：直接对 UNION ALL 做 ORDER BY + LIMIT，无嵌套子查询
+        union_sql = " UNION ALL ".join(union_parts)
+        count_sql = f"SELECT COUNT(*) as cnt FROM ({union_sql}) AS unified"
+        full_sql = f"""
+            SELECT * FROM ({union_sql}) AS unified
+            ORDER BY sort_time DESC
+            LIMIT {limit} OFFSET {offset}
+        """
+    else:
+        # 全部模式：UNION ALL + 外层合计
+        union_sql = " UNION ALL ".join(union_parts)
+        count_sql = " SELECT SUM(cnt) as cnt FROM (" + " UNION ALL ".join(count_parts) + ") AS tc"
+        full_sql = f"""
+            SELECT * FROM ({union_sql}) AS unified
+            ORDER BY sort_time DESC
+            LIMIT {limit} OFFSET {offset}
+        """
+
+    total_row = await Database.fetchone(count_sql)
+    total = total_row["cnt"] if total_row else 0
+
+    # 分页查询
+    rows = await Database.fetchall(full_sql)
+
+    records = []
+    for row in rows:
+        r = {
+            "type": row["type"],
+            "change_amount": row["change_amount"],
+            "created_at": row["sort_time"].isoformat() if hasattr(row["sort_time"], 'isoformat') else str(row["sort_time"]),
+            "status": row.get("status", ""),
+            "extra_info": row.get("extra_info") or "",
+        }
+
+        # 格式化额外信息
+        if r["type"] == "recharge":
+            r["label"] = "充值"
+        elif r["type"] == "consumption":
+            r["label"] = "消耗"
+            r["extra_info"] = f"任务: {r['extra_info']}" if r["extra_info"] else ""
+        elif r["type"] == "refund":
+            r["label"] = "退款"
+            r["extra_info"] = f"取消/失败退还" if r["extra_info"] else "取消/失败退还"
+        elif r["type"] == "adjustment":
+            r["label"] = "调整"
+        elif r["type"] == "invite":
+            r["label"] = "邀请"
+            r["extra_info"] = f"邀请: {r['extra_info']}" if r["extra_info"] else ""
+
+        records.append(r)
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    return {
+        "records": records,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }
+
+
+# ========== ZS币消耗记录查询 ==========
+
+
+@router.get("/consumption/records")
+async def get_consumption_records(
+    page: int = 1,
+    page_size: int = 10,
+    user: UserInfo = Depends(require_user),
+):
+    """
+    查询当前用户的ZS币消耗记录（分页）
+    """
+    # 计算总数
+    count_row = await Database.fetchone(
+        "SELECT COUNT(*) as cnt FROM generation_log WHERE user_id = %s",
+        (user.id,),
+    )
+    total = count_row["cnt"] if count_row else 0
+
+    # 分页查询
+    offset = (page - 1) * page_size
+    rows = await Database.fetchall(
+        """SELECT task_id, estimated_seconds, actual_seconds, frozen_zs, deducted_zs, status, created_at, updated_at
+           FROM generation_log
+           WHERE user_id = %s
+           ORDER BY created_at DESC
+           LIMIT %s OFFSET %s""",
+        (user.id, page_size, offset),
+    )
+
+    records = []
+    for row in rows:
+        records.append({
+            "task_id": row["task_id"],
+            "estimated_seconds": row["estimated_seconds"],
+            "actual_seconds": row["actual_seconds"],
+            "frozen_zs": row["frozen_zs"],
+            "deducted_zs": row["deducted_zs"],
+            "status": row["status"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+        })
+
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    return {
+        "records": records,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+    }

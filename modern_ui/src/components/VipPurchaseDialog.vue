@@ -55,7 +55,7 @@
             <div class="word-duration">生成视频时长约30秒</div>
           </div>
           <div class="vip-compare-col plan-col-vip">
-            文案最多 <strong class="text-vip">398</strong> 字
+            文案最多 <strong class="text-vip">368</strong> 字
             <div class="word-duration">生成视频时长约80秒</div>
           </div>
         </div>

@@ -38,7 +38,7 @@
         <!-- Spacer + User Menu at bottom -->
         <div style="flex:1"></div>
 
-        <UserMenu @show-login="showLogin = true" @go-admin="switchView('admin')" />
+        <UserMenu @show-login="showLogin = true" />
       </div>
     </aside>
 
@@ -49,7 +49,7 @@
       <!-- <I2vView v-if="activeView === 'image_to_video'" /> -->
       <!-- <ActionTransferView v-if="activeView === 'action_transfer'" /> -->
 
-      <!-- ====== 📋 历史记录 ====== -->
+      <!-- ====== 📝 历史记录 ====== -->
       <TaskHistoryView v-if="activeView === 'history'" />
 
       <!-- ====== ⚙️ 系统配置 ====== -->
@@ -58,8 +58,11 @@
       <!-- ====== 🔐 用户管理 (Admin) ====== -->
       <AdminView v-if="activeView === 'admin'" />
 
-      <!-- ====== 📊 任务中心 ====== -->
+      <!-- ====== 🗓️ 任务中心 ====== -->
       <TaskCenterView v-if="activeView === 'tasks'" />
+
+      <!-- ====== 📊 账户明细 ====== -->
+      <AccountDetailView v-if="activeView === 'account'" />
 
     </main>
 
@@ -82,6 +85,7 @@ import SettingsView from './views/SettingsView.vue'
 import LoginView from './views/LoginView.vue'
 import AdminView from './views/AdminView.vue'
 import HomePage from './views/HomePage.vue'
+import AccountDetailView from './views/AccountDetailView.vue'
 import UserMenu from './components/UserMenu.vue'
 
 const auth = getAuth()
@@ -99,14 +103,16 @@ const baseNavItems: NavItem[] = [
   // { key: 'custom_media', icon: '🎨', label: '素材创作' },
   // { key: 'image_to_video', icon: '🎥', label: '图生视频' },
   // { key: 'action_transfer', icon: '💃', label: '动作迁移' },
-  { key: 'tasks', icon: '📊', label: '任务中心' },
-  { key: 'history', icon: '📋', label: '历史记录' },
+  { key: 'tasks', icon: '🗓️', label: '任务中心' },
+  { key: 'history', icon: '📝', label: '历史记录' },
+  { key: 'account', icon: '💰', label: '账户明细' },
 ]
 
 const navItems = computed(() => {
   const items = [...baseNavItems]
   if (auth.isAdmin.value) {
     items.push({ key: 'settings', icon: '⚙️', label: '系统配置' })
+    items.push({ key: 'admin', icon: '🔐', label: '用户管理' })
   }
   return items
 })

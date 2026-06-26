@@ -558,6 +558,8 @@ class PersistenceService:
             "file_size": metadata.get("result", {}).get("file_size", 0),
             "video_path": metadata.get("result", {}).get("video_path"),
             "user_id": metadata.get("user_id"),
+            "deducted_zs": metadata.get("result", {}).get("deducted_zs", 0),
+            "frozen_zs": metadata.get("result", {}).get("frozen_zs", 0),
         }
         
         # Update or append
@@ -614,6 +616,8 @@ class PersistenceService:
                     "file_size": metadata.get("result", {}).get("file_size", 0),
                     "video_path": metadata.get("result", {}).get("video_path"),
                     "user_id": metadata.get("user_id"),
+                    "deducted_zs": metadata.get("result", {}).get("deducted_zs", 0),
+                    "frozen_zs": metadata.get("result", {}).get("frozen_zs", 0),
                 })
         
         self._save_index(index)

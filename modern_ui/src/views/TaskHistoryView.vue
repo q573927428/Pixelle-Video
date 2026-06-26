@@ -1,7 +1,7 @@
 <template>
   <div class="tool-page">
     <div class="page-header">
-      <span class="page-icon">📋</span>
+      <span class="page-icon">📝</span>
       <div>
         <h3 class="page-title">历史记录</h3>
         <p class="page-desc">所有已完成任务的保存90天，超时自动删除，请及时下载到本地</p>
@@ -58,19 +58,22 @@
             <div v-else class="history-item-placeholder">🎬</div>
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
-          <div class="history-item-info">
-            <div class="history-item-title-row">
-              <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
-              <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
-                <el-icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></el-icon>
-                {{ task.username || task.phone }}
-              </span>
-            </div>
-            <div class="history-item-meta">
-              <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
-                {{ task.status === 'completed' ? '已完成' : '失败' }}
-              </el-tag>
-              <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
+            <div class="history-item-info">
+              <div class="history-item-title-row">
+                <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
+                  {{ task.status === 'completed' ? '已完成' : '失败' }}
+                </el-tag>
+                <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
+                <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
+                  <el-icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></el-icon>
+                  {{ task.phone || task.username }}
+                </span>
+              </div>
+              <div class="history-item-meta">
+                <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
+                <span v-if="task.deducted_zs > 0" class="zs-badge" title="实际扣除ZS币">
+                  <span class="zs-icon">◇</span> -{{ task.deducted_zs }}
+                </span>
               <span class="meta-actions">
                 <el-tooltip content="复制文案" placement="top" :show-after="300">
                   <el-button
@@ -438,6 +441,22 @@ async function handleDelete(task: any) {
   color: var(--muted);
   margin-left: auto;
   opacity: 0.7;
+}
+.zs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.zs-icon {
+  font-size: 10px;
+  line-height: 1;
 }
 
 .history-list {

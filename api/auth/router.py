@@ -3,12 +3,13 @@ Auth & Admin routes
 """
 
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from loguru import logger
 from pydantic import BaseModel
 
 from api.auth.database import Database
-from api.auth.utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token
+from api.auth.utils import hash_password, verify_password, create_access_token, create_refresh_token, decode_refresh_token, generate_invite_code
 from api.auth.schemas import (
     RegisterRequest,
     LoginRequest,
@@ -17,6 +18,7 @@ from api.auth.schemas import (
     UserDailyUsage,
     AdminUserUpdate,
     AdminSetVipRequest,
+    AdminBalanceAdjustRequest,
     UserListResponse,
 )
 from api.auth.dependencies import (
@@ -24,13 +26,16 @@ from api.auth.dependencies import (
     require_admin,
     check_daily_limit,
     get_current_user,
+    get_sys_config,
+    handle_invite_reward,
 )
+from api.auth.schemas import SysConfigResponse, SysConfigUpdateRequest
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-# Column list for user queries (include vip_expires_at, phone)
-_USER_COLUMNS = "id, username, email, phone, role, daily_limit, vip_expires_at, status, created_at"
+# Column list for user queries (include vip_expires_at, phone, zs_balance, invite_code)
+_USER_COLUMNS = "id, username, email, phone, role, daily_limit, vip_expires_at, zs_balance, invite_code, status, created_at"
 
 
 def _row_to_userinfo(row: dict) -> UserInfo:
@@ -43,6 +48,8 @@ def _row_to_userinfo(row: dict) -> UserInfo:
         role=row["role"],
         daily_limit=row["daily_limit"],
         vip_expires_at=row.get("vip_expires_at"),
+        zs_balance=row.get("zs_balance", 0),
+        invite_code=row.get("invite_code"),
         status=row.get("status", 1),
         created_at=row["created_at"],
     )
@@ -74,10 +81,18 @@ async def register(body: RegisterRequest):
 
     # Create user
     password_hash = hash_password(body.password)
+    user_invite_code = generate_invite_code()
+    register_bonus = int(await get_sys_config("register_bonus", "600"))
+
     user_id = await Database.execute(
-        "INSERT INTO users (username, password_hash, email, role, daily_limit) VALUES (%s, %s, %s, 'normal', 1)",
-        (body.username, password_hash, body.email),
+        "INSERT INTO users (username, password_hash, email, role, daily_limit, zs_balance, invite_code) "
+        "VALUES (%s, %s, %s, 'normal', -1, %s, %s)",
+        (body.username, password_hash, body.email, register_bonus, user_invite_code),
     )
+
+    # Process invite reward
+    if body.invite_code:
+        await handle_invite_reward(body.invite_code, user_id)
 
     # Generate tokens
     access_token = create_access_token(user_id, "normal")
@@ -94,10 +109,11 @@ async def register(body: RegisterRequest):
         email=body.email,
         role="normal",
         daily_limit=1,
+        zs_balance=register_bonus,
         created_at=datetime.now(),
     )
 
-    logger.info(f"New user registered: {body.username} (id={user_id})")
+    logger.info(f"New user registered: {body.username} (id={user_id}) zs_balance={register_bonus}")
     return TokenResponse(access_token=access_token, refresh_token=refresh_token, user=user_info)
 
 
@@ -176,7 +192,7 @@ async def login_by_phone(body: LoginByPhoneRequest):
 @router.get("/me", response_model=UserInfo)
 async def get_me(user: UserInfo = Depends(require_user)):
     """Get current user info"""
-    # Refresh from DB to get latest vip_expires_at
+    # Refresh from DB to get latest data
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user.id,),
@@ -301,7 +317,6 @@ async def update_user(
     admin: UserInfo = Depends(require_admin),
 ):
     """Update user role/status/limit (admin only)"""
-    # Check user exists
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
@@ -315,16 +330,12 @@ async def update_user(
     if body.role is not None:
         updates.append("role = %s")
         params.append(body.role)
-        # When setting role to vip, auto-set daily_limit to 10 (daily limit)
-        # Override even when daily_limit is explicitly provided to ensure consistency
         if body.role == 'vip':
             updates.append("daily_limit = %s")
             params.append(10)
-        # When setting role to svip, auto-set daily_limit to -1 (unlimited)
         elif body.role == 'svip':
             updates.append("daily_limit = %s")
             params.append(-1)
-        # When setting role to normal/admin and daily_limit not specifically set, keep original
         elif body.daily_limit is not None:
             updates.append("daily_limit = %s")
             params.append(body.daily_limit)
@@ -346,7 +357,6 @@ async def update_user(
         )
         logger.info(f"Admin updated user {user_id}: {body.model_dump(exclude_none=True)}")
 
-    # Return updated user
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
@@ -359,9 +369,7 @@ async def set_vip(
     body: AdminSetVipRequest,
     admin: UserInfo = Depends(require_admin),
 ):
-    """Set a user as VIP with expiry date (admin only).
-    VIP users get 10 generations per day."""
-    # Find user by username or phone
+    """Set a user as VIP with expiry date (admin only)."""
     if body.phone:
         row = await Database.fetchone(
             f"SELECT {_USER_COLUMNS} FROM users WHERE phone = %s",
@@ -377,14 +385,12 @@ async def set_vip(
 
     user_id = row["id"]
 
-    # Update role to vip, set vip_expires_at and daily_limit = 10 (daily limit)
     await Database.execute(
         "UPDATE users SET role = 'vip', vip_expires_at = %s, daily_limit = 10 WHERE id = %s",
         (body.vip_expires_at, user_id),
     )
     logger.info(f"Admin set VIP for user {row['username']} (id={user_id}) until {body.vip_expires_at}")
 
-    # Return updated user
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
@@ -404,9 +410,7 @@ async def set_svip(
     body: AdminSetSvipRequest,
     admin: UserInfo = Depends(require_admin),
 ):
-    """Set a user as SVIP with expiry date (admin only).
-    SVIP users get unlimited generations per day."""
-    # Find user by username or phone
+    """Set a user as SVIP with expiry date (admin only)."""
     if body.phone:
         row = await Database.fetchone(
             f"SELECT {_USER_COLUMNS} FROM users WHERE phone = %s",
@@ -422,14 +426,12 @@ async def set_svip(
 
     user_id = row["id"]
 
-    # Update role to svip, set vip_expires_at and daily_limit = -1 (unlimited)
     await Database.execute(
         "UPDATE users SET role = 'svip', vip_expires_at = %s, daily_limit = -1 WHERE id = %s",
         (body.svip_expires_at, user_id),
     )
     logger.info(f"Admin set SVIP for user {row['username']} (id={user_id}) until {body.svip_expires_at}")
 
-    # Return updated user
     row = await Database.fetchone(
         f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
         (user_id,),
@@ -452,7 +454,6 @@ async def remove_vip(
 
     old_role = row["role"]
 
-    # Reset to normal
     await Database.execute(
         "UPDATE users SET role = 'normal', vip_expires_at = NULL, daily_limit = 1 WHERE id = %s",
         (user_id,),
@@ -464,3 +465,152 @@ async def remove_vip(
         (user_id,),
     )
     return _row_to_userinfo(row)
+
+
+@router.post("/admin/adjust-balance", response_model=UserInfo)
+async def adjust_user_balance(
+    body: AdminBalanceAdjustRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """管理员增减用户ZS余额（正数=增加，负数=减少），记录变更日志"""
+    if body.change_amount == 0:
+        raise HTTPException(status_code=400, detail="变动数量不能为0")
+
+    # 获取目标用户
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (body.user_id,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    balance_before = row.get("zs_balance", 0)
+    balance_after = balance_before + body.change_amount
+    if balance_after < 0:
+        raise HTTPException(status_code=400, detail=f"余额不足，当前余额 {balance_before}，减少 {abs(body.change_amount)} 后余额为负数")
+
+    # 更新余额
+    await Database.execute(
+        "UPDATE users SET zs_balance = %s WHERE id = %s",
+        (balance_after, body.user_id),
+    )
+
+    # 记录变更日志
+    await Database.execute(
+        "INSERT INTO balance_change_log (user_id, admin_id, change_amount, balance_before, balance_after, reason) "
+        "VALUES (%s, %s, %s, %s, %s, %s)",
+        (body.user_id, admin.id, body.change_amount, balance_before, balance_after, body.reason),
+    )
+
+    logger.info(
+        f"Admin {admin.username}(id={admin.id}) adjusted balance for user {row['username']}(id={body.user_id}): "
+        f"{balance_before} -> {balance_after} (change={body.change_amount}), reason: {body.reason}"
+    )
+
+    # 返回更新后的用户信息
+    row = await Database.fetchone(
+        f"SELECT {_USER_COLUMNS} FROM users WHERE id = %s",
+        (body.user_id,),
+    )
+    return _row_to_userinfo(row)
+
+
+# ====== 邀请信息接口 ======
+
+
+@router.get("/invite-info")
+async def get_invite_info(user: UserInfo = Depends(require_user)):
+    """
+    获取我的邀请信息
+    """
+    invite_bonus = int(await get_sys_config("invite_bonus", "200"))
+
+    # 如果用户没有邀请码，自动生成并保存
+    if not user.invite_code:
+        user.invite_code = generate_invite_code()
+        await Database.execute(
+            "UPDATE users SET invite_code = %s WHERE id = %s",
+            (user.invite_code, user.id),
+        )
+
+    # Count total invites
+    count_row = await Database.fetchone(
+        "SELECT COUNT(*) as cnt FROM invite_log WHERE inviter_id = %s",
+        (user.id,),
+    )
+    total_invites = count_row["cnt"] if count_row else 0
+
+    # Sum total reward
+    reward_row = await Database.fetchone(
+        "SELECT COALESCE(SUM(reward_zs), 0) as total FROM invite_log WHERE inviter_id = %s",
+        (user.id,),
+    )
+    total_reward_zs = reward_row["total"] if reward_row else 0
+
+    # Get invitee list
+    invitees = await Database.fetchall(
+        """SELECT u.username, il.created_at
+           FROM invite_log il
+           JOIN users u ON u.id = il.invitee_id
+           WHERE il.inviter_id = %s
+           ORDER BY il.created_at DESC
+           LIMIT 50""",
+        (user.id,),
+    )
+
+    invitee_list = [
+        {"username": row["username"], "created_at": row["created_at"].isoformat() if hasattr(row["created_at"], 'isoformat') else str(row["created_at"])}
+        for row in invitees
+    ]
+
+    return {
+        "invite_code": user.invite_code or "",
+        "invite_link": f"/register?invite={user.invite_code or ''}",
+        "invite_bonus": invite_bonus,
+        "total_invites": total_invites,
+        "total_reward_zs": total_reward_zs,
+        "invitees": invitee_list,
+    }
+
+
+# ====== 管理员系统配置接口 ======
+
+
+@router.get("/admin/config", response_model=SysConfigResponse)
+async def get_admin_config(admin: UserInfo = Depends(require_admin)):
+    """获取系统配置（管理员）"""
+    zs_per_second = await get_sys_config("zs_per_second", "5")
+    exchange_rate = await get_sys_config("exchange_rate", "100")
+    register_bonus = await get_sys_config("register_bonus", "600")
+    min_recharge = await get_sys_config("min_recharge", "10")
+    invite_bonus = await get_sys_config("invite_bonus", "200")
+
+    return SysConfigResponse(
+        zs_per_second=zs_per_second,
+        exchange_rate=exchange_rate,
+        register_bonus=register_bonus,
+        min_recharge=min_recharge,
+        invite_bonus=invite_bonus,
+    )
+
+
+@router.put("/admin/config/{config_key}")
+async def update_admin_config(
+    config_key: str,
+    body: SysConfigUpdateRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """修改系统配置（管理员）
+    可修改：zs_per_second, exchange_rate, register_bonus, invite_bonus, min_recharge
+    """
+    valid_keys = ["zs_per_second", "exchange_rate", "register_bonus", "invite_bonus", "min_recharge"]
+    if config_key not in valid_keys:
+        raise HTTPException(status_code=400, detail=f"无效的配置键，允许的值: {valid_keys}")
+
+    await Database.execute(
+        "UPDATE sys_config SET config_value = %s WHERE config_key = %s",
+        (body.config_value, config_key),
+    )
+    logger.info(f"Admin updated config {config_key} = {body.config_value}")
+
+    return {"success": True, "config_key": config_key, "config_value": body.config_value}

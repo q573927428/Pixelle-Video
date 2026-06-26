@@ -1,26 +1,8 @@
 """
-支付配置：套餐定义 + 微信商户信息
+支付配置：微信商户信息 + 系统配置读取
 """
 
 from api.config import api_config
-
-# 套餐定义
-PLANS = {
-    "vip": {
-        "name": "VIP会员年卡(测试)",
-        "price": 688,
-        "duration_days": 365,
-        "role": "vip",
-        "daily_limit": 10,
-    },
-    "svip": {
-        "name": "SVIP会员年卡(测试)",
-        "price": 1588,
-        "duration_days": 365,
-        "role": "svip",
-        "daily_limit": -1,
-    },
-}
 
 # 微信商户配置
 WECHAT_MCHID = api_config.wechat_payment["mchid"]

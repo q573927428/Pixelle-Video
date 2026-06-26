@@ -11,7 +11,6 @@
           <div style="display:flex;align-items:center;gap:6px;">
             <span style="font-size:13px;font-weight:400;">批量</span>
             <el-switch v-model="form.batch_mode" @change="onBatchModeChange" />
-            <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
           </div>
         </div>
         <div class="form-section-body">
@@ -226,6 +225,14 @@
                 </el-tag>
               </div>
             </div>
+            <el-form-item label="口播文案（可选，每行一段，留空AI自动生成）">
+              <el-input
+                v-model="form.batch_goods_texts"
+                type="textarea"
+                :rows="6"
+                placeholder="智能保温杯，保温效果超长待机。&#10;无线蓝牙耳机，音质清晰续航持久。&#10;便携式咖啡机，随时随地享受现磨。&#10;&#10;不填写则AI根据商品标题自动生成文案"
+              />
+            </el-form-item>
             <el-form-item label="商品图片（按顺序一一对应）">
               <div class="upload-field-container">
                 <UploadBox category="goods_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_goods')" @select-history="(c) => $emit('select-history', c)" />
@@ -469,7 +476,6 @@
             <div style="display:flex;align-items:center;gap:6px;">
               <span style="font-size:13px;font-weight:400;">开关</span>
               <el-switch v-model="form.subtitle_enabled" @change="onSubtitleEnabledChange" />
-              <span class="vip-badge" v-if="!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value" @click="handleVipBadgeClick">👑 VIP</span>
             </div>
           </div>
           <div class="form-section-body" v-if="form.subtitle_enabled">
@@ -532,7 +538,6 @@
 
     </div>
   </el-form>
-  <VipPurchaseDialog ref="vipDialogRef" />
 </template>
 
 <script setup lang="ts">
@@ -541,17 +546,9 @@ import type { DigitalForm, WorkflowInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
-import VipPurchaseDialog from './VipPurchaseDialog.vue'
 import { ElMessage } from 'element-plus'
-import { getAuth } from '../composables/useAuth'
 
-const auth = getAuth()
-const vipDialogRef = ref<InstanceType<typeof VipPurchaseDialog> | null>(null)
-
-function handleVipBadgeClick() {
-  vipDialogRef.value?.openVipDialog()
-}
-const textMaxLength = computed(() => (auth.isVip.value || auth.isSvip.value || auth.isAdmin.value) ? 398 : 150)
+const textMaxLength = ref(368)
 const BATCH_MAX_COUNT = 10
 
 const props = defineProps<{
@@ -612,21 +609,14 @@ const emit = defineEmits<{
   (e: 'select-history', category: string): void
 }>()
 
-// 批量模式下不强制切换模式，两种模式都支持
+// 批量模式：直接允许（已取消VIP限制）
 function onBatchModeChange(val: boolean) {
-  if (!val) return
-  if (!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value) {
-    props.form.batch_mode = false
-    ElMessage.warning('批量模式为 VIP 会员专属功能，请升级会员后使用')
-  }
+  // 所有人都可以使用批量模式
 }
 
+// 字幕功能：直接允许（已取消VIP限制）
 function onSubtitleEnabledChange(val: boolean) {
-  if (!val) return
-  if (!auth.isVip.value && !auth.isSvip.value && !auth.isAdmin.value) {
-    props.form.subtitle_enabled = false
-    ElMessage.warning('字幕功能为 VIP 会员专属功能，请升级会员后使用')
-  }
+  // 所有人都可以使用字幕功能
 }
 
 const videoApiParamsActiveNames = ref<string[]>([])
@@ -1003,35 +993,6 @@ async function handleMediaParse() {
   :deep(.media-dialog .el-dialog) {
     width: 92% !important;
     max-width: 92vw !important;
-  }
-}
-
-/* VIP 标识：亮眼金色渐变 + 闪烁效果 */
-.vip-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  color: #fff;
-  background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 0 0 16px rgba(255, 165, 0, 0.3);
-  animation: vipPulse 2s ease-in-out infinite;
-  cursor: pointer;
-  user-select: none;
-}
-
-@keyframes vipPulse {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(255, 215, 0, 0.6), 0 0 16px rgba(255, 165, 0, 0.3);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 12px rgba(255, 215, 0, 0.9), 0 0 24px rgba(255, 165, 0, 0.5);
-    transform: scale(1.05);
   }
 }
 </style>

@@ -22,7 +22,7 @@ class VideoGenerateRequest(BaseModel):
     """Video generation request"""
     
     # === Input ===
-    text: str = Field(..., max_length=398, description="Source text for video generation，最长398字")
+    text: str = Field(..., max_length=368, description="Source text for video generation，最长368字")
     
     # === Processing Mode ===
     mode: Literal["generate", "fixed"] = Field(
@@ -35,6 +35,9 @@ class VideoGenerateRequest(BaseModel):
     
     # === Basic Config ===
     n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes (only used in 'generate' mode, ignored in 'fixed' mode)")
+    
+    # === ZS币 计费 ===
+    estimated_seconds: Optional[int] = Field(None, ge=1, le=300, description="预估视频时长（秒），用于ZS币预冻结扣费")
     
     # === TTS Parameters ===
     tts_inference_mode: Optional[str] = Field(
@@ -157,13 +160,13 @@ class VideoBatchGenerateRequest(BaseModel):
         v = [t.strip() for t in v if t.strip()]
         if not v:
             raise ValueError("主题列表不能全为空")
-        max_len = 398
+        max_len = 368
         for i, topic in enumerate(v):
             if len(topic) > max_len:
                 raise ValueError(f"第 {i+1} 行主题超出 {max_len} 字限制（当前 {len(topic)} 字）")
         return v
 
-    title_prefix: Optional[str] = Field(None, max_length=398, description="Prefix for video titles, will be prepended as '{title_prefix} - {topic}'")
+    title_prefix: Optional[str] = Field(None, max_length=368, description="Prefix for video titles, will be prepended as '{title_prefix} - {topic}'")
     
     # === Shared Config (applies to all videos in batch) ===
     n_scenes: Optional[int] = Field(5, ge=1, le=20, description="Number of scenes per video")

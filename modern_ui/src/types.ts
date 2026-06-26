@@ -146,6 +146,7 @@ export interface DigitalForm {
   // 批量模式
   batch_mode: boolean
   batch_topics: string
+  batch_goods_texts: string  // 批量带货模式：每行一个文案（可选，留空AI自动生成）
   batch_goods_assets: string[]  // 批量模式：每个主题对应的商品图片
   batch_character_assets: string[]  // 批量模式：每个文案对应的人物图片
   character_asset: string | null

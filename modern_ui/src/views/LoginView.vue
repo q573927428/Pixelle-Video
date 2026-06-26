@@ -99,6 +99,10 @@
           />
         </el-form-item>
 
+        <el-form-item label="邀请码（可选）" prop="inviteCode">
+          <el-input v-model="phoneForm.inviteCode" placeholder="请输入邀请码" maxlength="8" />
+        </el-form-item>
+
         <el-alert
           v-if="phoneErrorMsg"
           :title="phoneErrorMsg"
@@ -130,7 +134,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { User, Lock, Iphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
@@ -146,6 +150,18 @@ const emit = defineEmits<{
 }>()
 
 const isRegister = ref(props.startRegister)
+
+// 从 URL 参数中读取 invite 邀请码
+onMounted(() => {
+  const params = new URLSearchParams(window.location.search)
+  const invite = params.get('invite')
+  if (invite) {
+    phoneForm.inviteCode = invite
+    if (!isRegister.value) {
+      isRegister.value = true
+    }
+  }
+})
 
 // 登录表单
 const loading = ref(false)
@@ -179,6 +195,7 @@ const phoneForm = reactive({
   code: '',
   password: '',
   confirmPassword: '',
+  inviteCode: '',
 })
 
 const phoneRules = {
@@ -292,7 +309,8 @@ async function handlePhoneRegister() {
 
   try {
     const auth = getAuth()
-    await auth.registerByPhone(phoneForm.phone, phoneForm.code, phoneForm.password)
+    const inviteCode = phoneForm.inviteCode?.trim() || undefined
+    await auth.registerByPhone(phoneForm.phone, phoneForm.code, phoneForm.password, inviteCode)
     ElMessage.success('注册成功！')
     emit('login-success')
   } catch (e: any) {

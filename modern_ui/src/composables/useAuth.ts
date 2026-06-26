@@ -9,6 +9,8 @@ export interface UserInfo {
   role: 'vip' | 'svip' | 'normal' | 'admin'
   daily_limit: number
   vip_expires_at: string | null
+  zs_balance: number
+  invite_code: string | null
   status: number
   created_at: string
 }
@@ -57,6 +59,7 @@ export function useAuth() {
     if (role === 'vip') return 'VIP 会员'
     return '普通用户'
   })
+  const zsBalance = computed(() => currentUser.value?.zs_balance ?? 0)
 
   async function login(username: string, password: string): Promise<UserInfo> {
     const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/login', {
@@ -84,17 +87,18 @@ export function useAuth() {
     return res.user
   }
 
-  async function register(username: string, password: string, email?: string): Promise<UserInfo> {
+  async function register(username: string, password: string, email?: string, inviteCode?: string): Promise<UserInfo> {
+    const body: Record<string, any> = { username, password }
+    if (email) body.email = email
+    if (inviteCode) body.invite_code = inviteCode
     const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, email }),
+      body: JSON.stringify(body),
     })
-    // 先清除旧 token/cache，再设置新的（避免注册后仍显示旧用户信息）
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
-    // 重置单例状态
     token.value = null
     currentUser.value = null
     token.value = res.access_token
@@ -112,17 +116,17 @@ export function useAuth() {
     })
   }
 
-  async function registerByPhone(phone: string, code: string, password: string): Promise<UserInfo> {
+  async function registerByPhone(phone: string, code: string, password: string, inviteCode?: string): Promise<UserInfo> {
+    const body: Record<string, any> = { phone, code, password }
+    if (inviteCode) body.invite_code = inviteCode
     const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/register-by-phone', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code, password }),
+      body: JSON.stringify(body),
     })
-    // 先清除旧 token/cache，再设置新的（避免注册后仍显示旧用户信息）
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
-    // 重置单例状态
     token.value = null
     currentUser.value = null
     token.value = res.access_token
@@ -176,6 +180,7 @@ export function useAuth() {
     isVip,
     isSvip,
     roleLabel,
+    zsBalance,
     login,
     loginByPhone,
     register,

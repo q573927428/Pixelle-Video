@@ -25,10 +25,14 @@ CREATE TABLE IF NOT EXISTS `users` (
     `daily_limit` INT NOT NULL DEFAULT 1 COMMENT '-1 means unlimited (SVIP), 10 means VIP',
     `status` TINYINT NOT NULL DEFAULT 1 COMMENT '1=active, 0=disabled',
     `vip_expires_at` DATETIME DEFAULT NULL COMMENT 'VIP会员到期时间',
+    `zs_balance` INT NOT NULL DEFAULT 0 COMMENT 'ZS币余额（整数，1元=100ZS币，1秒=5ZS币）',
+    `invited_by` INT DEFAULT NULL COMMENT '邀请人用户ID',
+    `invite_code` VARCHAR(16) DEFAULT NULL UNIQUE COMMENT '用户邀请码',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX `idx_username` (`username`),
-    INDEX `idx_role` (`role`)
+    INDEX `idx_role` (`role`),
+    INDEX `idx_invite_code` (`invite_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `daily_usage` (
@@ -65,6 +69,76 @@ CREATE TABLE IF NOT EXISTS `sms_codes` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX `idx_phone_code` (`phone`, `code`),
     INDEX `idx_phone_created` (`phone`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `sys_config` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `config_key` VARCHAR(64) NOT NULL UNIQUE COMMENT '配置键',
+    `config_value` VARCHAR(255) NOT NULL COMMENT '配置值',
+    `description` VARCHAR(255) DEFAULT NULL COMMENT '描述',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `recharge_orders` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `order_no` VARCHAR(64) NOT NULL UNIQUE,
+    `user_id` INT NOT NULL,
+    `username` VARCHAR(50) NOT NULL,
+    `amount_rmb` DECIMAL(10,2) NOT NULL COMMENT '充值金额（人民币）',
+    `amount_zs` INT NOT NULL COMMENT '到账ZS币数量（整数）',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+    `wechat_transaction_id` VARCHAR(64) DEFAULT NULL,
+    `paid_at` DATETIME DEFAULT NULL,
+    `notify_raw` TEXT DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_order_no` (`order_no`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `invite_log` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `inviter_id` INT NOT NULL COMMENT '邀请人用户ID',
+    `invitee_id` INT NOT NULL COMMENT '被邀请人用户ID',
+    `reward_zs` INT NOT NULL DEFAULT 0 COMMENT '邀请人获得的ZS币奖励',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_inviter` (`inviter_id`),
+    INDEX `idx_invitee` (`invitee_id`),
+    FOREIGN KEY (`inviter_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`invitee_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `balance_change_log` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT NOT NULL COMMENT '用户ID',
+    `admin_id` INT NOT NULL COMMENT '操作管理员ID',
+    `change_amount` INT NOT NULL COMMENT '变动数量（正数=增加，负数=减少）',
+    `balance_before` INT NOT NULL COMMENT '变动前余额',
+    `balance_after` INT NOT NULL COMMENT '变动后余额',
+    `reason` VARCHAR(500) DEFAULT '' COMMENT '变动原因',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_admin_id` (`admin_id`),
+    INDEX `idx_created_at` (`created_at`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    FOREIGN KEY (`admin_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `generation_log` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `task_id` VARCHAR(64) NOT NULL COMMENT '任务ID',
+    `user_id` INT NOT NULL,
+    `estimated_seconds` INT NOT NULL COMMENT '预估时长（秒，整数）',
+    `actual_seconds` INT DEFAULT NULL COMMENT '实际时长（秒，整数，向上取整）',
+    `frozen_zs` INT NOT NULL COMMENT '预冻结ZS币（整数）',
+    `deducted_zs` INT DEFAULT NULL COMMENT '实际扣除ZS币（整数）',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'frozen'
+        COMMENT 'frozen=已冻结, deducted=已扣款, refunded=已退款',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_task_id` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """
 
@@ -143,6 +217,8 @@ class Database:
             cls._run_migrations_sync(conn)
             # Seed default admin
             cls._seed_default_admin_sync(conn)
+            # Seed sys_config defaults
+            cls._seed_sys_config_sync(conn)
         finally:
             conn.close()
 
@@ -152,6 +228,29 @@ class Database:
         try:
             cursor = conn.cursor(dictionary=True)
             db_name = conn.database
+            # 5.6 清除所有会员角色，统一转为普通用户（上线执行一次）
+            # 注意：这里用 zs_balance 字段是否存在来判断是否已清理
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'zs_balance'",
+                (db_name,)
+            )
+            has_zs_balance = cursor.fetchone()
+            if has_zs_balance and has_zs_balance["cnt"] > 0:
+                # zs_balance 字段存在说明是新版系统，清除所有会员数据
+                cursor.execute(
+                    "UPDATE users SET "
+                    "role = 'normal', "
+                    "vip_expires_at = NULL, "
+                    "daily_limit = 1 "
+                    "WHERE role IN ('vip', 'svip')"
+                )
+                cleared_count = cursor.rowcount
+                if cleared_count > 0:
+                    logger.info(f"✅ 已清除 {cleared_count} 个会员用户（vip/svip → normal），统一转为按次计费模式")
+                else:
+                    logger.info("ℹ️ 无会员用户需要清理（已全部为普通用户）")
+            
             # Check if vip_expires_at column exists
             cursor.execute(
                 "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
@@ -166,8 +265,37 @@ class Database:
                 )
                 logger.info("✅ Added vip_expires_at column to users table")
 
+            # Check if zs_balance column exists
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'zs_balance'",
+                (db_name,)
+            )
+            row_zs = cursor.fetchone()
+            if row_zs and row_zs["cnt"] == 0:
+                cursor.execute(
+                    "ALTER TABLE `users` ADD COLUMN `zs_balance` INT NOT NULL DEFAULT 0 "
+                    "COMMENT 'ZS币余额（整数，1元=100ZS币，1秒=5ZS币）' AFTER `vip_expires_at`"
+                )
+                logger.info("✅ Added zs_balance column to users table")
+
+            # Check if invite_code column exists
+            cursor.execute(
+                "SELECT COUNT(*) as cnt FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'invite_code'",
+                (db_name,)
+            )
+            row_ic = cursor.fetchone()
+            if row_ic and row_ic["cnt"] == 0:
+                cursor.execute(
+                    "ALTER TABLE `users` ADD COLUMN `invited_by` INT DEFAULT NULL "
+                    "COMMENT '邀请人用户ID' AFTER `zs_balance`,"
+                    "ADD COLUMN `invite_code` VARCHAR(16) DEFAULT NULL UNIQUE "
+                    "COMMENT '用户邀请码' AFTER `invited_by`"
+                )
+                logger.info("✅ Added invited_by/invite_code columns to users table")
+
             # Migrate role ENUM: if MySQL doesn't support 'svip', alter the table
-            # Check if 'svip' is in the ENUM values
             cursor.execute(
                 "SELECT COLUMN_TYPE FROM information_schema.COLUMNS "
                 "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'",
@@ -181,7 +309,7 @@ class Database:
                 )
                 logger.info("✅ Updated users.role ENUM to include 'svip'")
 
-            # VIP: daily_limit = 10 (was -1, now changed to 10 per day)
+            # VIP: daily_limit = 10
             cursor.execute(
                 "UPDATE users SET daily_limit = 10 WHERE role = 'vip' AND daily_limit = -1"
             )
@@ -212,37 +340,31 @@ class Database:
                 )
                 logger.info("✅ Added phone column to users table")
 
-            # Create payment_orders table
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS `payment_orders` (
-                    `id` INT AUTO_INCREMENT PRIMARY KEY,
-                    `order_no` VARCHAR(64) NOT NULL UNIQUE COMMENT '商户订单号（业务唯一）',
-                    `user_id` INT NOT NULL COMMENT '用户ID',
-                    `username` VARCHAR(50) NOT NULL COMMENT '用户名（冗余，方便对账）',
-                    `plan_type` VARCHAR(16) NOT NULL DEFAULT 'vip' COMMENT '套餐类型: vip/svip',
-                    `plan_name` VARCHAR(64) NOT NULL DEFAULT 'VIP会员年卡' COMMENT '套餐名称',
-                    `amount` DECIMAL(10,2) NOT NULL COMMENT '支付金额（元）',
-                    `duration_days` INT NOT NULL DEFAULT 365 COMMENT '开通天数',
-                    `status` VARCHAR(20) NOT NULL DEFAULT 'pending'
-                        COMMENT '订单状态: pending=待支付, paid=已支付, expired=已过期, cancelled=已取消, refunded=已退款',
-                    `wechat_transaction_id` VARCHAR(64) DEFAULT NULL COMMENT '微信支付订单号',
-                    `code_url` VARCHAR(255) DEFAULT NULL COMMENT '微信支付二维码链接',
-                    `paid_at` DATETIME DEFAULT NULL COMMENT '支付完成时间',
-                    `vip_expires_at` DATETIME DEFAULT NULL COMMENT '本次开通后的会员到期时间',
-                    `notify_raw` TEXT DEFAULT NULL COMMENT '微信回调原始数据（JSON）',
-                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                    INDEX `idx_user_id` (`user_id`),
-                    INDEX `idx_order_no` (`order_no`),
-                    INDEX `idx_status` (`status`),
-                    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """)
-            logger.info("✅ payment_orders table initialized")
-
             cursor.close()
         except Exception as e:
             logger.warning(f"⚠️ Migration warning: {e}")
+
+    @classmethod
+    def _seed_sys_config_sync(cls, conn):
+        """Seed default system configuration values"""
+        try:
+            cursor = conn.cursor()
+            default_configs = [
+                ('zs_per_second', '5', '每秒消耗ZS币数量'),
+                ('exchange_rate', '100', '1元人民币可兑换ZS币数量'),
+                ('register_bonus', '600', '新用户注册赠送ZS币数量'),
+                ('min_recharge', '10', '最低充值金额（元人民币）'),
+                ('invite_bonus', '200', '邀请好友注册，邀请人获得的ZS币奖励'),
+            ]
+            for key, value, desc in default_configs:
+                cursor.execute(
+                    "INSERT IGNORE INTO sys_config (config_key, config_value, description) VALUES (%s, %s, %s)",
+                    (key, value, desc)
+                )
+            cursor.close()
+            logger.info("✅ System configuration seeded (sys_config)")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to seed sys_config: {e}")
 
     @classmethod
     def _seed_default_admin_sync(cls, conn):
