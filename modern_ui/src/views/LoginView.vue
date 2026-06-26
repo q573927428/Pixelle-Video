@@ -1,5 +1,6 @@
 <template>
   <div class="login-wrapper">
+    <div class="login-bg-glow"></div>
     <div class="login-card">
       <div class="login-header">
         <div class="login-logo">🎬</div>
@@ -134,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { User, Lock, Iphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -143,7 +144,7 @@ import { getAuth } from '../composables/useAuth'
 const route = useRoute()
 const router = useRouter()
 
-const isRegister = ref(route.name === 'register')
+const isRegister = computed(() => route.name === 'register')
 
 // 从 URL 参数中读取 invite 邀请码
 onMounted(() => {
@@ -152,7 +153,7 @@ onMounted(() => {
   if (invite) {
     phoneForm.inviteCode = invite
     if (!isRegister.value) {
-      isRegister.value = true
+      router.replace('/register?invite=' + invite)
     }
   }
 })
@@ -319,20 +320,35 @@ async function handlePhoneRegister() {
 
 <style scoped>
 .login-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+  overflow: hidden;
+}
+
+.login-bg-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 800px;
+  height: 800px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(124, 58, 237, 0.25) 0%, rgba(6, 182, 212, 0.12) 40%, transparent 70%);
+  pointer-events: none;
 }
 
 .login-card {
+  position: relative;
   width: 420px;
   padding: 40px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   backdrop-filter: blur(20px);
+  z-index: 1;
 }
 
 .login-header {
