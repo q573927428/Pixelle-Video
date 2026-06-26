@@ -1,147 +1,20 @@
 <template>
-  <!-- Landing Page -->
-  <HomePage v-if="showLanding" @show-login="handleShowLogin" @show-register="handleShowRegister" />
-
-  <!-- Login / Register Page -->
-  <LoginView v-else-if="showLogin" :startRegister="startRegister" @login-success="handleLoginSuccess" />
-
-  <!-- Main App -->
-  <div class="shell" v-else>
-    <aside class="sidebar" :class="{ collapsed: !sidebarOpen }">
-      <div class="brand">
-        <div class="brand-logo">🎬</div>
-        <div class="brand-text">
-          <h1 class="brand-title">ZuoSuo AI</h1>
-          <p class="brand-subtitle">创作之所 作为之所在</p>
-        </div>
-        <!-- Mobile toggle button -->
-        <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" aria-label="切换菜单">
-          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
-          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
-          <span class="toggle-bar" :class="{ open: sidebarOpen }"></span>
-        </button>
-      </div>
-
-      <div class="sidebar-nav-wrapper" :class="{ collapsed: !sidebarOpen }">
-        <div class="nav-title">工作台</div>
-        <button
-          v-for="item in navItems"
-          :key="item.key"
-          class="nav-item"
-          :class="{ active: activeView === item.key }"
-          @click="switchView(item.key)"
-        >
-          <span class="nav-icon">{{ item.icon }}</span>
-          <span>{{ item.label }}</span>
-        </button>
-
-        <!-- Spacer + User Menu at bottom -->
-        <div style="flex:1"></div>
-
-        <UserMenu @show-login="showLogin = true" />
-      </div>
-    </aside>
-
-    <main class="main">
-      <DigitalHumanView v-if="activeView === 'digital_human'" />
-      <!-- <QuickCreateView v-if="activeView === 'quick_create'" /> -->
-      <!-- <AssetBasedView v-if="activeView === 'custom_media'" /> -->
-      <!-- <I2vView v-if="activeView === 'image_to_video'" /> -->
-      <!-- <ActionTransferView v-if="activeView === 'action_transfer'" /> -->
-
-      <!-- ====== 📝 历史记录 ====== -->
-      <TaskHistoryView v-if="activeView === 'history'" />
-
-      <!-- ====== ⚙️ 系统配置 ====== -->
-      <SettingsView v-if="activeView === 'settings'" />
-
-      <!-- ====== 🔐 用户管理 (Admin) ====== -->
-      <AdminView v-if="activeView === 'admin'" />
-
-      <!-- ====== 🗓️ 任务中心 ====== -->
-      <TaskCenterView v-if="activeView === 'tasks'" />
-
-      <!-- ====== 📊 账户明细 ====== -->
-      <AccountDetailView v-if="activeView === 'account'" />
-
-    </main>
-
-  </div>
+  <template v-if="showAppLayout">
+    <AppLayout>
+      <router-view />
+    </AppLayout>
+  </template>
+  <template v-else>
+    <router-view />
+  </template>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import type { NavItem } from './types'
-import { useResources } from './composables/useResources'
-import { getAuth } from './composables/useAuth'
-import QuickCreateView from './views/QuickCreateView.vue'
-// import AssetBasedView from './views/AssetBasedView.vue'
-import DigitalHumanView from './views/DigitalHumanView.vue'
-import I2vView from './views/I2vView.vue'
-import ActionTransferView from './views/ActionTransferView.vue'
-import TaskHistoryView from './views/TaskHistoryView.vue'
-import TaskCenterView from './views/TaskCenterView.vue'
-import SettingsView from './views/SettingsView.vue'
-import LoginView from './views/LoginView.vue'
-import AdminView from './views/AdminView.vue'
-import HomePage from './views/HomePage.vue'
-import AccountDetailView from './views/AccountDetailView.vue'
-import UserMenu from './components/UserMenu.vue'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { appRoutes } from './router'
+import AppLayout from './views/AppLayout.vue'
 
-const auth = getAuth()
-const activeView = ref('digital_human')
-const showLanding = ref(!auth.isLoggedIn.value)
-const showLogin = ref(false)
-const startRegister = ref(false)
-const sidebarOpen = ref(false)
-
-const { loadAll } = useResources()
-
-const baseNavItems: NavItem[] = [
-  { key: 'digital_human', icon: '🤖', label: '数字人' },
-  // { key: 'quick_create', icon: '⚡', label: '快速创作' },
-  // { key: 'custom_media', icon: '🎨', label: '素材创作' },
-  // { key: 'image_to_video', icon: '🎥', label: '图生视频' },
-  // { key: 'action_transfer', icon: '💃', label: '动作迁移' },
-  { key: 'tasks', icon: '🗓️', label: '任务中心' },
-  { key: 'history', icon: '📝', label: '历史记录' },
-  { key: 'account', icon: '💰', label: '账户明细' },
-]
-
-const navItems = computed(() => {
-  const items = [...baseNavItems]
-  if (auth.isAdmin.value) {
-    items.push({ key: 'settings', icon: '⚙️', label: '系统配置' })
-    items.push({ key: 'admin', icon: '🔐', label: '用户管理' })
-  }
-  return items
-})
-
-onMounted(() => {
-  if (auth.isLoggedIn.value) {
-    loadAll()
-  }
-})
-
-function switchView(key: string) {
-  activeView.value = key
-  sidebarOpen.value = false
-}
-
-function handleShowLogin() {
-  showLanding.value = false
-  showLogin.value = true
-  startRegister.value = false
-}
-
-function handleShowRegister() {
-  showLanding.value = false
-  showLogin.value = true
-  startRegister.value = true
-}
-
-function handleLoginSuccess() {
-  showLogin.value = false
-  loadAll()
-}
+const route = useRoute()
+const showAppLayout = computed(() => appRoutes.includes(route.name as string))
 </script>

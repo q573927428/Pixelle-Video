@@ -135,21 +135,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { User, Lock, Iphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
 
-const props = withDefaults(defineProps<{
-  startRegister?: boolean
-}>(), {
-  startRegister: false,
-})
+const route = useRoute()
+const router = useRouter()
 
-const emit = defineEmits<{
-  (e: 'login-success'): void
-}>()
-
-const isRegister = ref(props.startRegister)
+const isRegister = ref(route.name === 'register')
 
 // 从 URL 参数中读取 invite 邀请码
 onMounted(() => {
@@ -226,9 +220,11 @@ const phoneRules = {
 }
 
 function toggleMode() {
-  isRegister.value = !isRegister.value
-  errorMsg.value = ''
-  phoneErrorMsg.value = ''
+  if (isRegister.value) {
+    router.push('/login')
+  } else {
+    router.push('/register')
+  }
 }
 
 async function handleLogin() {
@@ -257,7 +253,7 @@ async function handleLogin() {
     }
 
     ElMessage.success('登录成功！')
-    emit('login-success')
+    router.push('/create')
   } catch (e: any) {
     errorMsg.value = e.message || '登录失败，请重试'
   } finally {
@@ -312,7 +308,7 @@ async function handlePhoneRegister() {
     const inviteCode = phoneForm.inviteCode?.trim() || undefined
     await auth.registerByPhone(phoneForm.phone, phoneForm.code, phoneForm.password, inviteCode)
     ElMessage.success('注册成功！')
-    emit('login-success')
+    router.push('/create')
   } catch (e: any) {
     phoneErrorMsg.value = e.message || '注册失败，请重试'
   } finally {

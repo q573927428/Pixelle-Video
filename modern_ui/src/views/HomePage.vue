@@ -13,10 +13,10 @@
         </p>
 
         <div class="hero-actions">
-          <el-button type="primary" size="large" class="hero-btn hero-btn-primary" @click="$emit('show-login')">
+          <el-button type="primary" size="large" class="hero-btn hero-btn-primary" @click="router.push('/login')">
             立即登录
           </el-button>
-          <el-button size="large" class="hero-btn hero-btn-secondary" @click="$emit('show-register')">
+          <el-button size="large" class="hero-btn hero-btn-secondary" @click="router.push('/register')">
             免费注册
           </el-button>
         </div>
@@ -161,7 +161,7 @@
               </span>
             </li>
           </ul>
-          <el-button class="plan-btn" @click="$emit('show-register')">免费注册</el-button>
+          <el-button class="plan-btn" @click="router.push('/register')">免费注册</el-button>
         </div>
 
         <!-- VIP Plan (中列 - 最突出) -->
@@ -195,7 +195,7 @@
               </span>
             </li>
           </ul>
-          <el-button type="primary" class="plan-btn plan-btn-vip" @click="$emit('show-login')">开通 VIP</el-button>
+          <el-button type="primary" class="plan-btn plan-btn-vip" @click="router.push('/login')">开通 VIP</el-button>
         </div>
 
         <!-- WeChat Plan (右列 - 微信联系) -->
@@ -248,10 +248,10 @@
         <h2 class="cta-title">准备好开始创作了吗？</h2>
         <p class="cta-desc">立即注册，释放您的创意潜能</p>
         <div class="cta-actions">
-          <el-button type="primary" size="large" class="cta-btn" @click="$emit('show-register')">
+          <el-button type="primary" size="large" class="cta-btn" @click="router.push('/register')">
             免费注册
           </el-button>
-          <el-button size="large" class="cta-btn cta-btn-outline" @click="$emit('show-login')">
+          <el-button size="large" class="cta-btn cta-btn-outline" @click="router.push('/login')">
             登录
           </el-button>
         </div>
@@ -266,13 +266,11 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import { Check, ChatLineSquare, VideoPlay, ChatDotSquare, Discount, MagicStick, Clock, InfoFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
-defineEmits<{
-  (e: 'show-login'): void
-  (e: 'show-register'): void
-}>()
+const router = useRouter()
 
 async function copyWechatId() {
   try {
