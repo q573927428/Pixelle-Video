@@ -10,8 +10,8 @@
         <!-- ZS币余额 -->
         <div class="zs-balance-row">
           <span class="zs-balance-label">
-            <!-- <el-icon style="font-size:14px; margin-right:3px; color:#e6a23c;"><Coin /></el-icon> -->
-            ZS币余额
+            <img src="/zsicon60.png" class="zs-icon" alt="ZS币" />
+            余额
           </span>
           <span class="zs-balance-value">
             <span class="zs-balance-num">{{ auth.zsBalance.value }}</span>
@@ -176,6 +176,13 @@ async function handleLogout() {
   color: rgba(251, 191, 36, 0.7);
   font-weight: 600;
   font-size: 12px;
+}
+
+.zs-icon {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  object-fit: contain;
 }
 
 .zs-balance-value {

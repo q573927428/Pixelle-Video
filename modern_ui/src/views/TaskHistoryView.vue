@@ -72,7 +72,7 @@
               <div class="history-item-meta">
                 <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
                 <span v-if="task.deducted_zs > 0" class="zs-badge" title="实际扣除ZS币">
-                  <span class="zs-icon">◇</span> -{{ task.deducted_zs }}
+                  <img src="/zsicon60.png" class="zs-icon-img" /> -{{ task.deducted_zs }}
                 </span>
               <span class="meta-actions">
                 <el-tooltip content="复制文案" placement="top" :show-after="300">
@@ -449,14 +449,15 @@ async function handleDelete(task: any) {
   font-size: 12px;
   font-weight: 700;
   color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
+  background: rgba(110, 110, 110, 0.301);
   padding: 1px 7px;
   border-radius: 10px;
   white-space: nowrap;
 }
-.zs-icon {
-  font-size: 10px;
-  line-height: 1;
+.zs-icon-img {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
 }
 
 .history-list {
