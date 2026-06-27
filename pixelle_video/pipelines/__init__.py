@@ -21,7 +21,6 @@ from pixelle_video.pipelines.base import BasePipeline
 from pixelle_video.pipelines.linear import LinearVideoPipeline, PipelineContext
 from pixelle_video.pipelines.standard import StandardPipeline
 from pixelle_video.pipelines.custom import CustomPipeline
-from pixelle_video.pipelines.asset_based import AssetBasedPipeline
 
 __all__ = [
     "BasePipeline",
@@ -29,6 +28,5 @@ __all__ = [
     "PipelineContext",
     "StandardPipeline",
     "CustomPipeline",
-    "AssetBasedPipeline",
 ]
 

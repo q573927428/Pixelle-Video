@@ -38,7 +38,6 @@ from pixelle_video.services.persistence import PersistenceService
 from pixelle_video.services.history_manager import HistoryManager
 from pixelle_video.pipelines.standard import StandardPipeline
 from pixelle_video.pipelines.custom import CustomPipeline
-from pixelle_video.pipelines.asset_based import AssetBasedPipeline
 
 
 class PixelleVideoCore:
@@ -394,7 +393,6 @@ class PixelleVideoCore:
         self.pipelines = {
             "standard": StandardPipeline(self),
             "custom": CustomPipeline(self),
-            "asset_based": AssetBasedPipeline(self),
         }
         logger.info(f"📹 Registered pipelines: {', '.join(self.pipelines.keys())}")
         
