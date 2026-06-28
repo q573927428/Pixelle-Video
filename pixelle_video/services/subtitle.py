@@ -51,11 +51,13 @@ class SubtitleConfigModel:
         background_radius: int = 8,
         font_border_width: int = 0,
         font_border_color: str = "#000000",
+        font_weight: int = 400,
     ):
         self.enabled = enabled
         self.font_size = font_size
         self.font_color = font_color
         self.font_family = font_family
+        self.font_weight = font_weight
         self.position_x = position_x
         self.position_y = position_y
         self.max_width = max_width
@@ -85,6 +87,7 @@ class SubtitleConfigModel:
             background_radius=d.get("background_radius", 8),
             font_border_width=d.get("font_border_width", 0),
             font_border_color=d.get("font_border_color", "#000000"),
+            font_weight=d.get("font_weight", 400),
         )
 
 
@@ -515,9 +518,15 @@ class SubtitleService:
         frames_dir = os.path.join(output_dir, "subtitle_frames")
         os.makedirs(frames_dir, exist_ok=True)
 
-        # 字体：使用普通字体，与前端预览保持一致
+        # 字体：根据 font_weight 加载合适的字体变体
         font_size = config.font_size
         font_path = self._font_path
+        # 当 font_weight >= 600 时优先使用 Bold 字体变体
+        if config.font_weight >= 600:
+            bold_path = self._find_bold_font(font_path)
+            if bold_path:
+                font_path = bold_path
+                logger.info(f"Using bold font variant (weight={config.font_weight}): {font_path}")
         try:
             font = ImageFont.truetype(font_path, font_size)
         except Exception as e:

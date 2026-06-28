@@ -80,6 +80,7 @@ class SubtitleRequestConfig(BaseModel):
     background_radius: int = 20
     font_border_width: int = 1
     font_border_color: str = "#000000"
+    font_weight: int = 400
 
 
 class DigitalHumanRequest(BaseModel):

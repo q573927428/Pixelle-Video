@@ -288,6 +288,7 @@ const digitalForm = ref<DigitalForm>({
     font_size: 56,
     font_color: '#FFFFFF',
     font_family: 'NotoSansSC-Bold',
+    font_weight: 400,
     position_x: 0,
     position_y: -390,
     max_width: 900,
@@ -515,8 +516,8 @@ function renderSubtitlePreview() {
   padT = Math.round(padT * scale); padR = Math.round(padR * scale)
   padB = Math.round(padB * scale); padL = Math.round(padL * scale)
 
-  // 使用中等字重与后端 Pillow 渲染保持一致
-  ctx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+  // 使用 font_weight 与后端 Pillow 渲染保持一致
+  ctx.font = `${cfg.font_weight || 600} ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
   ctx.textBaseline = 'middle'
 
   // 文字间距
@@ -669,6 +670,7 @@ watch(
     () => ({
       fz: digitalForm.value.subtitle_config.font_size,
       fc: digitalForm.value.subtitle_config.font_color,
+      fw: digitalForm.value.subtitle_config.font_weight,
       px: digitalForm.value.subtitle_config.position_x,
       py: digitalForm.value.subtitle_config.position_y,
       mw: digitalForm.value.subtitle_config.max_width,
@@ -726,6 +728,7 @@ async function handleSubtitlePreview() {
          font_size: digitalForm.value.subtitle_config.font_size,
          font_color: digitalForm.value.subtitle_config.font_color,
          font_family: digitalForm.value.subtitle_config.font_family,
+         font_weight: digitalForm.value.subtitle_config.font_weight,
          position_x: digitalForm.value.subtitle_config.position_x,
          position_y: digitalForm.value.subtitle_config.position_y,
          max_width: digitalForm.value.subtitle_config.max_width,
@@ -863,6 +866,7 @@ function buildPayload(overrides?: { mode?: string; title?: string; text?: string
      font_size: digitalForm.value.subtitle_config.font_size,
      font_color: digitalForm.value.subtitle_config.font_color,
      font_family: digitalForm.value.subtitle_config.font_family,
+     font_weight: digitalForm.value.subtitle_config.font_weight,
      position_x: digitalForm.value.subtitle_config.position_x,
      position_y: digitalForm.value.subtitle_config.position_y,
      max_width: digitalForm.value.subtitle_config.max_width,

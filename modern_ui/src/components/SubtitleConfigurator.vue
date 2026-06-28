@@ -57,6 +57,9 @@
             <el-form-item label="文字间距">
               <el-slider v-model="localConfig.letter_spacing" :min="0" :max="50" :step="1" show-input />
             </el-form-item>
+            <el-form-item label="文字粗细">
+              <el-slider v-model="localConfig.font_weight" :min="100" :max="900" :step="100" show-input />
+            </el-form-item>
             <el-divider style="margin:8px 0;" />
             <el-form-item label="文字边框粗细">
               <el-slider v-model="localConfig.font_border_width" :min="0" :max="10" :step="1" show-input />

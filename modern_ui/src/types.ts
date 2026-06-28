@@ -75,6 +75,7 @@ export interface SubtitleConfig {
   font_size: number
   font_color: string
   font_family: string
+  font_weight: number
   position_x: number
   position_y: number
   max_width: number
