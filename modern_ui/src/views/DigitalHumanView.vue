@@ -211,10 +211,10 @@ const digitalForm = ref<DigitalForm>({
     font_border_width: 1,
     font_border_color: '#000000',
   },
-  // ===== 网感剪辑相关配置（默认开启） =====
+  // ===== 网感剪辑相关配置（默认全部开启） =====
   internet_clip_enabled: true,
   title_overlay_config: {
-    enabled: false,
+    enabled: true,
     text: '爆款视频标题预览效果',
     font_size: 76,
     font_color: '#FF69B4',
@@ -225,7 +225,7 @@ const digitalForm = ref<DigitalForm>({
     duration_seconds: 5,
   },
   business_card_config: {
-    enabled: false,
+    enabled: true,
     title: '创始人 & CEO',
     subtitle: '专注AI视频生成',
     display_mode: 'full',
@@ -378,6 +378,8 @@ function loadBackgroundImage() {
     failedImageUrls.add(imgUrl)
     console.warn('[SubtitlePreview] 背景图片加载失败:', imgUrl)
     bgImage = null
+    // 即使背景加载失败也渲染预览（使用深色背景）
+    nextTick(() => renderPreview())
   }
   img.src = imgUrl
 }

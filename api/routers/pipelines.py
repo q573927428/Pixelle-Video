@@ -40,6 +40,7 @@ from api.tasks import TaskType, task_manager
 from pixelle_video.utils.os_util import create_task_output_dir
 from api.utils.history_persistence import save_web_generation_history
 from pixelle_video.services.subtitle import SubtitleService, SubtitleConfigModel
+from pixelle_video.services.overlay import OverlayService, TitleOverlayConfig, BusinessCardConfig, BgmOverlayConfig
 from pixelle_video.services.video import VideoService
 from pixelle_video.services.remote_comfy_service import RemoteComfyService, RemoteComfyServiceError
 from pixelle_video.utils.os_util import get_temp_path
@@ -109,6 +110,21 @@ class DigitalHumanRequest(BaseModel):
 
     # 字幕配置
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
+
+    # 网感剪辑配置
+    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
+        "font_weight": 700, "position_x": 0, "position_y": -800,
+        "display_mode": "full", "duration_seconds": 5,
+    })
+    business_card_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "title": "", "subtitle": "",
+        "display_mode": "full", "duration_seconds": 5,
+    })
+    bgm_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "selected_bgm": None, "volume": 50, "custom_bgm": None,
+    })
+    pip_mix_config: dict[str, Any] = Field(default_factory=dict)
 
 
 def _is_api_workflow(workflow_key: str | None) -> bool:
@@ -295,6 +311,115 @@ async def _run_second_digital_workflow(
         raise RuntimeError("The second step of the workflow did not return a video.")
 
     return await _download_to_file(generated_video_url, final_video_path)
+
+
+def _burn_overlays_sync(
+    video_path: str,
+    task_dir: str,
+    video_width: int,
+    video_height: int,
+    video_duration: float,
+) -> str:
+    """
+    同步叠加层烧录函数：标题叠加 + 个人名片
+    使用 OverlayService 生成帧图像，通过 FFmpeg overlay 叠加到视频上
+    """
+    # 从 request_body 中获取配置（通过调用栈获取）
+    import inspect
+    frame_insp = inspect.currentframe()
+    rb = None
+    while frame_insp:
+        local_vars = frame_insp.f_locals
+        if 'request_body' in local_vars:
+            rb = local_vars['request_body']
+            break
+        frame_insp = frame_insp.f_back
+    if rb is None:
+        logger.warning("⚠️ [叠层] 无法获取 request_body，跳过叠加层处理")
+        return video_path
+
+    try:
+        import subprocess
+        import json
+
+        overlay_service = OverlayService()
+        video_service = VideoService()
+        current_video = video_path
+
+        # 1. 标题叠加
+        try:
+            title_cfg = TitleOverlayConfig.from_dict(rb.title_overlay_config if hasattr(rb, 'title_overlay_config') else {})
+            if title_cfg.enabled and title_cfg.text:
+                title_dir = overlay_service.generate_title_overlay_frames(
+                    config=title_cfg,
+                    video_width=video_width,
+                    video_height=video_height,
+                    output_dir=task_dir,
+                    video_duration=video_duration,
+                )
+                if title_dir:
+                    title_output = os.path.join(task_dir, "with_title.mp4")
+                    video_service.burn_subtitle_frames(
+                        video=current_video,
+                        subtitle_dir=title_dir,
+                        output=title_output,
+                    )
+                    if os.path.exists(title_output):
+                        current_video = title_output
+                        logger.info(f"✅ [叠层] 标题叠加成功: {title_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [叠层] 标题叠加失败，继续后续处理: {e}")
+
+        # 2. 个人名片
+        try:
+            card_cfg = BusinessCardConfig.from_dict(rb.business_card_config if hasattr(rb, 'business_card_config') else {})
+            if card_cfg.enabled and card_cfg.title:
+                card_dir = overlay_service.generate_business_card_frames(
+                    config=card_cfg,
+                    video_width=video_width,
+                    video_height=video_height,
+                    output_dir=task_dir,
+                    video_duration=video_duration,
+                )
+                if card_dir:
+                    card_output = os.path.join(task_dir, "with_card.mp4")
+                    video_service.burn_subtitle_frames(
+                        video=current_video,
+                        subtitle_dir=card_dir,
+                        output=card_output,
+                    )
+                    if os.path.exists(card_output):
+                        current_video = card_output
+                        logger.info(f"✅ [叠层] 个人名片叠加成功: {card_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [叠层] 个人名片叠加失败，继续后续处理: {e}")
+
+        # 3. 背景音乐
+        try:
+            bgm_cfg = BgmOverlayConfig.from_dict(rb.bgm_config if hasattr(rb, 'bgm_config') else {})
+            if bgm_cfg.enabled:
+                # 解析 BGM 路径
+                bgm_path = bgm_cfg.custom_bgm or bgm_cfg.selected_bgm
+                if bgm_path:
+                    volume = max(0.0, min(1.0, bgm_cfg.volume / 100.0))
+                    bgm_output = os.path.join(task_dir, "with_bgm.mp4")
+                    video_service.add_bgm(
+                        video=current_video,
+                        bgm=bgm_path,
+                        output=bgm_output,
+                        bgm_volume=volume,
+                        loop=True,
+                    )
+                    if os.path.exists(bgm_output):
+                        current_video = bgm_output
+                        logger.info(f"✅ [叠层] 背景音乐叠加成功: {bgm_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [叠层] 背景音乐叠加失败，继续后续处理: {e}")
+
+        return current_video
+    except Exception as e:
+        logger.exception(f"⚠️ [叠层] 叠加层处理整体异常，返回原视频: {e}")
+        return video_path
 
 
 def _burn_subtitles_sync(
