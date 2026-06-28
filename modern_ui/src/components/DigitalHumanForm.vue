@@ -6,42 +6,14 @@
       <!-- ====== 第一板块：人物形象上传 ====== -->
       <div class="form-section-wrapper">
         <div class="form-section">
-        <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-          <span>🧑 人物上传</span>
-          <div style="display:flex;align-items:center;gap:6px;">
-            <span style="font-size:13px;font-weight:400;">批量</span>
-            <el-switch v-model="form.batch_mode" @change="onBatchModeChange" />
-          </div>
-        </div>
+        <div class="form-section-title">🧑 人物上传</div>
         <div class="form-section-body">
-        <template v-if="form.batch_mode">
-          <el-alert
-            title="可上传多张人物图片，按顺序与文案一一对应；少于文案数时最后一张循环使用"
-            type="info"
-            :closable="false"
-            show-icon
-            style="margin-bottom:14px;"
-          />
-          <el-form-item label="人物图片（按顺序一一对应）">
-            <div class="upload-field-container">
-              <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_character')" @select-history="(c) => $emit('select-history', c)" />
-            </div>
-            <div v-if="form.batch_character_assets.length > 0" style="width:100%;">
-              <div class="small muted" style="margin-bottom:6px;">
-                已上传 {{ form.batch_character_assets.length }} 张人物图片
-              </div>
-              <FilePreview :items="form.batch_character_assets" @remove="(idx) => form.batch_character_assets.splice(idx, 1)" />
-            </div>
-          </el-form-item>
-        </template>
-        <template v-else>
           <el-form-item label="角色图片">
             <div class="upload-field-container">
               <UploadBox category="character_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_character')" @select-history="(c) => $emit('select-history', c)" />
               <FilePreview v-if="form.character_asset" :items="[form.character_asset]" @remove="form.character_asset = null" />
             </div>
           </el-form-item>
-        </template>
       </div>
         </div>
       </div>
@@ -183,111 +155,6 @@
           </el-radio-group>
         </el-form-item>
 
-        <!-- ====== 批量模式：多组数据输入 ====== -->
-        <template v-if="form.batch_mode">
-          <!-- 批量-带货模式 -->
-          <template v-if="form.mode === 'digital'">
-            <el-alert
-              title="每行输入一个商品主题/标题，按顺序对应商品图片（可选）"
-              type="info"
-              :closable="false"
-              show-icon
-              style="margin-bottom:14px;"
-            />
-            <el-form-item label="商品主题列表（每行一个）">
-              <el-input
-                v-model="form.batch_topics"
-                type="textarea"
-                :rows="8"
-                placeholder="智能保温杯&#10;无线蓝牙耳机&#10;便携式咖啡机&#10;..."
-              />
-            </el-form-item>
-            <div v-if="batchTopicsCount > 0" class="soft-panel">
-              <el-tag :type="batchExceedLimit ? 'danger' : 'success'">
-                共 {{ batchTopicsCount }} 个主题
-                <template v-if="batchExceedLimit">（最多 10 个）</template>
-              </el-tag>
-              <el-alert
-                v-if="batchExceedLimit"
-                title="批量模式最多支持 10 个主题，请减少数量"
-                type="error"
-                :closable="false"
-                show-icon
-                style="margin-top:8px;"
-              />
-              <div class="small muted" style="margin-top:6px;">
-                商品标题使用主题名称，文案由 AI 自动生成。
-                可上传多张商品图片，按顺序与主题一一对应；少于主题数时最后一张循环使用。
-              </div>
-              <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
-                <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
-                  第 {{ idx }} 行超 {{ textMaxLength }} 字
-                </el-tag>
-              </div>
-            </div>
-            <el-form-item label="口播文案（可选，每行一段，留空AI自动生成）">
-              <el-input
-                v-model="form.batch_goods_texts"
-                type="textarea"
-                :rows="6"
-                placeholder="智能保温杯，保温效果超长待机。&#10;无线蓝牙耳机，音质清晰续航持久。&#10;便携式咖啡机，随时随地享受现磨。&#10;&#10;不填写则AI根据商品标题自动生成文案"
-              />
-            </el-form-item>
-            <el-form-item label="商品图片（按顺序一一对应）">
-              <div class="upload-field-container">
-                <UploadBox category="goods_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_batch_goods')" @select-history="(c) => $emit('select-history', c)" />
-              </div>
-              <div v-if="form.batch_goods_assets.length > 0" style="width:100%;">
-                <div class="small muted" style="margin-bottom:6px;">
-                  已上传 {{ form.batch_goods_assets.length }} 张商品图片
-                </div>
-                <FilePreview :items="form.batch_goods_assets" @remove="(idx) => form.batch_goods_assets.splice(idx, 1)" />
-              </div>
-            </el-form-item>
-          </template>
-
-          <!-- 批量-自定义模式 -->
-          <template v-if="form.mode === 'customize'">
-            <el-alert
-              title="每行输入一段固定口播文案，系统逐行生成数字人视频"
-              type="warning"
-              :closable="false"
-              show-icon
-              style="margin-bottom:14px;"
-            />
-            <el-form-item label="口播文案列表（每行一段）">
-              <el-input
-                v-model="form.batch_topics"
-                type="textarea"
-                :rows="10"
-                placeholder="这件商品真的太好用了，推荐给大家。&#10;今天给大家带来一款超实用的产品，看完你就懂了。&#10;你可能不知道，这款产品还有这么多隐藏功能。&#10;..."
-              />
-            </el-form-item>
-            <div v-if="batchTopicsCount > 0" class="soft-panel">
-              <el-tag :type="batchExceedLimit ? 'danger' : 'success'">
-                共 {{ batchTopicsCount }} 段文案
-                <template v-if="batchExceedLimit">（最多 10 段）</template>
-              </el-tag>
-              <el-alert
-                v-if="batchExceedLimit"
-                title="批量模式最多支持 10 段文案，请减少数量"
-                type="error"
-                :closable="false"
-                show-icon
-                style="margin-top:8px;"
-              />
-              <div class="small muted" style="margin-top:6px;">每段文案对应一个口播视频</div>
-              <div v-if="overLimitLines.length > 0" style="margin-top:6px;">
-                <el-tag v-for="idx in overLimitLines" :key="idx" type="danger" size="small" style="margin-right:4px;margin-bottom:4px;">
-                  第 {{ idx }} 行超 {{ textMaxLength }} 字
-                </el-tag>
-              </div>
-            </div>
-          </template>
-        </template>
-
-        <!-- ====== 单次模式：常规输入 ====== -->
-        <template v-if="!form.batch_mode">
           <!-- 带货模式 -->
           <div v-if="form.mode === 'digital'" class="soft-panel">
             <el-form-item label="商品图片">
@@ -300,14 +167,14 @@
               <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" :maxlength="30" show-word-limit />
             </el-form-item>
             <el-form-item label="口播文案（可留空自动生成）">
-              <el-input v-model="form.goods_text" type="textarea" :rows="5" :maxlength="textMaxLength" show-word-limit placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
+              <el-input v-model="form.goods_text" type="textarea" :rows="5" maxlength="500" show-word-limit placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
             </el-form-item>
           </div>
 
           <!-- 自定义模式 -->
           <div v-if="form.mode === 'customize'" class="soft-panel">
             <el-form-item label="自定义口播文案">
-              <el-input v-model="form.goods_text" type="textarea" :rows="6" :maxlength="textMaxLength" show-word-limit placeholder="填写固定口播文案内容" />
+              <el-input v-model="form.goods_text" type="textarea" :rows="6" maxlength="500" show-word-limit placeholder="填写固定口播文案内容" />
               <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;">
                 <el-button v-if="form.goods_text.trim()" type="warning" size="small" @click="handleRewrite" :loading="rewriteLoading">
                   ✨ 一键改写
@@ -343,7 +210,6 @@
               </el-button>
             </template>
           </el-dialog>
-        </template>
       </div>
         </div>
       </div>
@@ -489,9 +355,6 @@ import FilePreview from './FilePreview.vue'
 import SubtitleConfigurator from './SubtitleConfigurator.vue'
 import { ElMessage } from 'element-plus'
 
-const textMaxLength = ref(368)
-const BATCH_MAX_COUNT = 10
-
 const props = defineProps<{
   form: DigitalForm
   mediaWorkflows: WorkflowInfo[]
@@ -501,32 +364,6 @@ const props = defineProps<{
 
 const refAudioItems = computed<string[]>(() => {
   return props.form.ref_audio ? [props.form.ref_audio] : []
-})
-
-// 批量模式：计算主题数量
-const batchTopicsCount = computed(() => {
-  if (!props.form.batch_topics || !props.form.batch_topics.trim()) return 0
-  return props.form.batch_topics.trim().split('\n').filter(line => line.trim()).length
-})
-
-// 批量模式：是否超过最大限制
-const batchExceedLimit = computed(() => {
-  return batchTopicsCount.value > BATCH_MAX_COUNT
-})
-
-// 批量模式：超出字数限制的行号（1-based，跳过空行）
-const overLimitLines = computed(() => {
-  if (!props.form.batch_topics || !props.form.batch_topics.trim()) return []
-  const lines = props.form.batch_topics.split('\n')
-  const maxLen = textMaxLength.value
-  const result: number[] = []
-  lines.forEach((line, idx) => {
-    const trimmed = line.trim()
-    if (trimmed && trimmed.length > maxLen) {
-      result.push(idx + 1)
-    }
-  })
-  return result
 })
 
 // 从 mediaWorkflows 中过滤出图片生成相关的工作流（来源为 runninghub）
@@ -549,11 +386,6 @@ const emit = defineEmits<{
   (e: 'upload', file: File, category: string, target: string): void
   (e: 'select-history', category: string): void
 }>()
-
-// 批量模式：直接允许（已取消VIP限制）
-function onBatchModeChange(val: boolean) {
-  // 所有人都可以使用批量模式
-}
 
 const videoApiParamsActiveNames = ref<string[]>([])
 
@@ -662,7 +494,7 @@ async function handleRewrite() {
       body: JSON.stringify({ prompt, temperature: 0.7, max_tokens: 1024 }),
     })
     if (res.content) {
-      props.form.goods_text = res.content.trim().slice(0, textMaxLength.value)
+      props.form.goods_text = res.content.trim().slice(0, 500)
       ElMessage.success('改写完成')
     } else {
       ElMessage.warning('改写失败，请重试')
@@ -712,7 +544,7 @@ async function handleMediaParse() {
       body: JSON.stringify({ share_text: mediaShareText.value.trim() }),
     })
     if (res.success && res.text) {
-      props.form.goods_text = res.text.slice(0, textMaxLength.value)
+      props.form.goods_text = res.text.slice(0, 500)
       mediaDialogVisible.value = false
       ElMessage.success('口播文案导入成功')
     } else {

@@ -252,13 +252,13 @@ async def get_vip_plans():
         "vip": {
             "price": float(await get_sys_config("vip_price", "29")),
             "bonus_zs": int(await get_sys_config("vip_bonus_zs", "3900")),
-            "discount": int(await get_sys_config("vip_discount", "90")),
+            "discount": int(float(await get_sys_config("vip_discount", "90"))),
             "queue_priority": int(await get_sys_config("vip_queue_priority", "1")),
         },
         "svip": {
             "price": float(await get_sys_config("svip_price", "89")),
             "bonus_zs": int(await get_sys_config("svip_bonus_zs", "10000")),
-            "discount": int(await get_sys_config("svip_discount", "80")),
+            "discount": int(float(await get_sys_config("svip_discount", "80"))),
             "queue_priority": int(await get_sys_config("svip_queue_priority", "2")),
         },
     }

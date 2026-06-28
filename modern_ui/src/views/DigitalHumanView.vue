@@ -25,31 +25,8 @@
             <el-tag :type="running ? 'warning' : 'info'" effect="dark">{{ running ? '生成中' : '就绪' }}</el-tag>
           </div>
         <div class="card-body">
-            <!-- ZS币费用预览 - 批量模式 -->
-            <div v-if="!running && batchCostPreview" class="cost-preview">
-              <div class="cost-row" style="border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:6px;margin-bottom:4px;">
-                <span>批量生成 <strong>{{ batchCostPreview.count }}</strong> 个视频</span>
-                <span>共 <strong style="color:#fbbf24;">{{ batchCostPreview.totalCost }}</strong> ZS币</span>
-              </div>
-              <div style="max-height:160px;overflow-y:auto;margin-bottom:6px;">
-                <div v-for="(item, idx) in batchCostPreview.costs" :key="idx" class="cost-row" style="font-size:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03);">
-                  <span class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">#{{ idx+1 }} {{ item.topic }}</span>
-                  <span v-if="item.isAiGenerated" class="muted">AI约60字 ≈ <strong>{{ item.cost }}</strong> ZS</span>
-                  <span v-else-if="item.seconds > 0">{{ item.seconds }}秒 = <strong>{{ item.cost }}</strong> ZS</span>
-                  <span v-else class="muted">AI生成文案</span>
-                </div>
-              </div>
-              <div class="cost-row" style="border-top:1px solid rgba(255,255,255,0.06);padding-top:6px;">
-                <span>当前余额</span>
-                <span :style="{ color: auth.zsBalance.value >= batchCostPreview.totalCost ? '#22c55e' : '#ef4444' }">
-                  <strong>{{ auth.zsBalance.value }}</strong> ZS币
-                  <span v-if="auth.zsBalance.value < batchCostPreview.totalCost" style="margin-left:4px;">⚠️ 不足</span>
-                </span>
-              </div>
-            </div>
-
             <!-- ZS币费用预览 - 单次模式 -->
-            <div v-else-if="!running && estimatedSeconds > 0" class="cost-preview">
+            <div v-if="!running && estimatedSeconds > 0" class="cost-preview">
               <div class="cost-row">
                 <span>文案字数</span>
                 <span><strong>{{ (digitalForm.goods_text || '').replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '').length }}</strong> 字</span>
@@ -87,7 +64,7 @@
                 <span v-if="elapsedTime" style="font-weight:600;white-space:nowrap;margin-left:12px;" :style="{ color: running ? 'var(--el-color-warning)' : 'var(--el-color-success)' }">⏱ {{ elapsedTime }}</span>
               </div>
             </div>
-            <div v-if="submitted || batchSubmitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
+            <div v-if="submitted" style="margin:12px 0;padding:12px;background:rgba(64,158,255,0.08);border:1px solid rgba(64,158,255,0.2);border-radius:8px;">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                 <span style="font-size:14px;color:var(--el-color-primary);flex:1;">
                   ✅ 任务已提交，可以关闭网页。可在「任务中心」查看，成功后可以在「历史记录」查看。
@@ -96,37 +73,8 @@
               </div>
             </div>
 
-            <!-- 批量模式结果列表 -->
-            <template v-if="batchResults.length > 0">
-              <el-table :data="batchResults" style="width:100%;" size="small" max-height="400">
-                <el-table-column prop="index" label="#" width="40" />
-                <el-table-column prop="topic" label="主题" min-width="80" show-overflow-tooltip />
-                <el-table-column label="状态" width="80">
-                  <template #default="{ row }">
-                    <el-tag v-if="row.loading" type="info" size="small">生成中</el-tag>
-                    <el-tag v-else-if="row.success" type="success" size="small">成功</el-tag>
-                    <el-tag v-else type="danger" size="small">失败</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="预览" min-width="160">
-                  <template #default="{ row }">
-                    <video v-if="row.video_url" :src="row.video_url" controls style="width:100%;height:150px;object-fit:contain;background:#000;border-radius:4px;" />
-                    <span v-else class="small muted">暂无</span>
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="110" fixed="right">
-                  <template #default="{ row }">
-                    <div v-if="row.success && row.video_url" style="display:flex;gap:4px;flex-wrap:wrap;">
-                      <el-button size="small" plain @click="copyText">📋复制</el-button>
-                      <el-button size="small" type="primary" plain @click="downloadVideo(row.video_url)">⬇️下载</el-button>
-                    </div>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </template>
-
             <!-- 单次模式结果 -->
-            <template v-else-if="result.video_url">
+            <template v-if="result.video_url">
               <video class="result-video" controls :src="result.video_url" />
               <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
                 <el-button size="small" plain @click="copyText">📋 复制文案</el-button>
@@ -135,7 +83,7 @@
             </template>
 
             <!-- 字幕预览（开启字幕且不在运行/提交状态时显示） -->
-            <div v-else-if="digitalForm.subtitle_enabled && !running && !submitted && !batchSubmitted" style="margin-bottom:12px;">
+            <div v-else-if="digitalForm.subtitle_enabled && !running && !submitted" style="margin-bottom:12px;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                 <span style="font-size:12px;color:var(--el-text-color-secondary);">🎬 实时字幕样式预览</span>
               </div>
@@ -185,10 +133,6 @@ import HistoryDialog from '../components/HistoryDialog.vue'
 const { running, progress, statusText, result, submitTask, currentTaskId, submitted, cancelCurrentTask } = useTaskRunner()
 const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
 
-const batchResults = ref<any[]>([])
-const batchSubmitted = ref(false)
-const batchTaskIds = ref<string[]>([])
-
 const auth = getAuth()
 
 // ZS币计费：根据文案字数自动计算预估时长（1秒=4字，计入语速因子）
@@ -218,40 +162,6 @@ const estimatedCost = computed(() => {
 // 原价（无折扣时显示）
 const estimatedOriginalCost = computed(() => estimatedSeconds.value * 5)
 
-// 批量模式：计算每个文案/主题的费用
-const batchCostPreview = computed(() => {
-  if (!digitalForm.value.batch_mode) return null
-  const speed = digitalForm.value.tts_speed || 1.0
-  const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
-  if (!topics.length) return null
-  const isCustomize = digitalForm.value.mode === 'customize'
-
-  // 批量-带货模式：获取每行文案（可选）
-  const batchTexts = !isCustomize
-    ? digitalForm.value.batch_goods_texts.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
-    : []
-
-  const costs = topics.map((topic, idx) => {
-    let text = ''
-    if (isCustomize) {
-      // 口播模式：直接用每行文案
-      text = topic
-    } else {
-      // 带货模式：batch_goods_texts 对应行有值用它的，否则AI生成约60字
-      const customText = batchTexts[idx] || ''
-      text = customText || topic
-    }
-    const cleanText = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
-    // 带货模式且该行没填文案时AI生成约60字
-    const isAiGenerated = !isCustomize && (!batchTexts[idx] || !batchTexts[idx].trim())
-    const effectiveLen = isAiGenerated ? Math.max(cleanText.length, 60) : cleanText.length
-    const secs = Math.ceil(effectiveLen / 4 / speed) || 0
-    return { topic, seconds: secs, cost: secs * 5, isAiGenerated }
-  })
-  const totalCost = costs.reduce((sum, t) => sum + t.cost, 0)
-  return { costs, totalCost, count: topics.length }
-})
-
 /**
  * 根据用户角色返回视频合成工作流路径：
  * - 普通用户 → digital_combination.json
@@ -265,7 +175,7 @@ function getVideoWorkflowPath(): string {
 }
 
 const digitalForm = ref<DigitalForm>({
-  mode: 'customize', batch_mode: false, batch_topics: '', batch_goods_texts: '', batch_goods_assets: [], batch_character_assets: [],
+  mode: 'customize',
   character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',
@@ -351,13 +261,6 @@ watch(running, (val, oldVal) => {
 
 // 监听 submitted 状态：任务提交成功后（预扣款发生），立即刷新余额
 watch(submitted, (val) => {
-  if (val) {
-    auth.fetchMe().catch(() => {})
-  }
-})
-
-// 监听 batchSubmitted 状态：批量提交成功后，立即刷新余额
-watch(batchSubmitted, (val) => {
   if (val) {
     auth.fetchMe().catch(() => {})
   }
@@ -653,11 +556,11 @@ watch(
 
 // 取消生成任务后重新渲染字幕预览 Canvas
 watch(
-  () => ({ running: running.value, submitted: submitted.value, batchSubmitted: batchSubmitted.value }),
+  () => ({ running: running.value, submitted: submitted.value }),
   (newVal, oldVal) => {
     // 从生成中/已提交状态恢复到空闲状态时，重新渲染 Canvas
-    const wasBusy = oldVal.running || oldVal.submitted || oldVal.batchSubmitted
-    const isIdle = !newVal.running && !newVal.submitted && !newVal.batchSubmitted
+    const wasBusy = oldVal.running || oldVal.submitted
+    const isIdle = !newVal.running && !newVal.submitted
     if (wasBusy && isIdle && digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
       nextTick(() => renderSubtitlePreview())
     }
@@ -768,9 +671,7 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   const result = await uploadResource(rawFile, category, target)
   if (result) {
     if (target === 'digital_character') digitalForm.value.character_asset = result.path
-    else if (target === 'digital_batch_character') digitalForm.value.batch_character_assets = [...digitalForm.value.batch_character_assets, result.path]
     else if (target === 'digital_goods') digitalForm.value.goods_asset = result.path
-    else if (target === 'digital_batch_goods') digitalForm.value.batch_goods_assets = [...digitalForm.value.batch_goods_assets, result.path]
     else if (target === 'digital_ref_audio') digitalForm.value.ref_audio = result.path
     else if (category === 'ref_audio') digitalForm.value.ref_audio = result.path
   }
@@ -794,44 +695,21 @@ async function openHistory(category: string) {
 function onHistorySelect(record: any) {
   const cat = historyFilterCategory.value || record.category || 'misc'
   if (cat === 'ref_audio') digitalForm.value.ref_audio = record.path
-  else if (cat === 'character_image') {
-    if (digitalForm.value.batch_mode) {
-      digitalForm.value.batch_character_assets = [...digitalForm.value.batch_character_assets, record.path]
-    } else {
-      digitalForm.value.character_asset = record.path
-    }
-  }
-  else if (cat === 'goods_image') {
-    if (digitalForm.value.batch_mode) {
-      digitalForm.value.batch_goods_assets = [...digitalForm.value.batch_goods_assets, record.path]
-    } else {
-      digitalForm.value.goods_asset = record.path
-    }
-  }
+  else if (cat === 'character_image') digitalForm.value.character_asset = record.path
+  else if (cat === 'goods_image') digitalForm.value.goods_asset = record.path
   historyVisible.value = false
   historyFilterCategory.value = undefined
   ElMessage.success(`已选择：${record.name}`)
 }
 
-function buildPayload(overrides?: { mode?: string; title?: string; text?: string }): Record<string, any> {
+function buildPayload(): Record<string, any> {
   const payload: Record<string, any> = {}
   payload.character_assets = digitalForm.value.character_asset ? [digitalForm.value.character_asset] : []
   payload.goods_assets = digitalForm.value.goods_asset ? [digitalForm.value.goods_asset] : []
-  payload.mode = overrides?.mode || digitalForm.value.mode
-  payload.goods_title = overrides?.title ?? digitalForm.value.goods_title
-  payload.goods_text = overrides?.text ?? digitalForm.value.goods_text
-
-  // 计算预估秒数
-  if (overrides?.mode === 'customize' && overrides?.text) {
-    // 批量口播：每行自己的文案
-    payload.estimated_seconds = Math.ceil(overrides.text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '').length / 4) || 0
-  } else if (!overrides?.mode && digitalForm.value.batch_mode && digitalForm.value.mode === 'digital') {
-    // 批量带货：使用 batch_goods_texts 对应行，或 AI生成
-    // estimated_seconds 由后端统一计算
-    payload.estimated_seconds = 0
-  } else {
-    payload.estimated_seconds = estimatedSeconds.value
-  }
+  payload.mode = digitalForm.value.mode
+  payload.goods_title = digitalForm.value.goods_title
+  payload.goods_text = digitalForm.value.goods_text
+  payload.estimated_seconds = estimatedSeconds.value
   payload.workflow_config = { ...digitalForm.value.workflow_config }
   // 根据用户角色动态设置视频合成工作流路径
   payload.workflow_config.second_workflow_path = getVideoWorkflowPath()
@@ -902,123 +780,10 @@ async function generate() {
     ElMessage.warning('克隆声音模式，请上传参考音频'); return
   }
 
-  if (digitalForm.value.batch_mode) {
-    if (!digitalForm.value.character_asset && digitalForm.value.batch_character_assets.length === 0) {
-      ElMessage.warning('请上传角色图片'); return
-    }
-  } else {
-    if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
-  }
-
-    if (digitalForm.value.batch_mode) {
-      const topics = digitalForm.value.batch_topics.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
-      if (!topics.length) { ElMessage.warning('请输入商品主题列表'); return }
-      
-      // 批量模式最多支持 10 个
-      const BATCH_MAX_COUNT = 10
-      if (topics.length > BATCH_MAX_COUNT) {
-        ElMessage.error(`批量模式最多支持 ${BATCH_MAX_COUNT} 个主题/文案，当前 ${topics.length} 个，请减少数量`)
-        return
-      }
-
-      // 批量模式：计算每个文案的预估秒数和总消耗
-      const isCustomize = digitalForm.value.mode === 'customize'
-      const topicCosts = topics.map(topic => {
-        const text = isCustomize ? topic : ''
-        const cleanText = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
-        const secs = Math.ceil(cleanText.length / 4) || 0
-        return { topic, text, seconds: secs, cost: secs * 5 }
-      })
-      const totalCost = topicCosts.reduce((sum, t) => sum + t.cost, 0)
-
-      // ZS币余额校验（批量）
-      if (totalCost > 0 && auth.zsBalance.value < totalCost) {
-        ElMessage.warning(`ZS币不足（当前 ${auth.zsBalance.value}，批量共需 ${totalCost} ZS币），请先充值`)
-        return
-      }
-
-    running.value = true
-    progress.value = 0
-    statusText.value = `批量生成开始：共 ${topics.length} 个主题...`
-    result.value = {}
-    batchResults.value = topics.map((t, i) => ({ index: i + 1, topic: t, success: false, video_url: '', loading: true }))
-    batchSubmitted.value = false
-    batchTaskIds.value = []
-
-    // Step 1: Submit ALL tasks in parallel immediately
-    const taskIds: string[] = []
-    // 获取批量带货文案（每行一个，可选）
-    const batchGoodsTexts = digitalForm.value.mode === 'digital'
-      ? digitalForm.value.batch_goods_texts.trim().split('\n').filter(line => line.trim()).map(line => line.trim())
-      : []
-
-    for (let i = 0; i < topics.length; i++) {
-      const topic = topics[i]
-      statusText.value = `[${i + 1}/${topics.length}] 提交中：${topic}`
-      try {
-        const isCustomize = digitalForm.value.mode === 'customize'
-        const bgAssets = digitalForm.value.batch_goods_assets
-        const charAssets = digitalForm.value.batch_character_assets
-        const goodsImage = bgAssets.length > 0 ? bgAssets[Math.min(i, bgAssets.length - 1)] : ''
-        const characterImage = charAssets.length > 0 ? charAssets[Math.min(i, charAssets.length - 1)] : ''
-        const customText = !isCustomize && batchGoodsTexts[i] ? batchGoodsTexts[i] : ''
-        const payload = buildPayload({
-          mode: digitalForm.value.mode,
-          title: isCustomize ? '' : topic,
-          text: isCustomize ? topic : customText,
-        })
-        payload.goods_assets = goodsImage ? [goodsImage] : []
-        payload.character_assets = characterImage ? [characterImage] : (digitalForm.value.character_asset ? [digitalForm.value.character_asset] : [])
-        const data: any = await request('/api/pipelines/digital-human/async', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
-        taskIds[i] = data.task_id
-      } catch (e: any) {
-        taskIds[i] = ''
-        batchResults.value[i].success = false
-        batchResults.value[i].loading = false
-        console.error(`[${i + 1}/${topics.length}] ${topic} 提交失败：`, e)
-      }
-    }
-
-    batchTaskIds.value = taskIds.filter(id => id)
-    batchSubmitted.value = true
-
-    // Step 2: Poll ALL tasks in parallel
-    statusText.value = `全部已提交（${topics.length} 个），等待执行...`
-    const pollPromises = taskIds.map((taskId, i) => pollTaskOnce(taskId))
-    const pollResults = await Promise.all(pollPromises)
-
-    let completedCount = 0
-    let failedCount = 0
-    for (let i = 0; i < topics.length; i++) {
-      batchResults.value[i].loading = false
-      if (pollResults[i]?.success) {
-        completedCount++
-        batchResults.value[i].success = true
-        try {
-          const task: any = await request(`/api/tasks/${taskIds[i]}`)
-          if (task.result?.video_url) {
-            batchResults.value[i].video_url = task.result.video_url
-          }
-        } catch (_) {}
-      } else {
-        failedCount++
-        batchResults.value[i].success = false
-      }
-    }
-
-    running.value = false
-    progress.value = 100
-    statusText.value = `批量生成完成：成功 ${completedCount} 个，失败 ${failedCount} 个，共 ${topics.length} 个`
-    batchSubmitted.value = false
-    batchTaskIds.value = []
-    return
-  }
+  if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
 
   if (digitalForm.value.mode === 'digital' && !digitalForm.value.goods_asset) { ElMessage.warning('请上传商品图片'); return }
+
   const payload = buildPayload()
   payload.mode = digitalForm.value.mode
   payload.goods_text = digitalForm.value.goods_text
@@ -1039,62 +804,9 @@ async function generate() {
 }
 
 async function cancelAllTasks() {
-  if (batchTaskIds.value.length > 0) {
-    // 批量取消：逐个取消所有子任务
-    for (const tid of batchTaskIds.value) {
-      try {
-        await cancelTask(tid)
-      } catch (_) {}
-    }
-    batchTaskIds.value = []
-    batchSubmitted.value = false
-    running.value = false
-    statusText.value = '全部任务已取消'
-    // 所有取消请求完成后，刷新余额（确保后端已退款）
-    auth.fetchMe().catch(() => {})
-  } else if (currentTaskId.value) {
+  if (currentTaskId.value) {
     await cancelCurrentTask()
   }
-}
-
-function pollTaskOnce(taskId: string): Promise<{ success: boolean; error?: string }> {
-  return new Promise((resolve) => {
-    const maxAttempts = 600  // 最多等 30 分钟（600 * 3s）
-    let attempts = 0
-    const tick = async () => {
-      try {
-        const task: any = await request(`/api/tasks/${taskId}`)
-        if (task.status === 'completed') {
-          resolve({ success: true })
-          return
-        }
-        if (['failed', 'cancelled'].includes(task.status)) {
-          resolve({ success: false, error: task.error || task.message })
-          return
-        }
-        attempts++
-        if (attempts >= maxAttempts) {
-          resolve({ success: false, error: '轮询超时' })
-          return
-        }
-        setTimeout(tick, 3000)
-      } catch (e: any) {
-        // 网络波动等临时错误不要直接判失败，重试
-        console.warn(`[pollTaskOnce] polling error for ${taskId}:`, e.message)
-        attempts++
-        if (attempts >= maxAttempts) {
-          resolve({ success: false, error: '轮询失败过多' })
-          return
-        }
-        setTimeout(tick, 5000)  // 网络错误后等 5 秒重试
-      }
-    }
-    tick()
-  })
-}
-
-function previewAsset(path: string) {
-  window.open(filePreviewUrl(path), '_blank')
 }
 
 /** 一键复制文案 */
