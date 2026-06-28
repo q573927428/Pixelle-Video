@@ -14,6 +14,7 @@
           :media-workflows="mediaWorkflows"
           :tts-workflows="ttsWorkflows"
           :tts-voices="ttsVoices"
+          :bgm-list="bgmFiles"
           @upload="handleUpload"
           @select-history="openHistory"
         />
@@ -82,8 +83,8 @@
               </div>
             </template>
 
-            <!-- 字幕预览（开启字幕且不在运行/提交状态时显示） -->
-            <div v-else-if="digitalForm.subtitle_enabled && !running && !submitted" style="margin-bottom:12px;">
+            <!-- 网感预览（开启字幕/标题/名片且不在运行/提交状态时显示） -->
+            <div v-else-if="(digitalForm.subtitle_enabled || digitalForm.title_overlay_config.enabled || digitalForm.business_card_config.enabled) && !running && !submitted" style="margin-bottom:12px;">
               <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
                 <span style="font-size:12px;color:var(--el-text-color-secondary);">🎬 实时字幕样式预览</span>
               </div>
@@ -131,7 +132,7 @@ import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, currentTaskId, submitted, cancelCurrentTask } = useTaskRunner()
-const { mediaWorkflows, ttsWorkflows, ttsVoices, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
+const { mediaWorkflows, ttsWorkflows, ttsVoices, bgmFiles, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
 
 const auth = getAuth()
 
@@ -209,6 +210,42 @@ const digitalForm = ref<DigitalForm>({
     background_radius: 20,
     font_border_width: 1,
     font_border_color: '#000000',
+  },
+  // ===== 网感剪辑相关配置（默认开启） =====
+  internet_clip_enabled: true,
+  title_overlay_config: {
+    enabled: false,
+    text: '爆款视频标题预览效果',
+    font_size: 76,
+    font_color: '#FF69B4',
+    font_weight: 700,
+    position_x: 0,
+    position_y: -1600,
+    display_mode: 'full',
+    duration_seconds: 5,
+  },
+  business_card_config: {
+    enabled: false,
+    title: '创始人 & CEO',
+    subtitle: '专注AI视频生成',
+    display_mode: 'full',
+    duration_seconds: 5,
+  },
+  bgm_config: {
+    enabled: false,
+    selected_bgm: null,
+    volume: 50,
+    custom_bgm: null,
+  },
+  pip_mix_config: {
+    enabled: false,
+    overlay_video: null,
+    overlay_image: null,
+    position_x: 0,
+    position_y: 0,
+    width: 320,
+    height: 568,
+    opacity: 1.0,
   },
 })
 
@@ -318,7 +355,7 @@ function loadBackgroundImage() {
   const imgUrl = assetPath ? filePreviewUrl(assetPath) : '/videos/0000010.jpg'
   // URL 没变且图片已加载，说明只是 canvas DOM 被重建（开关切换），直接在新 canvas 上重绘
   if (bgImage && bgImage.dataset.src === imgUrl) {
-    renderSubtitlePreview()
+    renderPreview()
     return
   }
   // 如果该 URL 之前已加载失败，不再重试
@@ -334,7 +371,7 @@ function loadBackgroundImage() {
     updateCanvasSizeFromImage()
     // 使用 nextTick 确保 Vue 已更新 canvas 的 width/height 属性后再渲染，
     // 避免 canvas 属性变更导致画布被清空后无人重新渲染
-    nextTick(() => renderSubtitlePreview())
+    nextTick(() => renderPreview())
   }
   img.onerror = () => {
     // 记录失败 URL 到集合中，避免后续重复加载
@@ -369,22 +406,11 @@ function drawBackgroundContain(ctx: CanvasRenderingContext2D, img: HTMLImageElem
   ctx.drawImage(img, drawX, drawY, drawW, drawH)
 }
 
-function renderSubtitlePreview() {
+function renderPreview() {
   const canvas = previewCanvasRef.value
   if (!canvas) return
-  const cfg = digitalForm.value.subtitle_config
-  if (!cfg) return
   const ctx = canvas.getContext('2d')
   if (!ctx) return
-
-  // 预览时只取第一句文案显示
-  let rawText = digitalForm.value.goods_text?.trim() || '这是一个字幕样式预览'
-  if (rawText.length > 3) {
-    const sentences = rawText.split(/(?<=[。！？；，、，.!?;\s])/)
-    rawText = sentences[0] || rawText
-  }
-  // 去除标点符号，与后端 subtitle.py._clean_punctuation 保持一致
-  const text = rawText.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-]/g, '')
 
   const cw = canvasWidth.value
   const ch = canvasHeight.value
@@ -392,140 +418,232 @@ function renderSubtitlePreview() {
 
   ctx.clearRect(0, 0, cw, ch)
 
-  // 绘制视频帧作为背景（如果有），保持原始宽高比（object-fit: contain）
+  // 绘制视频帧作为背景（如果有）
   if (bgImage) {
     drawBackgroundContain(ctx, bgImage, cw, ch)
   } else {
-    // 没有加载成功时使用深色背景
     ctx.fillStyle = '#1a1a2e'
     ctx.fillRect(0, 0, cw, ch)
-    // 异步加载背景图片
     loadBackgroundImage()
   }
 
-  // 计算缩放后的参数，与后端 subtitle.py 在 1080x1920 分辨率下的渲染保持一致
-  const fontSize = Math.round(cfg.font_size * scale)
-  const maxWidth = Math.round(cfg.max_width * scale)
-  const offsetX = Math.round(cfg.position_x * scale)
-  const offsetY = Math.round(cfg.position_y * scale)
-  const radius = Math.round(cfg.background_radius * scale)
-
-  // 解析 padding（与后端 SubtitleService._parse_padding 逻辑一致）
-  const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
-  let padT = 10, padR = 20, padB = 10, padL = 20
-  if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
-  else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
-  else if (padParts.length === 4) { padT = padParts[0]; padR = padParts[1]; padB = padParts[2]; padL = padParts[3] }
-  padT = Math.round(padT * scale); padR = Math.round(padR * scale)
-  padB = Math.round(padB * scale); padL = Math.round(padL * scale)
-
-  // 使用 font_weight 与后端 Pillow 渲染保持一致
-  ctx.font = `${cfg.font_weight || 600} ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-  ctx.textBaseline = 'middle'
-
-  // 文字间距
-  const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
-
-  // safe reference to ctx (non-null)
   const c = ctx as CanvasRenderingContext2D
 
-  // 计算带间距的文本宽度
-  function getLineWidth(txt: string): number {
-    if (!txt) return 0
-    if (letterSpacing > 0 && txt.length > 1) {
-      return c.measureText(txt).width + letterSpacing * (txt.length - 1)
+  // ============ 1. 绘制字幕 ============
+  if (digitalForm.value.subtitle_enabled) {
+    const cfg = digitalForm.value.subtitle_config
+    if (cfg) {
+      let rawText = digitalForm.value.goods_text?.trim() || '这是一个字幕样式预览'
+      if (rawText.length > 3) {
+        const sentences = rawText.split(/(?<=[。！？；，、，.!?;\s])/)
+        rawText = sentences[0] || rawText
+      }
+      const text = rawText.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-]/g, '')
+
+      const fontSize = Math.round(cfg.font_size * scale)
+      const maxWidth = Math.round(cfg.max_width * scale)
+      const offsetX = Math.round(cfg.position_x * scale)
+      const offsetY = Math.round(cfg.position_y * scale)
+      const radius = Math.round(cfg.background_radius * scale)
+
+      const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
+      let padT = 10, padR = 20, padB = 10, padL = 20
+      if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
+      else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
+      else if (padParts.length === 4) { padT = padParts[0]; padR = padParts[1]; padB = padParts[2]; padL = padParts[3] }
+      padT = Math.round(padT * scale); padR = Math.round(padR * scale)
+      padB = Math.round(padB * scale); padL = Math.round(padL * scale)
+
+      c.font = `${cfg.font_weight || 600} ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      c.textBaseline = 'middle'
+
+      const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
+
+      function getLineWidth(txt: string): number {
+        if (!txt) return 0
+        if (letterSpacing > 0 && txt.length > 1) {
+          return c.measureText(txt).width + letterSpacing * (txt.length - 1)
+        }
+        return c.measureText(txt).width
+      }
+
+      const lines: string[] = []
+      let currentLine = ''
+      for (const char of text) {
+        const test = currentLine + char
+        if (getLineWidth(test) > maxWidth && currentLine) {
+          lines.push(currentLine)
+          currentLine = char
+        } else {
+          currentLine = test
+        }
+      }
+      if (currentLine) lines.push(currentLine)
+
+      const metrics = c.measureText('中')
+      const approximateAscent = metrics.actualBoundingBoxAscent || fontSize * 0.8
+      const approximateDescent = metrics.actualBoundingBoxDescent || fontSize * 0.2
+      const lineHeight = approximateAscent + approximateDescent
+
+      const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
+      const bgWidth = maxLineWidth + padL + padR
+      const bgHeight = lines.length * lineHeight + padT + padB
+
+      const baseX = cw / 2 + offsetX
+      const baseY = ch - Math.round(50 * scale) + offsetY
+      const bgX = baseX - bgWidth / 2
+      const bgY = baseY - bgHeight
+
+      const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
+      c.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
+
+      const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
+      if (r > 0) {
+        c.beginPath()
+        c.moveTo(bgX + r, bgY)
+        c.lineTo(bgX + bgWidth - r, bgY)
+        c.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
+        c.lineTo(bgX + bgWidth, bgY + bgHeight - r)
+        c.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
+        c.lineTo(bgX + r, bgY + bgHeight)
+        c.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
+        c.lineTo(bgX, bgY + r)
+        c.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
+        c.closePath()
+        c.fill()
+      } else {
+        c.fillRect(bgX, bgY, bgWidth, bgHeight)
+      }
+
+      const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
+      const borderColor = cfg.font_border_color || '#000000'
+
+      c.fillStyle = cfg.font_color || '#FFFFFF'
+      const yCorrection = (approximateAscent + approximateDescent - fontSize) / 2
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+        const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight + yCorrection + 2
+        const lineWidth = getLineWidth(line)
+        const startX = bgX + (bgWidth - lineWidth) / 2
+        if (letterSpacing > 0 && line.length > 1) {
+          let currentX = startX
+          for (const char of line) {
+            if (borderWidth > 0) {
+              c.strokeStyle = borderColor
+              c.lineWidth = borderWidth
+              c.lineJoin = 'round'
+              c.miterLimit = 2
+              c.strokeText(char, currentX, y)
+            }
+            c.fillText(char, currentX, y)
+            currentX += c.measureText(char).width + letterSpacing
+          }
+        } else {
+          if (borderWidth > 0) {
+            c.strokeStyle = borderColor
+            c.lineWidth = borderWidth
+            c.lineJoin = 'round'
+            c.miterLimit = 2
+            c.strokeText(line, startX, y)
+          }
+          c.fillText(line, startX, y)
+        }
+      }
     }
-    return c.measureText(txt).width
   }
 
-  // 按最大宽度换行（考虑文字间距）
-  const lines: string[] = []
-  let currentLine = ''
-  for (const char of text) {
-    const test = currentLine + char
-    if (getLineWidth(test) > maxWidth && currentLine) {
-      lines.push(currentLine)
-      currentLine = char
-    } else {
-      currentLine = test
+  // ============ 2. 绘制标题叠加 ============
+  if (digitalForm.value.title_overlay_config.enabled) {
+    const titleCfg = digitalForm.value.title_overlay_config
+    const titleText = titleCfg.text || '爆款推荐'
+    if (titleText) {
+      const fontSize = Math.round(titleCfg.font_size * scale)
+      const offsetX = Math.round(titleCfg.position_x * scale)
+      const offsetY = Math.round(titleCfg.position_y * scale)
+
+      c.font = `${titleCfg.font_weight || 700} ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      c.textBaseline = 'middle'
+      c.textAlign = 'center'
+
+      const metrics = c.measureText(titleText)
+      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8
+      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2
+      const tH = ascent + descent
+
+      const centerX = cw / 2 + offsetX
+      const centerY = offsetY < 0 ? ch + offsetY : offsetY
+      const y = centerY + (ascent - descent) / 2
+
+      // 描边（黑色边框提升可读性）
+      const borderWidth = Math.max(1, Math.round(2 * scale))
+      c.strokeStyle = '#000000'
+      c.lineWidth = borderWidth
+      c.lineJoin = 'round'
+      c.miterLimit = 2
+      c.strokeText(titleText, centerX, y)
+
+      c.fillStyle = titleCfg.font_color || '#FFFFFF'
+      c.fillText(titleText, centerX, y)
     }
   }
-  if (currentLine) lines.push(currentLine)
 
-  // 模拟 Canvas 的字体 metrics 来获得更好的行高估算，与后端一致
-  const metrics = c.measureText('中')
-  const approximateAscent = metrics.actualBoundingBoxAscent || fontSize * 0.8
-  const approximateDescent = metrics.actualBoundingBoxDescent || fontSize * 0.2
-  const lineHeight = approximateAscent + approximateDescent // 与后端一致：ascent + descent
-  
-  const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
-  const bgWidth = maxLineWidth + padL + padR
-  const bgHeight = lines.length * lineHeight + padT + padB
+  // ============ 3. 绘制个人名片（左侧中间靠下位置） ============
+  if (digitalForm.value.business_card_config.enabled) {
+    const cardCfg = digitalForm.value.business_card_config
+    const cardTitle = cardCfg.title || '创始人 & CEO'
+    const cardSubtitle = cardCfg.subtitle || ''
 
-  // 位置：底部向上 50px（1080p 尺寸），按比例缩放，与后端保持一致
-  const baseX = cw / 2 + offsetX
-  const baseY = ch - Math.round(50 * scale) + offsetY
-  const bgX = baseX - bgWidth / 2
-  const bgY = baseY - bgHeight
+    const cardW = Math.round(380 * scale)
+    const cardH = Math.round(cardSubtitle ? 160 * scale : 100 * scale)
+    // 左侧中间靠下位置：左边距 20px，Y 在画布约 65% 处
+    const cardX = Math.round(20 * scale)
+    const cardY = Math.round(ch * 0.65) - Math.round(cardH / 2)
 
-  // 绘制圆角背景
-  const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
-  c.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
-
-  const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
-  if (r > 0) {
+    // 半透明背景
+    c.fillStyle = 'rgba(0, 0, 0, 0.7)'
+    const cardRadius = Math.round(16 * scale)
     c.beginPath()
-    c.moveTo(bgX + r, bgY)
-    c.lineTo(bgX + bgWidth - r, bgY)
-    c.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
-    c.lineTo(bgX + bgWidth, bgY + bgHeight - r)
-    c.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
-    c.lineTo(bgX + r, bgY + bgHeight)
-    c.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
-    c.lineTo(bgX, bgY + r)
-    c.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
+    c.moveTo(cardX + cardRadius, cardY)
+    c.lineTo(cardX + cardW - cardRadius, cardY)
+    c.quadraticCurveTo(cardX + cardW, cardY, cardX + cardW, cardY + cardRadius)
+    c.lineTo(cardX + cardW, cardY + cardH - cardRadius)
+    c.quadraticCurveTo(cardX + cardW, cardY + cardH, cardX + cardW - cardRadius, cardY + cardH)
+    c.lineTo(cardX + cardRadius, cardY + cardH)
+    c.quadraticCurveTo(cardX, cardY + cardH, cardX, cardY + cardH - cardRadius)
+    c.lineTo(cardX, cardY + cardRadius)
+    c.quadraticCurveTo(cardX, cardY, cardX + cardRadius, cardY)
     c.closePath()
     c.fill()
-  } else {
-    c.fillRect(bgX, bgY, bgWidth, bgHeight)
-  }
 
-  // 文字边框宽度（与后端保持一致：直接使用 font_border_width 按比例缩放）
-  const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
-  const borderColor = cfg.font_border_color || '#000000'
+    // 头像占位符
+    const avatarSize = Math.round(70 * scale)
+    const avatarX = cardX + Math.round(20 * scale)
+    const avatarY = cardY + (cardH - avatarSize) / 2
+    c.fillStyle = '#409EFF'
+    c.beginPath()
+    c.arc(avatarX + avatarSize / 2, avatarY + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2)
+    c.fill()
+    c.fillStyle = '#FFFFFF'
+    c.font = `${Math.round(30 * scale)}px sans-serif`
+    c.textAlign = 'center'
+    c.textBaseline = 'middle'
+    c.fillText('👤', avatarX + avatarSize / 2, avatarY + avatarSize / 2)
 
-  // 绘制文字（每行在背景框内居中，与后端 Pillow 渲染一致）
-  c.fillStyle = cfg.font_color || '#FFFFFF'
-  // 与后端一致：添加 y_correction 补偿
-  const yCorrection = (approximateAscent + approximateDescent - fontSize) / 2
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight + yCorrection + 2
-    const lineWidth = getLineWidth(line)
-    // 每行在背景框内居中
-    const startX = bgX + (bgWidth - lineWidth) / 2
-    if (letterSpacing > 0 && line.length > 1) {
-      let currentX = startX
-      for (const char of line) {
-        if (borderWidth > 0) {
-          c.strokeStyle = borderColor
-          c.lineWidth = borderWidth
-          c.lineJoin = 'round'
-          c.miterLimit = 2
-          c.strokeText(char, currentX, y)
-        }
-        c.fillText(char, currentX, y)
-        currentX += c.measureText(char).width + letterSpacing
-      }
-    } else {
-      if (borderWidth > 0) {
-        c.strokeStyle = borderColor
-        c.lineWidth = borderWidth
-        c.lineJoin = 'round'
-        c.miterLimit = 2
-        c.strokeText(line, startX, y)
-      }
-      c.fillText(line, startX, y)
+    // 头衔文字
+    const textX = avatarX + avatarSize + Math.round(16 * scale)
+    const titleFontSize = Math.round(24 * scale)
+    c.font = `600 ${titleFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+    c.textAlign = 'left'
+    c.textBaseline = 'middle'
+    c.fillStyle = '#FFFFFF'
+    c.fillText(cardTitle, textX, cardY + (cardSubtitle ? cardH * 0.32 : cardH / 2))
+
+    // 辅语
+    if (cardSubtitle) {
+      const subFontSize = Math.round(18 * scale)
+      c.font = `400 ${subFontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
+      c.fillStyle = 'rgba(255,255,255,0.8)'
+      c.fillText(cardSubtitle, textX, cardY + cardH * 0.68)
     }
   }
 }
@@ -534,43 +652,43 @@ function renderSubtitlePreview() {
 watch(
   () => digitalForm.value.character_asset,
   () => {
-    if (digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
+    const hasPreview = digitalForm.value.subtitle_enabled || digitalForm.value.title_overlay_config.enabled || digitalForm.value.business_card_config.enabled
+    if (hasPreview && previewCanvasRef.value) {
       loadBackgroundImage()
     }
   }
 )
 
-  // 监听字幕开关变化
-  watch(
-    () => digitalForm.value.subtitle_enabled,
-    (enabled) => {
-      if (enabled) {
-        // 确保 canvas DOM 已存在后，加载背景并渲染
-        nextTick(() => {
-          loadBackgroundImage()
-        })
-      }
-    },
-    { immediate: true, flush: 'post' }
-  )
+// 监听网感开关变化，确保开启时加载背景
+watch(
+  () => digitalForm.value.internet_clip_enabled,
+  (enabled) => {
+    if (enabled && previewCanvasRef.value) {
+      loadBackgroundImage()
+    }
+  }
+)
 
-// 取消生成任务后重新渲染字幕预览 Canvas
+// 取消生成任务后重新渲染 Canvas
 watch(
   () => ({ running: running.value, submitted: submitted.value }),
   (newVal, oldVal) => {
     // 从生成中/已提交状态恢复到空闲状态时，重新渲染 Canvas
     const wasBusy = oldVal.running || oldVal.submitted
     const isIdle = !newVal.running && !newVal.submitted
-    if (wasBusy && isIdle && digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
-      nextTick(() => renderSubtitlePreview())
+    const hasPreview = digitalForm.value.subtitle_enabled || digitalForm.value.title_overlay_config.enabled || digitalForm.value.business_card_config.enabled
+    if (wasBusy && isIdle && hasPreview && previewCanvasRef.value) {
+      nextTick(() => renderPreview())
     }
   },
   { immediate: false }
 )
 
-  // 监听字幕样式参数变化：开启字幕时实时更新预览
+  // 监听字幕/标题/名片开关及参数变化：实时更新预览
   watch(
     () => ({
+      // 字幕
+      subtitle_enabled: digitalForm.value.subtitle_enabled,
       fz: digitalForm.value.subtitle_config.font_size,
       fc: digitalForm.value.subtitle_config.font_color,
       fw: digitalForm.value.subtitle_config.font_weight,
@@ -584,13 +702,31 @@ watch(
       br: digitalForm.value.subtitle_config.background_radius,
       bw: digitalForm.value.subtitle_config.font_border_width,
       bclr: digitalForm.value.subtitle_config.font_border_color,
+      // 标题
+      title_enabled: digitalForm.value.title_overlay_config.enabled,
+      title_text: digitalForm.value.title_overlay_config.text,
+      title_fontSize: digitalForm.value.title_overlay_config.font_size,
+      title_fontColor: digitalForm.value.title_overlay_config.font_color,
+      title_fontWeight: digitalForm.value.title_overlay_config.font_weight,
+      title_px: digitalForm.value.title_overlay_config.position_x,
+      title_py: digitalForm.value.title_overlay_config.position_y,
+      // 名片
+      card_enabled: digitalForm.value.business_card_config.enabled,
+      card_title: digitalForm.value.business_card_config.title,
+      card_subtitle: digitalForm.value.business_card_config.subtitle,
     }),
     () => {
-      if (digitalForm.value.subtitle_enabled && previewCanvasRef.value) {
-        renderSubtitlePreview()
+      const hasPreview = digitalForm.value.subtitle_enabled || digitalForm.value.title_overlay_config.enabled || digitalForm.value.business_card_config.enabled
+      if (hasPreview) {
+        // 确保 canvas 存在且加载背景图
+        nextTick(() => {
+          if (previewCanvasRef.value) {
+            loadBackgroundImage()
+          }
+        })
       }
     },
-    { deep: true }
+    { deep: true, immediate: true }
   )
 
 async function handleSubtitlePreview() {

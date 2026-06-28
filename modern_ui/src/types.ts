@@ -97,6 +97,50 @@ export interface SubtitleConfig {
   font_border_color: string
 }
 
+// ===== 标题配置接口 =====
+export type DisplayMode = 'full' | 'duration'
+
+export interface TitleOverlayConfig {
+  enabled: boolean
+  text: string
+  font_size: number
+  font_color: string
+  font_weight: number
+  position_x: number
+  position_y: number
+  display_mode: DisplayMode
+  duration_seconds: number
+}
+
+// ===== 个人名片配置接口 =====
+export interface BusinessCardConfig {
+  enabled: boolean
+  title: string
+  subtitle: string
+  display_mode: DisplayMode
+  duration_seconds: number
+}
+
+// ===== 背景音乐配置接口 =====
+export interface BgmConfig {
+  enabled: boolean
+  selected_bgm: string | null
+  volume: number
+  custom_bgm: string | null
+}
+
+// ===== 画中画混剪配置接口 =====
+export interface PipMixConfig {
+  enabled: boolean
+  overlay_video: string | null
+  overlay_image: string | null
+  position_x: number
+  position_y: number
+  width: number
+  height: number
+  opacity: number
+}
+
 export interface DigitalForm {
   mode: 'digital' | 'customize'
   character_asset: string | null
@@ -126,6 +170,12 @@ export interface DigitalForm {
   // ===== 字幕配置 =====
   subtitle_enabled: boolean
   subtitle_config: SubtitleConfig
+  // ===== 网感剪辑相关配置 =====
+  internet_clip_enabled: boolean
+  title_overlay_config: TitleOverlayConfig
+  business_card_config: BusinessCardConfig
+  bgm_config: BgmConfig
+  pip_mix_config: PipMixConfig
 }
 
 
