@@ -29,23 +29,19 @@
       </div>
     </div>
 
-    <!-- Action Buttons -->
-    <div class="user-actions">
-      <div class="user-action-btn vip" @click="handleOpenVip" v-if="!auth.isVipEffective.value">
-        <el-icon><StarFilled /></el-icon>
-        <span>开通VIP</span>
+    <!-- Account Navigation Grid -->
+    <div class="account-nav">
+      <div class="nav-item" @click="handleOpenVip">
+        <span class="nav-icon">⭐</span>
+        <span class="nav-label">{{ auth.isVipEffective.value ? '续费VIP' : '开通VIP' }}</span>
       </div>
-      <div class="user-action-btn vip" @click="handleOpenVip" v-else>
-        <el-icon><StarFilled /></el-icon>
-        <span>续费VIP</span>
+      <div class="nav-item" @click="handleRecharge">
+        <span class="nav-icon">💎</span>
+        <span class="nav-label">余额充值</span>
       </div>
-      <div class="user-action-btn recharge" @click="handleRecharge">
-        <el-icon><Coin /></el-icon>
-        <span>充值</span>
-      </div>
-      <div class="user-action-btn invite" @click="handleInvite">
-        <el-icon><Share /></el-icon>
-        <span>邀请</span>
+      <div class="nav-item" @click="handleInvite">
+        <span class="nav-icon">🔗</span>
+        <span class="nav-label">邀请好友</span>
       </div>
     </div>
 
@@ -227,90 +223,44 @@ async function handleLogout() {
   margin-right: 4px;
 }
 
-/* Action Buttons */
-.user-actions {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 12px;
-  flex-wrap: wrap;
+/* Account Navigation Grid - 2 per row with border */
+.account-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 10px;
 }
 
-.user-action-btn {
-  display: inline-flex;
+.nav-item {
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 8px 18px;
+  gap: 6px;
+  padding: 9px 8px;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.15s;
+  box-sizing: border-box;
+}
+
+.nav-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.nav-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.nav-label {
   white-space: nowrap;
-}
-
-/* 充值按钮 - 金色渐变 */
-.user-action-btn.recharge {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border-color: #f59e0b;
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 9px 20px;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
-}
-
-.user-action-btn.recharge:hover {
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  border-color: #fbbf24;
-  color: #fff;
-  box-shadow: 0 0 24px rgba(245, 158, 11, 0.4);
-  transform: translateY(-1px);
-}
-
-.user-action-btn.invite {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  border-color: #22c55e;
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 9px 20px;
-  box-shadow: 0 0 12px rgba(34, 197, 94, 0.25);
-}
-
-.user-action-btn.invite:hover {
-  background: linear-gradient(135deg, #4ade80, #22c55e);
-  border-color: #4ade80;
-  box-shadow: 0 0 24px rgba(34, 197, 94, 0.4);
-  transform: translateY(-1px);
-}
-
-.user-action-btn.admin:hover {
-  background: rgba(64, 158, 255, 0.15);
-  color: #409eff;
-  border-color: rgba(64, 158, 255, 0.3);
-}
-
-/* VIP 按钮 - 紫色渐变 */
-.user-action-btn.vip {
-  background: linear-gradient(135deg, #7c3aed, #6366f1);
-  border-color: #7c3aed;
-  color: #fff;
-  font-weight: 700;
-  font-size: 13px;
-  padding: 9px 20px;
-  box-shadow: 0 0 12px rgba(124, 58, 237, 0.25);
-}
-
-.user-action-btn.vip:hover {
-  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
-  border-color: #8b5cf6;
-  box-shadow: 0 0 24px rgba(124, 58, 237, 0.4);
-  transform: translateY(-1px);
 }
 
 /* VIP 标签行 */
