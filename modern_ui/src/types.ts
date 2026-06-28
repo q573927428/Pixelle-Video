@@ -52,6 +52,15 @@ export interface TtsVoiceInfo {
 
 
 
+export interface RemoteComfyConfig {
+  enabled: boolean
+  base_url: string
+  image_workflow_id: string
+  video_workflow_id: string
+  customize_workflow_id: string
+  tts_workflow_id: string
+}
+
 export interface DigitalWorkflowConfig {
   first_workflow_path: string
   second_workflow_path: string

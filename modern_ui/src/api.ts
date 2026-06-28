@@ -238,12 +238,22 @@ export interface LLMConfig {
   model: string
 }
 
+export interface RemoteComfyConfig {
+  enabled: boolean
+  base_url: string
+  image_workflow_id: string
+  video_workflow_id: string
+  customize_workflow_id: string
+  tts_workflow_id: string
+}
+
 export interface ComfyUIConfig {
   comfyui_url: string
   comfyui_api_key: string
   runninghub_api_key: string
   runninghub_concurrent_limit: number
   runninghub_instance_type: string
+  remote_comfy: RemoteComfyConfig
 }
 
 export interface FullConfig {
@@ -304,6 +314,24 @@ export async function testComfyUIConnection(url: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// ====== Remote ComfyUI (zealman mirror) API ======
+
+export async function testRemoteComfyConnection(baseUrl: string): Promise<{ success: boolean; message: string }> {
+  return request('/api/config/remote-comfy/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ base_url: baseUrl }),
+  })
+}
+
+export async function listRemoteWorkflows(baseUrl: string): Promise<{ success: boolean; workflows: any[]; message: string }> {
+  return request('/api/config/remote-comfy/list-workflows', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ base_url: baseUrl }),
+  })
 }
 
 export async function resetConfig(): Promise<{ success: boolean; message: string }> {

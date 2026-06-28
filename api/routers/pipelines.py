@@ -41,7 +41,9 @@ from pixelle_video.utils.os_util import create_task_output_dir
 from api.utils.history_persistence import save_web_generation_history
 from pixelle_video.services.subtitle import SubtitleService, SubtitleConfigModel
 from pixelle_video.services.video import VideoService
+from pixelle_video.services.remote_comfy_service import RemoteComfyService, RemoteComfyServiceError
 from pixelle_video.utils.os_util import get_temp_path
+from pixelle_video.config import config_manager
 
 # 统一文字清理正则（与前端 DigitalHumanView.vue 保持一致）
 PATTERN_CLEAN_TEXT = r'[。！？；，、：；“”\'\'—…（）【】《》〈〉.!?,;:()\[\]{}<>""\'\'\-/\s]'
@@ -462,6 +464,62 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
         )
 
     generated_text = await get_script_text()
+
+    # ===== Check if remote ComfyUI mode is enabled =====
+    try:
+        comfyui_cfg = config_manager.get_comfyui_config()
+        rc = comfyui_cfg.get("remote_comfy", {})
+        remote_enabled = rc.get("enabled", False)
+        remote_base_url = rc.get("base_url", "")
+    except Exception:
+        remote_enabled = False
+        remote_base_url = ""
+
+    if remote_enabled and remote_base_url:
+        logger.info(f"🌐 Using remote ComfyUI mode: {remote_base_url}")
+        
+        # Get workflow IDs from config:
+        # compose_workflow_id = "digital_customize"  → 人物图+商品图 → 合成图（带货模式用）
+        # video_workflow_id = "digital_combination"  → 图片+音频 → 口播视频（所有模式都用）
+        compose_workflow_id = rc.get("customize_workflow_id", "digital_customize")  # 图片合成
+        video_workflow_id = rc.get("video_workflow_id", "digital_combination")      # 视频合成
+        
+        # Generate TTS locally first
+        await _run_tts(pixelle_video, request_body, generated_text, audio_path)
+        
+        # Create remote ComfyUI service
+        remote_svc = RemoteComfyService(remote_base_url)
+        try:
+            if request_body.mode == "customize":
+                # 口播模式: 人物图 + 音频 → 直接走 digital_combination 生成口播视频
+                _, final_video_local = await remote_svc.run_digital_human_workflow(
+                    image_workflow_id="",
+                    video_workflow_id=video_workflow_id,
+                    character_image_path=character_assets[0],
+                    audio_path=audio_path,
+                    output_dir=task_dir,
+                )
+                final_path = final_video_local
+            else:
+                goods_image = goods_assets[0] if goods_assets else None
+                _, final_video_local = await remote_svc.run_digital_human_workflow(
+                    image_workflow_id=compose_workflow_id if goods_image else "",
+                    video_workflow_id=video_workflow_id,
+                    character_image_path=character_assets[0],
+                    audio_path=audio_path,
+                    goods_image_path=goods_image,
+                    goods_type=request_body.goods_title,
+                    output_dir=task_dir,
+                )
+                final_path = final_video_local
+
+            # ===== 字幕烧录 =====
+            if request_body.subtitle_config and request_body.subtitle_config.enabled:
+                final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+            
+            return final_path
+        finally:
+            await remote_svc.close()
 
     # Normalize API workflow paths: ensure they have the "api/" prefix expected by media service
     if cfg.api_video_workflow and not cfg.api_video_workflow.startswith("api/"):

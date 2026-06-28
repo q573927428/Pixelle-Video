@@ -128,12 +128,21 @@ class ConfigManager:
     
     def get_comfyui_config(self) -> dict:
         """Get ComfyUI configuration as dict"""
+        rc = self.config.comfyui.remote_comfy
         return {
             "comfyui_url": self.config.comfyui.comfyui_url,
             "comfyui_api_key": self.config.comfyui.comfyui_api_key,
             "runninghub_api_key": self.config.comfyui.runninghub_api_key,
             "runninghub_concurrent_limit": self.config.comfyui.runninghub_concurrent_limit,
             "runninghub_instance_type": self.config.comfyui.runninghub_instance_type,
+            "remote_comfy": {
+                "enabled": rc.enabled,
+                "base_url": rc.base_url,
+                "image_workflow_id": rc.image_workflow_id,
+                "video_workflow_id": rc.video_workflow_id,
+                "customize_workflow_id": rc.customize_workflow_id,
+                "tts_workflow_id": rc.tts_workflow_id,
+            },
             "tts": {
                 "default_workflow": self.config.comfyui.tts.default_workflow,
             },

@@ -105,6 +105,16 @@ class VideoSubConfig(BaseModel):
     )
 
 
+class RemoteComfyConfig(BaseModel):
+    """Remote ComfyUI (zealman mirror) configuration"""
+    enabled: bool = Field(default=False, description="Enable remote ComfyUI mode")
+    base_url: str = Field(default="", description="Remote ComfyUI API base URL (e.g. https://...:8443)")
+    image_workflow_id: str = Field(default="digital_image", description="Remote workflow ID for image compositing")
+    video_workflow_id: str = Field(default="digital_combination", description="Remote workflow ID for video generation")
+    customize_workflow_id: str = Field(default="digital_customize", description="Remote workflow ID for customize mode")
+    tts_workflow_id: str = Field(default="tts_edge", description="Remote workflow ID for TTS")
+
+
 class ComfyUIConfig(BaseModel):
     """ComfyUI configuration (includes global settings and service-specific configs)"""
     comfyui_url: str = Field(default="http://127.0.0.1:8188", description="ComfyUI Server URL")
@@ -112,6 +122,7 @@ class ComfyUIConfig(BaseModel):
     runninghub_api_key: Optional[str] = Field(default=None, description="RunningHub API Key (optional)")
     runninghub_concurrent_limit: int = Field(default=1, ge=1, le=10, description="RunningHub concurrent execution limit (1-10)")
     runninghub_instance_type: Optional[str] = Field(default=None, description="RunningHub instance type (optional, set to 'plus' for 48GB VRAM)")
+    remote_comfy: RemoteComfyConfig = Field(default_factory=RemoteComfyConfig, description="Remote ComfyUI (zealman mirror) configuration")
     tts: TTSSubConfig = Field(default_factory=TTSSubConfig, description="TTS-specific configuration")
     image: ImageSubConfig = Field(default_factory=ImageSubConfig, description="Image-specific configuration")
     video: VideoSubConfig = Field(default_factory=VideoSubConfig, description="Video-specific configuration")

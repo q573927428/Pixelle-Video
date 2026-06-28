@@ -21,6 +21,7 @@ from typing import Any
 from pixelle_video.config import config_manager
 from pixelle_video.llm_presets import get_preset_names, get_preset, find_preset_by_base_url_and_model
 from pixelle_video.utils.llm_util import fetch_available_models, test_llm_connection
+from pixelle_video.services.remote_comfy_service import RemoteComfyService
 from api.auth.dependencies import require_admin
 from api.auth.schemas import UserInfo
 
@@ -33,12 +34,22 @@ class LLMConfig(BaseModel):
     model: str = ""
 
 
+class RemoteComfyConfig(BaseModel):
+    enabled: bool = False
+    base_url: str = ""
+    image_workflow_id: str = "digital_image"
+    video_workflow_id: str = "digital_combination"
+    customize_workflow_id: str = "digital_customize"
+    tts_workflow_id: str = "tts_edge"
+
+
 class ComfyUIConfig(BaseModel):
     comfyui_url: str = "http://127.0.0.1:8188"
     comfyui_api_key: str = ""
     runninghub_api_key: str = ""
     runninghub_concurrent_limit: int = 1
     runninghub_instance_type: str = ""
+    remote_comfy: RemoteComfyConfig = RemoteComfyConfig()
 
 
 class APIProviderCommonConfig(BaseModel):
@@ -93,6 +104,8 @@ async def get_config(admin: UserInfo = Depends(require_admin)):
     llm_cfg = config_manager.get_llm_config()
     comfyui_cfg = config_manager.get_comfyui_config()
     api_cfg = config_manager.get_api_providers_config()
+    
+    rc = comfyui_cfg.get("remote_comfy", {})
 
     return FullConfigResponse(
         llm=LLMConfig(
@@ -106,6 +119,14 @@ async def get_config(admin: UserInfo = Depends(require_admin)):
             runninghub_api_key=comfyui_cfg.get("runninghub_api_key", ""),
             runninghub_concurrent_limit=comfyui_cfg.get("runninghub_concurrent_limit", 1),
             runninghub_instance_type=comfyui_cfg.get("runninghub_instance_type") or "",
+            remote_comfy=RemoteComfyConfig(
+                enabled=rc.get("enabled", False),
+                base_url=rc.get("base_url", ""),
+                image_workflow_id=rc.get("image_workflow_id", "digital_image"),
+                video_workflow_id=rc.get("video_workflow_id", "digital_combination"),
+                customize_workflow_id=rc.get("customize_workflow_id", "digital_customize"),
+                tts_workflow_id=rc.get("tts_workflow_id", "tts_edge"),
+            ),
         ),
         api_providers=api_cfg,
         presets=get_preset_names(),
@@ -147,6 +168,21 @@ async def save_config(request: SaveConfigRequest, admin: UserInfo = Depends(requ
                 runninghub_concurrent_limit=request.comfyui.runninghub_concurrent_limit,
                 runninghub_instance_type=request.comfyui.runninghub_instance_type or "",
             )
+
+        # Save remote ComfyUI config
+        rc = request.comfyui.remote_comfy
+        config_manager.update({
+            "comfyui": {
+                "remote_comfy": {
+                    "enabled": rc.enabled,
+                    "base_url": rc.base_url,
+                    "image_workflow_id": rc.image_workflow_id,
+                    "video_workflow_id": rc.video_workflow_id,
+                    "customize_workflow_id": rc.customize_workflow_id,
+                    "tts_workflow_id": rc.tts_workflow_id,
+                }
+            }
+        })
 
         # Save API providers config
         for provider_key in ("common", "openai", "dashscope", "ark", "kling"):
@@ -219,3 +255,62 @@ async def reset_config(admin: UserInfo = Depends(require_admin)):
         return {"success": True, "message": "Configuration reset to defaults"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ====== Remote ComfyUI endpoints ======
+
+
+class TestRemoteComfyRequest(BaseModel):
+    base_url: str
+
+
+class TestRemoteComfyResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ListRemoteWorkflowsResponse(BaseModel):
+    success: bool
+    workflows: list[dict] = []
+    message: str = ""
+
+
+@router.post("/config/remote-comfy/test", response_model=TestRemoteComfyResponse)
+async def test_remote_comfy_connection(
+    request: TestRemoteComfyRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """Test connection to remote ComfyUI (zealman mirror)"""
+    try:
+        if not request.base_url:
+            return TestRemoteComfyResponse(success=False, message="请输入远程 ComfyUI 地址")
+        service = RemoteComfyService(request.base_url)
+        ok = await service.check_health()
+        await service.close()
+        if ok:
+            return TestRemoteComfyResponse(success=True, message="✅ 连接成功！远程 ComfyUI 面板运行正常")
+        else:
+            return TestRemoteComfyResponse(success=False, message="❌ 连接失败，请检查地址是否正确或面板是否已启动")
+    except Exception as e:
+        return TestRemoteComfyResponse(success=False, message=f"❌ 连接失败：{e}")
+
+
+@router.post("/config/remote-comfy/list-workflows", response_model=ListRemoteWorkflowsResponse)
+async def list_remote_workflows(
+    request: TestRemoteComfyRequest,
+    admin: UserInfo = Depends(require_admin),
+):
+    """List saved workflows on remote ComfyUI"""
+    try:
+        if not request.base_url:
+            return ListRemoteWorkflowsResponse(success=False, message="请输入远程 ComfyUI 地址")
+        service = RemoteComfyService(request.base_url)
+        workflows = await service.list_workflows()
+        await service.close()
+        return ListRemoteWorkflowsResponse(
+            success=True,
+            workflows=workflows,
+            message=f"找到 {len(workflows)} 个工作流",
+        )
+    except Exception as e:
+        return ListRemoteWorkflowsResponse(success=False, message=f"获取工作流列表失败：{e}")

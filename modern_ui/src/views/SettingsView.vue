@@ -50,11 +50,20 @@
         </div>
       </div>
 
-      <!-- ========== Column 2: ComfyUI ========== -->
+      <!-- ========== Column 2: ComfyUI / RunningHub / Remote ComfyUI ========== -->
       <div class="card">
-        <div class="card-header"><h3 class="card-title">🔧 ComfyUI / RunningHub</h3></div>
+        <div class="card-header"><h3 class="card-title">🔧 ComfyUI / RunningHub / 远程API</h3></div>
         <div class="card-body">
-          <el-form label-position="top" size="default">
+          <!-- 执行模式切换 -->
+          <el-form-item label="数字人执行模式">
+            <el-radio-group v-model="executionMode">
+              <el-radio-button value="runninghub">☁️ RunningHub</el-radio-button>
+              <el-radio-button value="remote_comfy">🌐 远程 ComfyUI</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+
+          <!-- ===== RunningHub 模式 ===== -->
+          <template v-if="executionMode === 'runninghub'">
             <el-form-item label="本地 ComfyUI">
               <div style="display:flex;gap:8px;width:100%;">
                 <el-input v-model="comfyuiConfig.comfyui_url" placeholder="http://127.0.0.1:8188" style="flex:1;" />
@@ -83,7 +92,54 @@
                 </el-select>
               </el-form-item>
             </div>
-          </el-form>
+          </template>
+
+          <!-- ===== 远程 ComfyUI (zealman) 模式 ===== -->
+          <template v-if="executionMode === 'remote_comfy'">
+            <el-alert
+              title="远程 ComfyUI 模式：直接调用远程 ComfyUI 面板 API 执行工作流，不经过 RunningHub。需要在远程 ComfyUI 的「API 生成」页中预先导入并保存好数字人工作流。"
+              type="info"
+              :closable="false"
+              show-icon
+              style="margin-bottom:14px;"
+            />
+            <el-form-item label="远程 ComfyUI 地址 *">
+              <div style="display:flex;gap:8px;width:100%;">
+                <el-input v-model="remoteComfyConfig.base_url" placeholder="https://uu1068283-7826db062674.westd.seetacloud.com:8443" style="flex:1;" />
+                <el-button :loading="testingRemoteComfy" @click="testRemoteComfy">测试连接</el-button>
+              </div>
+            </el-form-item>
+
+            <el-divider />
+
+            <el-form-item label="商品图片合成工作流">
+              <div style="display:flex;gap:8px;width:100%;">
+                <el-input v-model="remoteComfyConfig.customize_workflow_id" placeholder="digital_customize" style="flex:1;" />
+                <el-button :loading="loadingRemoteWorkflows" @click="loadRemoteWorkflows">🔄 加载列表</el-button>
+              </div>
+              <div v-if="remoteWorkflowList.length > 0" style="margin-top:8px;width:100%;">
+                <el-tag
+                  v-for="wf in remoteWorkflowList"
+                  :key="wf.id"
+                  :type="remoteComfyConfig.customize_workflow_id === wf.id ? 'primary' : 'info'"
+                  style="margin:2px;cursor:pointer;"
+                  @click="remoteComfyConfig.customize_workflow_id = wf.id"
+                >
+                  {{ wf.id || wf.name }}
+                </el-tag>
+              </div>
+              <div class="small muted" style="margin-top:4px;">带货模式：人物图+商品图→合成图</div>
+            </el-form-item>
+
+            <el-form-item label="数字人视频工作流">
+              <el-input v-model="remoteComfyConfig.video_workflow_id" placeholder="digital_combination" />
+              <div class="small muted" style="margin-top:4px;">口播/带货：图片+音频→口播视频</div>
+            </el-form-item>
+
+            <el-form-item label="TTS 工作流（可选）">
+              <el-input v-model="remoteComfyConfig.tts_workflow_id" placeholder="tts_edge" />
+            </el-form-item>
+          </template>
         </div>
       </div>
     </div>
@@ -194,6 +250,8 @@ import {
   loadLLMModels,
   testLLMConnection,
   testComfyUIConnection,
+  testRemoteComfyConnection,
+  listRemoteWorkflows,
   resetConfig as apiResetConfig,
   detectPreset,
   getPresetConfig,
@@ -222,6 +280,20 @@ const comfyuiConfig = reactive({
   runninghub_instance_type: '',
 })
 const instanceTypeDisplay = ref('24g')
+
+// ====== 远程 ComfyUI 状态 ======
+const executionMode = ref('runninghub')
+const remoteComfyConfig = reactive({
+  enabled: false,
+  base_url: '',
+  image_workflow_id: 'digital_image',
+  video_workflow_id: 'digital_combination',
+  customize_workflow_id: 'digital_customize',
+  tts_workflow_id: 'tts_edge',
+})
+const testingRemoteComfy = ref(false)
+const loadingRemoteWorkflows = ref(false)
+const remoteWorkflowList = ref<any[]>([])
 
 const commonConfig = reactive({ print_model_input: false, local_proxy: '' })
 const openaiConfig = reactive({ api_key: '', base_url: '', use_proxy: false })
@@ -286,6 +358,17 @@ onMounted(async () => {
     comfyuiConfig.runninghub_concurrent_limit = cfg.comfyui.runninghub_concurrent_limit
     comfyuiConfig.runninghub_instance_type = cfg.comfyui.runninghub_instance_type
     instanceTypeDisplay.value = cfg.comfyui.runninghub_instance_type === 'plus' ? 'plus' : '24g'
+
+    // Remote ComfyUI
+    const rc = cfg.comfyui.remote_comfy
+    if (rc) {
+      executionMode.value = rc.enabled ? 'remote_comfy' : 'runninghub'
+      remoteComfyConfig.base_url = rc.base_url || ''
+      remoteComfyConfig.image_workflow_id = rc.image_workflow_id || 'digital_image'
+      remoteComfyConfig.video_workflow_id = rc.video_workflow_id || 'digital_combination'
+      remoteComfyConfig.customize_workflow_id = rc.customize_workflow_id || 'digital_customize'
+      remoteComfyConfig.tts_workflow_id = rc.tts_workflow_id || 'tts_edge'
+    }
 
     const ap = cfg.api_providers
     if (ap.common) {
@@ -375,6 +458,49 @@ async function testConnection() {
   }
 }
 
+// ====== Test Remote ComfyUI ======
+async function testRemoteComfy() {
+  if (!remoteComfyConfig.base_url) {
+    ElMessage.warning('请先填写远程 ComfyUI 地址')
+    return
+  }
+  testingRemoteComfy.value = true
+  try {
+    const res = await testRemoteComfyConnection(remoteComfyConfig.base_url)
+    if (res.success) {
+      ElMessage.success(res.message || '连接成功！')
+    } else {
+      ElMessage.error(res.message || '连接失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(`连接失败：${e.message}`)
+  } finally {
+    testingRemoteComfy.value = false
+  }
+}
+
+// ====== Load Remote Workflows ======
+async function loadRemoteWorkflows() {
+  if (!remoteComfyConfig.base_url) {
+    ElMessage.warning('请先填写远程 ComfyUI 地址')
+    return
+  }
+  loadingRemoteWorkflows.value = true
+  try {
+    const res = await listRemoteWorkflows(remoteComfyConfig.base_url)
+    if (res.success) {
+      remoteWorkflowList.value = res.workflows || []
+      ElMessage.success(res.message || `找到 ${remoteWorkflowList.value.length} 个工作流`)
+    } else {
+      ElMessage.error(res.message || '加载失败')
+    }
+  } catch (e: any) {
+    ElMessage.error(`加载失败：${e.message}`)
+  } finally {
+    loadingRemoteWorkflows.value = false
+  }
+}
+
 // ====== Test ComfyUI ======
 async function testComfyUI() {
   if (!comfyuiConfig.comfyui_url) {
@@ -417,6 +543,14 @@ async function handleSave() {
         runninghub_api_key: comfyuiConfig.runninghub_api_key,
         runninghub_concurrent_limit: comfyuiConfig.runninghub_concurrent_limit,
         runninghub_instance_type: runninghubInstanceType.value,
+        remote_comfy: {
+          enabled: executionMode.value === 'remote_comfy',
+          base_url: remoteComfyConfig.base_url,
+          image_workflow_id: remoteComfyConfig.image_workflow_id,
+          video_workflow_id: remoteComfyConfig.video_workflow_id,
+          customize_workflow_id: remoteComfyConfig.customize_workflow_id,
+          tts_workflow_id: remoteComfyConfig.tts_workflow_id,
+        },
       },
       api_providers: {
         common: { print_model_input: commonConfig.print_model_input, local_proxy: commonConfig.local_proxy },
