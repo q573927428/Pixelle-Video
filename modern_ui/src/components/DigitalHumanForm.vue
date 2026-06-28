@@ -469,83 +469,24 @@
         </div>
       </div>
       <!-- ====== 字幕配置 ====== -->
-      <div class="form-section-wrapper">
-        <div class="form-section">
-          <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>📝 字幕配置</span>
-            <div style="display:flex;align-items:center;gap:6px;">
-              <span style="font-size:13px;font-weight:400;">开关</span>
-              <el-switch v-model="form.subtitle_enabled" @change="onSubtitleEnabledChange" />
-            </div>
-          </div>
-          <div class="form-section-body" v-if="form.subtitle_enabled">
-            <el-collapse v-model="subtitleActiveNames">
-              <el-collapse-item name="subtitle-basic">
-                <template #title>
-                  <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">📐 普通设置</span>
-                </template>
-                <el-form-item label="文字大小">
-                  <el-slider v-model="form.subtitle_config.font_size" :min="22" :max="96" :step="2" show-input />
-                </el-form-item>
-                <el-form-item label="文字颜色">
-                  <el-color-picker v-model="form.subtitle_config.font_color" show-alpha />
-                </el-form-item>
-                <el-form-item label="文字间距">
-                  <el-slider v-model="form.subtitle_config.letter_spacing" :min="0" :max="50" :step="1" show-input />
-                </el-form-item>
-                <el-divider style="margin:8px 0;" />
-                <el-form-item label="文字边框粗细">
-                  <el-slider v-model="form.subtitle_config.font_border_width" :min="0" :max="10" :step="1" show-input />
-                </el-form-item>
-                <el-form-item label="文字边框颜色">
-                  <el-color-picker v-model="form.subtitle_config.font_border_color" show-alpha />
-                </el-form-item>
-                <el-divider style="margin:8px 0;" />
-                <el-form-item label="位置 X">
-                  <el-slider v-model="form.subtitle_config.position_x" :min="-500" :max="500" :step="10" show-input />
-                </el-form-item>
-                <el-form-item label="位置 Y">
-                  <el-slider v-model="form.subtitle_config.position_y" :min="-1700" :max="100" :step="10" show-input />
-                </el-form-item>
-              </el-collapse-item>
-              <div style="height:15px;"></div>
-              <el-collapse-item name="subtitle-advanced">
-                <template #title>
-                  <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">⚙️ 高级设置</span>
-                </template>
-                <el-form-item label="最大宽度">
-                  <el-slider v-model="form.subtitle_config.max_width" :min="100" :max="1980" :step="20" show-input />
-                </el-form-item>
-                <el-divider style="margin:8px 0;" />
-                <el-form-item label="背景颜色">
-                  <el-color-picker v-model="form.subtitle_config.background_color" show-alpha />
-                </el-form-item>
-                <el-form-item label="背景透明度">
-                  <el-slider v-model="form.subtitle_config.background_opacity" :min="0" :max="1.0" :step="0.1" show-input />
-                </el-form-item>
-                <el-form-item label="背景内边距">
-                  <el-input v-model="form.subtitle_config.background_padding" placeholder="例如：10 20（上下 左右） 或 10 20 10 20（上 右 下 左）" />
-                  <small>例如：10 20（上下 左右） 或 10 20 10 20（上 右 下 左）</small>
-                </el-form-item>
-                <el-form-item label="背景圆角">
-                  <el-input-number v-model="form.subtitle_config.background_radius" :min="0" :max="50" :step="2" style="width:100%;" />
-                </el-form-item>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-        </div>
-      </div>
-
+      <SubtitleConfigurator
+        :enabled="form.subtitle_enabled"
+        :config="form.subtitle_config"
+        :preview-text="form.goods_text"
+        @update:enabled="form.subtitle_enabled = $event"
+        @update:config="form.subtitle_config = $event"
+      />
     </div>
   </el-form>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import type { DigitalForm, WorkflowInfo, TtsVoiceInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
+import SubtitleConfigurator from './SubtitleConfigurator.vue'
 import { ElMessage } from 'element-plus'
 
 const textMaxLength = ref(368)
@@ -614,206 +555,7 @@ function onBatchModeChange(val: boolean) {
   // 所有人都可以使用批量模式
 }
 
-// 字幕功能：直接允许（已取消VIP限制）
-function onSubtitleEnabledChange(val: boolean) {
-  // 所有人都可以使用字幕功能
-}
-
 const videoApiParamsActiveNames = ref<string[]>([])
-
-const subtitleActiveNames = ref<string[]>(['subtitle-basic'])
-
-// === 实时字幕预览 Canvas ===
-const previewCanvasRef = ref<HTMLCanvasElement | null>(null)
-const CANVAS_PREVIEW_WIDTH = 360  // 预览 Canvas 宽度（模拟 1080p 等比缩放）
-const CANVAS_PREVIEW_HEIGHT = 640 // 预览 Canvas 高度（9:16 竖屏）
-const canvasWidth = computed(() => CANVAS_PREVIEW_WIDTH)
-const canvasHeight = computed(() => CANVAS_PREVIEW_HEIGHT)
-
-function hexToRgba(hex: string, alpha: number): string {
-  const h = hex.replace('#', '')
-  const r = parseInt(h.substring(0, 2), 16)
-  const g = parseInt(h.substring(2, 4), 16)
-  const b = parseInt(h.substring(4, 6), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
-function renderSubtitlePreview() {
-  const canvas = previewCanvasRef.value
-  if (!canvas) return
-  const cfg = props.form.subtitle_config
-  if (!cfg) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  // 缩放比例：从 1080x1920 缩放到 Canvas 尺寸
-  const scaleX = CANVAS_PREVIEW_WIDTH / 1080
-  const scaleY = CANVAS_PREVIEW_HEIGHT / 1920
-  const scale = Math.min(scaleX, scaleY)
-
-  // 清空画布
-  ctx.clearRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
-
-  // 绘制深色背景模拟视频
-  ctx.fillStyle = '#1a1a2e'
-  ctx.fillRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
-
-  // 预览时只取第一句文案显示
-  let rawText = props.form.goods_text?.trim() || '这是一个字幕样式预览'
-  if (rawText.length > 3) {
-    const sentences = rawText.split(/(?<=[。！？；，、，.!?;\s])/)
-    rawText = sentences[0] || rawText
-  }
-  // 去除标点符号，与后端 subtitle.py._clean_punctuation 保持一致
-  const demoText = rawText.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-]/g, '')
-
-  // 计算缩放后的参数
-  const fontSize = Math.round(cfg.font_size * scale)
-  const maxWidth = Math.round(cfg.max_width * scale)
-  const offsetX = Math.round(cfg.position_x * scale)
-  const offsetY = Math.round(cfg.position_y * scale)
-  const radius = Math.round(cfg.background_radius * scale)
-
-  // 解析 padding
-  const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
-  let padT = 10, padR = 20, padB = 10, padL = 20
-  if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
-  else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
-  else if (padParts.length === 4) { padT = padParts[0]; padR = padParts[1]; padB = padParts[2]; padL = padParts[3] }
-  padT = Math.round(padT * scale); padR = Math.round(padR * scale)
-  padB = Math.round(padB * scale); padL = Math.round(padL * scale)
-
-  // 设置字体
-  ctx.font = `${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-  ctx.textBaseline = 'top'
-
-  // 文字边框
-  const borderWidth = Math.round((cfg.font_border_width || 0) * scale)
-  const borderColor = cfg.font_border_color || '#000000'
-
-  // 文字间距（缩放后）
-  const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
-
-  // 计算带间距的文本宽度
-  const ctxSafe = ctx as CanvasRenderingContext2D
-  function getLineWidth(txt: string): number {
-    if (!txt) return 0
-    if (letterSpacing > 0 && txt.length > 1) {
-      return ctxSafe.measureText(txt).width + letterSpacing * (txt.length - 1)
-    }
-    return ctxSafe.measureText(txt).width
-  }
-
-  // 重新计算文字行（考虑文字间距）
-  const lines: string[] = []
-  let curLine = ''
-  for (const char of demoText) {
-    const test = curLine + char
-    if (getLineWidth(test) > maxWidth && curLine) {
-      lines.push(curLine)
-      curLine = char
-    } else {
-      curLine = test
-    }
-  }
-  if (curLine) lines.push(curLine)
-
-  // 行高 = ascent + descent (与后端 Pillow 字幕服务的 font.getmetrics() 保持一致)
-  // 对于中文字体，ascent + descent ≈ fontSize * 1.2
-  const lineHeight = Math.round(fontSize * 1.2)
-
-  // 背景尺寸（使用带间距的宽度）
-  const lineWidths = lines.map(l => getLineWidth(l))
-  const maxLineWidth = Math.max(...lineWidths)
-  const bgWidth = maxLineWidth + padL + padR
-  const bgHeight = lines.length * lineHeight + padT + padB
-
-  // 位置（基座在底部上方）
-  const baseX = CANVAS_PREVIEW_WIDTH / 2 + offsetX
-  const baseY = CANVAS_PREVIEW_HEIGHT - 100 * scale + offsetY
-  const bgX = baseX - bgWidth / 2
-  const bgY = baseY - bgHeight
-
-  // 绘制圆角背景（用新尺寸）
-  ctxSafe.clearRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
-  ctxSafe.fillStyle = '#1a1a2e'
-  ctxSafe.fillRect(0, 0, CANVAS_PREVIEW_WIDTH, CANVAS_PREVIEW_HEIGHT)
-
-  const bgAlpha = Math.max(0, Math.min(1, cfg.background_opacity))
-  ctxSafe.fillStyle = hexToRgba(cfg.background_color, bgAlpha)
-  const r = Math.min(radius, bgHeight / 2, bgWidth / 2)
-  if (r > 0) {
-    ctxSafe.beginPath()
-    ctxSafe.moveTo(bgX + r, bgY)
-    ctxSafe.lineTo(bgX + bgWidth - r, bgY)
-    ctxSafe.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + r)
-    ctxSafe.lineTo(bgX + bgWidth, bgY + bgHeight - r)
-    ctxSafe.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - r, bgY + bgHeight)
-    ctxSafe.lineTo(bgX + r, bgY + bgHeight)
-    ctxSafe.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - r)
-    ctxSafe.lineTo(bgX, bgY + r)
-    ctxSafe.quadraticCurveTo(bgX, bgY, bgX + r, bgY)
-    ctxSafe.closePath()
-    ctxSafe.fill()
-  } else {
-    ctxSafe.fillRect(bgX, bgY, bgWidth, bgHeight)
-  }
-
-  // 绘制文字（每行居中，与后端 Pillow 渲染一致）
-  ctxSafe.fillStyle = cfg.font_color || '#FFFFFF'
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
-    const y = bgY + padT + i * lineHeight
-    const lineWidth = getLineWidth(line)
-    // 每行在背景框内居中
-    const startX = bgX + (bgWidth - lineWidth) / 2
-    if (letterSpacing > 0 && line.length > 1) {
-      let currentX = startX
-      for (const char of line) {
-        if (borderWidth > 0) {
-          ctxSafe.strokeStyle = borderColor
-          ctxSafe.lineWidth = borderWidth
-          ctxSafe.lineJoin = 'round'
-          ctxSafe.miterLimit = 2
-          ctxSafe.strokeText(char, currentX, y)
-        }
-        ctxSafe.fillText(char, currentX, y)
-        currentX += ctxSafe.measureText(char).width + letterSpacing
-      }
-    } else {
-      if (borderWidth > 0) {
-        ctxSafe.strokeStyle = borderColor
-        ctxSafe.lineWidth = borderWidth
-        ctxSafe.lineJoin = 'round'
-        ctxSafe.miterLimit = 2
-        ctxSafe.strokeText(line, startX, y)
-      }
-      ctxSafe.fillText(line, startX, y)
-    }
-  }
-}
-
-// 监听字幕配置变化，重新渲染预览 Canvas
-watch(
-  () => [
-    props.form.subtitle_config.font_size,
-    props.form.subtitle_config.font_color,
-    props.form.subtitle_config.position_x,
-    props.form.subtitle_config.position_y,
-    props.form.subtitle_config.max_width,
-    props.form.subtitle_config.letter_spacing,
-    props.form.subtitle_config.background_color,
-    props.form.subtitle_config.background_opacity,
-    props.form.subtitle_config.background_padding,
-    props.form.subtitle_config.background_radius,
-    props.form.subtitle_config.font_border_width,
-    props.form.subtitle_config.font_border_color,
-  ],
-  () => {
-    nextTick(renderSubtitlePreview)
-  },
-  { immediate: true, deep: true }
-)
 
 const previewActiveNames = ref<string[]>([])
 const asrLoading = ref(false)

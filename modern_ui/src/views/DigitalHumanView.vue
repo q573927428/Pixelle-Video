@@ -504,7 +504,7 @@ function renderSubtitlePreview() {
 
   // 使用中等字重与后端 Pillow 渲染保持一致
   ctx.font = `600 ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
-  ctx.textBaseline = 'top'
+  ctx.textBaseline = 'middle'
 
   // 文字间距
   const letterSpacing = Math.round((cfg.letter_spacing || 0) * scale)
@@ -578,7 +578,7 @@ function renderSubtitlePreview() {
   c.fillStyle = cfg.font_color || '#FFFFFF'
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const y = bgY + padT + i * lineHeight
+    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight
     const lineWidth = getLineWidth(line)
     // 每行在背景框内居中
     const startX = bgX + (bgWidth - lineWidth) / 2

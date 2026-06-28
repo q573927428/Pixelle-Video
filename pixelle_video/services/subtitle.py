@@ -601,7 +601,10 @@ class SubtitleService:
                 # 背景框的中心是 bg_y1 + bg_height / 2
                 # 多行文本时，第一行的中心位置是：
                 # bg_y1 + pad_top + line_height / 2 + j * line_height
-                line_y = bg_y1 + pad_top + line_height / 2 + j * line_height
+                # 视觉居中补偿：Pillow anchor=mm 对中文(ascent>descent) 调整到 em-square 中心
+                ascent, descent = font.getmetrics()
+                y_correction = (ascent + descent - config.font_size) / 2
+                line_y = bg_y1 + (pad_top + pad_bottom) / 2 + line_height / 2 + j * line_height + y_correction
                 
                 if border_width > 0 and border_color:
                     self._draw_text_with_letter_spacing(
