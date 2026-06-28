@@ -1,5 +1,5 @@
 """
-支付相关 API 路由 - 充值（人民币→ZS币）
+支付相关 API 路由 - 充值（人民币→ZS币）+ 会员套餐购买（VIP/SVIP）
 """
 
 import json
@@ -21,6 +21,250 @@ from api.payment.wechat import (
 )
 
 router = APIRouter(prefix="/payment", tags=["Payment"])
+
+
+# ========== 会员套餐购买 API（VIP/SVIP）==========
+
+
+class VipCreateRequest(BaseModel):
+    """VIP/SVIP购买请求"""
+    plan_type: str = "vip"  # vip / svip
+
+
+class VipCreateResponse(BaseModel):
+    """VIP/SVIP购买响应"""
+    order_no: str
+    plan_type: str
+    amount_rmb: float
+    bonus_zs: int
+    code_url: Optional[str] = None
+    status: str = "pending"
+
+
+async def _activate_vip_membership(user_id: int, username: str, plan_type: str, months: int = 1):
+    """
+    激活VIP/SVIP会员：
+    1. 设置 role 和过期时间
+    2. 赠送ZS币
+    3. 设置 daily_limit = -1（无限）
+    """
+    from datetime import timedelta
+    
+    bonus_zs = int(await get_sys_config(f"{plan_type}_bonus_zs", "3900" if plan_type == "vip" else "10000"))
+    now = datetime.now()
+    
+    # 查询用户当前VIP到期时间（用于续费累加）
+    user_row = await Database.fetchone(
+        "SELECT vip_expires_at, role FROM users WHERE id = %s",
+        (user_id,)
+    )
+    
+    # 计算新的到期时间
+    new_expires = now + timedelta(days=30 * months)
+    if user_row and user_row["vip_expires_at"]:
+        current_expires = user_row["vip_expires_at"]
+        if isinstance(current_expires, str):
+            current_expires = datetime.fromisoformat(current_expires)
+        # 如果当前VIP还未过期，累加时长
+        if current_expires > now:
+            new_expires = current_expires + timedelta(days=30 * months)
+    
+    # 设置 role 和到期时间
+    await Database.execute(
+        "UPDATE users SET role = %s, vip_expires_at = %s, daily_limit = -1, "
+        "zs_balance = zs_balance + %s WHERE id = %s",
+        (plan_type, new_expires, bonus_zs, user_id)
+    )
+    
+    logger.info(
+        f"[会员激活] 用户 {username}({user_id}) 开通 {plan_type}，"
+        f"到期 {new_expires}，赠送 {bonus_zs} ZS币"
+    )
+    return bonus_zs
+
+
+@router.post("/vip/create", response_model=VipCreateResponse)
+async def create_vip_order(
+    body: VipCreateRequest,
+    user: UserInfo = Depends(require_user),
+):
+    """
+    创建VIP/SVIP购买订单
+    - VIP: ¥29 + 送3900 ZS币
+    - SVIP: ¥89 + 送10000 ZS币
+    """
+    # 检查plan_type
+    if body.plan_type not in ("vip", "svip"):
+        raise HTTPException(status_code=400, detail="无效的套餐类型，仅支持 vip/svip")
+    
+    # 读取价格配置
+    price_key = f"{body.plan_type}_price"
+    amount_rmb = float(await get_sys_config(price_key, "29" if body.plan_type == "vip" else "89"))
+    bonus_zs = int(await get_sys_config(f"{body.plan_type}_bonus_zs", "3900" if body.plan_type == "vip" else "10000"))
+    
+    # 生成订单号
+    order_no = _gen_order_no()
+    amount_fen = int(amount_rmb * 100)  # 元转分
+    
+    # 调用微信统一下单
+    description = f"{'SVIP' if body.plan_type == 'svip' else 'VIP'}会员 - ¥{amount_rmb}"
+    code_url = create_native_order(
+        order_no=order_no,
+        amount_fen=amount_fen,
+        description=description,
+        spbill_create_ip="127.0.0.1",
+    )
+    
+    if not code_url:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="微信支付下单失败，请稍后重试",
+        )
+    
+    # 保存订单到 membership_orders 表
+    await Database.execute(
+        """INSERT INTO membership_orders 
+           (order_no, user_id, username, plan_type, amount_rmb, bonus_zs, code_url, status)
+           VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')""",
+        (order_no, user.id, user.username, body.plan_type, amount_rmb, bonus_zs, code_url),
+    )
+    
+    logger.info(f"[会员购买] 用户 {user.username}({user.id}) 购买 {body.plan_type}，金额 {amount_rmb}元")
+    return VipCreateResponse(
+        order_no=order_no,
+        plan_type=body.plan_type,
+        amount_rmb=amount_rmb,
+        bonus_zs=bonus_zs,
+        code_url=code_url,
+        status="pending",
+    )
+
+
+@router.post("/vip/notify")
+async def wechat_vip_notify(request: Request):
+    """
+    微信支付异步通知回调（VIP/SVIP购买）
+    """
+    xml_data = (await request.body()).decode("utf-8")
+    logger.info(f"[会员回调] 收到微信通知: {xml_data[:200]}...")
+    
+    # 验证签名
+    result = verify_notify(xml_data)
+    if not result:
+        return Response(content=fail_xml(), media_type="application/xml")
+    
+    # 获取订单号
+    order_no = result.get("out_trade_no")
+    transaction_id = result.get("transaction_id")
+    
+    # 查询订单
+    row = await Database.fetchone(
+        "SELECT * FROM membership_orders WHERE order_no = %s",
+        (order_no,),
+    )
+    if not row:
+        logger.error(f"[会员回调] 订单不存在: {order_no}")
+        return Response(content=fail_xml(), media_type="application/xml")
+    
+    # 防止重复处理
+    if row["status"] == "paid":
+        logger.info(f"[会员回调] 订单已处理，跳过: {order_no}")
+        return Response(content=success_xml(), media_type="application/xml")
+    
+    # 处理支付成功逻辑
+    user_id = row["user_id"]
+    plan_type = row["plan_type"]
+    
+    now = datetime.now()
+    
+    # 更新订单状态
+    await Database.execute(
+        """UPDATE membership_orders 
+           SET status = 'paid', wechat_transaction_id = %s, paid_at = %s, 
+               notify_raw = %s, updated_at = %s
+           WHERE order_no = %s""",
+        (transaction_id, now, json.dumps(result, ensure_ascii=False, default=str), now, order_no),
+    )
+    
+    # 激活会员
+    await _activate_vip_membership(user_id, row["username"], plan_type)
+    
+    logger.info(
+        f"[会员] ✅ 订单 {order_no} 处理完成！用户 {row['username']}({user_id}) "
+        f"开通 {plan_type}，支付 {row['amount_rmb']}元"
+    )
+    
+    return Response(content=success_xml(), media_type="application/xml")
+
+
+@router.get("/vip/order/{order_no}")
+async def get_vip_order_status(
+    order_no: str,
+    user: UserInfo = Depends(require_user),
+):
+    """
+    查询会员订单状态（供前端轮询）
+    """
+    row = await Database.fetchone(
+        "SELECT * FROM membership_orders WHERE order_no = %s AND user_id = %s",
+        (order_no, user.id),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="订单不存在")
+    
+    # 如果状态仍是 pending，主动查询微信侧状态
+    if row["status"] == "pending":
+        wx_result = query_order(order_no)
+        if wx_result and wx_result.get("trade_state") == "SUCCESS":
+            transaction_id = wx_result.get("transaction_id", "")
+            now = datetime.now()
+            
+            await Database.execute(
+                """UPDATE membership_orders 
+                   SET status = 'paid', wechat_transaction_id = %s, paid_at = %s, 
+                       notify_raw = %s, updated_at = %s
+                   WHERE order_no = %s""",
+                (transaction_id, now, json.dumps(wx_result, ensure_ascii=False, default=str), now, order_no),
+            )
+            await _activate_vip_membership(user.id, user.username, row["plan_type"])
+            
+            row = await Database.fetchone(
+                "SELECT * FROM membership_orders WHERE order_no = %s",
+                (order_no,),
+            )
+    
+    return {
+        "order_no": row["order_no"],
+        "plan_type": row["plan_type"],
+        "status": row["status"],
+        "amount_rmb": float(row["amount_rmb"]),
+        "bonus_zs": row["bonus_zs"],
+        "paid_at": row["paid_at"],
+    }
+
+
+@router.get("/vip/plans")
+async def get_vip_plans():
+    """
+    获取VIP/SVIP套餐信息（价格、赠送ZS币、折扣率等）
+    """
+    return {
+        "vip": {
+            "price": float(await get_sys_config("vip_price", "29")),
+            "bonus_zs": int(await get_sys_config("vip_bonus_zs", "3900")),
+            "discount": int(await get_sys_config("vip_discount", "90")),
+            "queue_priority": int(await get_sys_config("vip_queue_priority", "1")),
+        },
+        "svip": {
+            "price": float(await get_sys_config("svip_price", "89")),
+            "bonus_zs": int(await get_sys_config("svip_bonus_zs", "10000")),
+            "discount": int(await get_sys_config("svip_discount", "80")),
+            "queue_priority": int(await get_sys_config("svip_queue_priority", "2")),
+        },
+    }
+
+
+# ========== 充值 API ==========
 
 
 # ========== 充值 API ==========

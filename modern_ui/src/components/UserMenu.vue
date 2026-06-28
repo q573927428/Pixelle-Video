@@ -7,21 +7,38 @@
           <span class="user-name">{{ auth.currentUser.value?.username }}</span>
           <el-icon class="logout-icon" @click="handleLogout"><SwitchButton /></el-icon>
         </div>
-        <!-- ZS币余额 -->
-        <div class="zs-balance-row">
-          <span class="zs-balance-label">
-            <img src="/zsicon60.png" class="zs-icon" alt="ZS币" />
-            余额
-          </span>
-          <span class="zs-balance-value">
-            <span class="zs-balance-num">{{ auth.zsBalance.value }}</span>
-          </span>
-        </div>
+    <!-- VIP/会员标签 -->
+    <div v-if="auth.isVipEffective.value" class="vip-tag-row">
+      <el-tag v-if="auth.isVip.value" type="warning" size="small" effect="dark" class="vip-tag">VIP</el-tag>
+      <el-tag v-else-if="auth.isSvip.value" type="danger" size="small" effect="dark" class="vip-tag svip-tag">SVIP</el-tag>
+      <span class="vip-expiry" v-if="auth.vipExpiresAt.value">
+        到期 {{ formatDate(auth.vipExpiresAt.value) }}
+      </span>
+    </div>
+
+    <!-- ZS币余额 -->
+    <div class="zs-balance-row">
+      <span class="zs-balance-label">
+        <img src="/zsicon60.png" class="zs-icon" alt="ZS币" />
+        余额
+      </span>
+      <span class="zs-balance-value">
+        <span class="zs-balance-num">{{ auth.zsBalance.value }}</span>
+      </span>
+    </div>
       </div>
     </div>
 
     <!-- Action Buttons -->
     <div class="user-actions">
+      <div class="user-action-btn vip" @click="handleOpenVip" v-if="!auth.isVipEffective.value">
+        <el-icon><StarFilled /></el-icon>
+        <span>开通VIP</span>
+      </div>
+      <div class="user-action-btn vip" @click="handleOpenVip" v-else>
+        <el-icon><StarFilled /></el-icon>
+        <span>续费VIP</span>
+      </div>
       <div class="user-action-btn recharge" @click="handleRecharge">
         <el-icon><Coin /></el-icon>
         <span>充值</span>
@@ -34,6 +51,7 @@
 
     <RechargeDialog ref="rechargeDialogRef" />
     <InviteDialog ref="inviteDialogRef" />
+    <VipPurchaseDialog ref="vipPurchaseDialogRef" />
   </div>
 
   <!-- Login Button (when not logged in) -->
@@ -46,11 +64,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Coin, SwitchButton, Share } from '@element-plus/icons-vue'
+import { Coin, SwitchButton, Share, StarFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getAuth } from '../composables/useAuth'
 import RechargeDialog from './RechargeDialog.vue'
 import InviteDialog from './InviteDialog.vue'
+import VipPurchaseDialog from './VipPurchaseDialog.vue'
 
 const emit = defineEmits<{
   (e: 'show-login'): void
@@ -59,6 +78,12 @@ const emit = defineEmits<{
 const auth = getAuth()
 const rechargeDialogRef = ref<InstanceType<typeof RechargeDialog> | null>(null)
 const inviteDialogRef = ref<InstanceType<typeof InviteDialog> | null>(null)
+const vipPurchaseDialogRef = ref<InstanceType<typeof VipPurchaseDialog> | null>(null)
+
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return '--'
+  return new Date(dateStr).toLocaleDateString('zh-CN')
+}
 
 function handleRecharge() {
   rechargeDialogRef.value?.open()
@@ -66,6 +91,10 @@ function handleRecharge() {
 
 function handleInvite() {
   inviteDialogRef.value?.open()
+}
+
+function handleOpenVip() {
+  vipPurchaseDialogRef.value?.openVipDialog()
 }
 
 onMounted(async () => {
@@ -264,5 +293,47 @@ async function handleLogout() {
   background: rgba(64, 158, 255, 0.15);
   color: #409eff;
   border-color: rgba(64, 158, 255, 0.3);
+}
+
+/* VIP 按钮 - 紫色渐变 */
+.user-action-btn.vip {
+  background: linear-gradient(135deg, #7c3aed, #6366f1);
+  border-color: #7c3aed;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 9px 20px;
+  box-shadow: 0 0 12px rgba(124, 58, 237, 0.25);
+}
+
+.user-action-btn.vip:hover {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  border-color: #8b5cf6;
+  box-shadow: 0 0 24px rgba(124, 58, 237, 0.4);
+  transform: translateY(-1px);
+}
+
+/* VIP 标签行 */
+.vip-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 2px 4px;
+}
+
+.vip-tag {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.vip-tag.svip-tag {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+}
+
+.vip-expiry {
+  font-size: 11px;
+  color: rgba(251, 191, 36, 0.6);
 }
 </style>

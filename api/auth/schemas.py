@@ -169,6 +169,15 @@ class SysConfigResponse(BaseModel):
     register_bonus: str
     min_recharge: str
     invite_bonus: str
+    # VIP/SVIP 套餐配置
+    vip_price: str = "29"
+    svip_price: str = "89"
+    vip_bonus_zs: str = "3900"
+    svip_bonus_zs: str = "10000"
+    vip_discount: str = "90"
+    svip_discount: str = "80"
+    vip_queue_priority: str = "1"
+    svip_queue_priority: str = "2"
 
 
 class SysConfigUpdateRequest(BaseModel):

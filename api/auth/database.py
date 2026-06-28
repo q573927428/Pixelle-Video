@@ -141,6 +141,29 @@ CREATE TABLE IF NOT EXISTS `generation_log` (
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_task_id` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 会员套餐订单表（VIP/SVIP购买记录）
+CREATE TABLE IF NOT EXISTS `membership_orders` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `order_no` VARCHAR(64) NOT NULL UNIQUE,
+    `user_id` INT NOT NULL,
+    `username` VARCHAR(50) NOT NULL,
+    `plan_type` VARCHAR(20) NOT NULL COMMENT 'vip/svip',
+    `amount_rmb` DECIMAL(10,2) NOT NULL COMMENT '支付金额（人民币）',
+    `bonus_zs` INT NOT NULL DEFAULT 0 COMMENT '赠送ZS币数量',
+    `months` INT NOT NULL DEFAULT 1 COMMENT '购买月数',
+    `code_url` VARCHAR(512) DEFAULT NULL COMMENT '微信支付二维码链接',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'pending',
+    `wechat_transaction_id` VARCHAR(64) DEFAULT NULL,
+    `paid_at` DATETIME DEFAULT NULL,
+    `notify_raw` TEXT DEFAULT NULL,
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX `idx_user_id` (`user_id`),
+    INDEX `idx_order_no` (`order_no`),
+    INDEX `idx_plan_type` (`plan_type`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 """
 
 # Default admin credentials
@@ -310,13 +333,13 @@ class Database:
                 )
                 logger.info("✅ Updated users.role ENUM to include 'svip'")
 
-            # VIP: daily_limit = 10
+            # VIP: daily_limit = -1 (unlimited)
             cursor.execute(
-                "UPDATE users SET daily_limit = 10 WHERE role = 'vip' AND daily_limit = -1"
+                "UPDATE users SET daily_limit = -1 WHERE role = 'vip' AND daily_limit = 10"
             )
             fixed_vip_count = cursor.rowcount
             if fixed_vip_count > 0:
-                logger.info(f"✅ Updated {fixed_vip_count} VIP users: daily_limit changed from -1 to 10")
+                logger.info(f"✅ Updated {fixed_vip_count} VIP users: daily_limit changed from 10 to -1")
 
             # SVIP: daily_limit = -1 (unlimited)
             cursor.execute(
@@ -356,6 +379,15 @@ class Database:
                 ('register_bonus', '600', '新用户注册赠送ZS币数量'),
                 ('min_recharge', '10', '最低充值金额（元人民币）'),
                 ('invite_bonus', '200', '邀请好友注册，邀请人获得的ZS币奖励'),
+                # VIP/SVIP 套餐配置
+                ('vip_price', '29', 'VIP会员月费（元）'),
+                ('svip_price', '89', 'SVIP会员月费（元）'),
+                ('vip_bonus_zs', '3900', 'VIP会员开通赠送ZS币数量'),
+                ('svip_bonus_zs', '10000', 'SVIP会员开通赠送ZS币数量'),
+                ('vip_discount', '90', 'VIP会员生成视频折扣率（90=9折）'),
+                ('svip_discount', '80', 'SVIP会员生成视频折扣率（80=8折）'),
+                ('vip_queue_priority', '1', 'VIP队列优先级'),
+                ('svip_queue_priority', '2', 'SVIP队列优先级'),
             ]
             for key, value, desc in default_configs:
                 cursor.execute(

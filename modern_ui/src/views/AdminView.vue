@@ -52,7 +52,7 @@
               {{ formatDate(row.created_at) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="280" fixed="right">
+          <el-table-column label="操作" width="380" fixed="right">
             <template #default="{ row }">
                 <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
                 <el-button size="small" type="warning" plain @click="openAdjustBalanceDialog(row)">调整余额</el-button>
@@ -66,7 +66,7 @@
                 {{ row.status === 0 ? '启用' : '禁用' }}
               </el-button>
               <el-button size="small" type="danger" plain v-if="row.role === 'vip' || row.role === 'svip'" @click="handleRemoveVipById(row)">
-                取消VIP/SVIP
+                取消VIP
               </el-button>
             </template>
           </el-table-column>
@@ -111,6 +111,45 @@
           <div class="config-item">
             <label>最低充值金额（元）</label>
             <el-input-number v-model.number="sysConfig.min_recharge" :min="1" :max="10000" />
+          </div>
+        </div>
+
+        <!-- VIP/SVIP 套餐配置 -->
+        <div style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 16px;">
+          <h4 style="margin:0 0 14px;font-size:14px;color:#ddd;">🌟 VIP/SVIP 套餐配置</h4>
+          <div class="config-grid">
+            <div class="config-item">
+              <label>VIP 月费（元）</label>
+              <el-input-number v-model.number="sysConfig.vip_price" :min="1" :max="9999" />
+            </div>
+            <div class="config-item">
+              <label>SVIP 月费（元）</label>
+              <el-input-number v-model.number="sysConfig.svip_price" :min="1" :max="9999" />
+            </div>
+            <div class="config-item">
+              <label>VIP 赠送 ZS币</label>
+              <el-input-number v-model.number="sysConfig.vip_bonus_zs" :min="0" :max="100000" />
+            </div>
+            <div class="config-item">
+              <label>SVIP 赠送 ZS币</label>
+              <el-input-number v-model.number="sysConfig.svip_bonus_zs" :min="0" :max="100000" />
+            </div>
+            <div class="config-item">
+              <label>VIP 折扣率（90=9折）</label>
+              <el-input-number v-model.number="sysConfig.vip_discount" :min="1" :max="100" />
+            </div>
+            <div class="config-item">
+              <label>SVIP 折扣率（80=8折）</label>
+              <el-input-number v-model.number="sysConfig.svip_discount" :min="1" :max="100" />
+            </div>
+            <div class="config-item">
+              <label>VIP 队列优先级</label>
+              <el-input-number v-model.number="sysConfig.vip_queue_priority" :min="0" :max="10" />
+            </div>
+            <div class="config-item">
+              <label>SVIP 队列优先级</label>
+              <el-input-number v-model.number="sysConfig.svip_queue_priority" :min="0" :max="10" />
+            </div>
           </div>
         </div>
         <div style="margin-top: 14px; text-align: right;">
@@ -242,13 +281,22 @@ const adjustBalanceAmount = ref(100)
 const adjustBalanceReason = ref('')
 const adjustBalanceSaving = ref(false)
 
-// ZS币 系统配置
+// ZS币 系统配置（含VIP/SVIP）
 const sysConfig = ref({
   zs_per_second: 5,
   exchange_rate: 100,
   register_bonus: 600,
   invite_bonus: 200,
   min_recharge: 10,
+  // VIP/SVIP配置
+  vip_price: 29,
+  svip_price: 89,
+  vip_bonus_zs: 3900,
+  svip_bonus_zs: 10000,
+  vip_discount: 90,
+  svip_discount: 80,
+  vip_queue_priority: 1,
+  svip_queue_priority: 2,
 })
 const configSaving = ref(false)
 
@@ -264,6 +312,14 @@ async function loadSysConfig() {
       register_bonus: parseInt(res.register_bonus) || 600,
       invite_bonus: parseInt(res.invite_bonus) || 200,
       min_recharge: parseInt(res.min_recharge) || 10,
+      vip_price: parseInt(res.vip_price) || 29,
+      svip_price: parseInt(res.svip_price) || 89,
+      vip_bonus_zs: parseInt(res.vip_bonus_zs) || 3900,
+      svip_bonus_zs: parseInt(res.svip_bonus_zs) || 10000,
+      vip_discount: parseInt(res.vip_discount) || 90,
+      svip_discount: parseInt(res.svip_discount) || 80,
+      vip_queue_priority: parseInt(res.vip_queue_priority) || 1,
+      svip_queue_priority: parseInt(res.svip_queue_priority) || 2,
     }
   } catch {
     // use defaults
@@ -294,7 +350,32 @@ async function saveSysConfig() {
     await request(`/api/auth/admin/config/min_recharge`, {
       method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.min_recharge) }),
     })
-    ElMessage.success('ZS币 系统配置已更新')
+    // 保存VIP/SVIP配置
+    await request(`/api/auth/admin/config/vip_price`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.vip_price) }),
+    })
+    await request(`/api/auth/admin/config/svip_price`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.svip_price) }),
+    })
+    await request(`/api/auth/admin/config/vip_bonus_zs`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.vip_bonus_zs) }),
+    })
+    await request(`/api/auth/admin/config/svip_bonus_zs`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.svip_bonus_zs) }),
+    })
+    await request(`/api/auth/admin/config/vip_discount`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.vip_discount) }),
+    })
+    await request(`/api/auth/admin/config/svip_discount`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.svip_discount) }),
+    })
+    await request(`/api/auth/admin/config/vip_queue_priority`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.vip_queue_priority) }),
+    })
+    await request(`/api/auth/admin/config/svip_queue_priority`, {
+      method: 'PUT', headers, body: JSON.stringify({ config_value: String(config.svip_queue_priority) }),
+    })
+    ElMessage.success('系统配置已更新（含VIP/SVIP套餐配置）')
   } catch (e: any) {
     ElMessage.error(`保存失败：${e.message}`)
   } finally {

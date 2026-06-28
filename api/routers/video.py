@@ -32,7 +32,7 @@ from api.schemas.video import (
 )
 from api.tasks import task_manager, TaskType
 from api.auth.dependencies import (
-    check_daily_limit, increment_daily_usage, decrement_daily_usage,
+    check_daily_limit,
     freeze_balance, settle_generation, get_sys_config
 )
 from api.auth.schemas import UserInfo, UserDailyUsage
@@ -116,15 +116,13 @@ async def generate_video_sync(
     Returns path to generated video, duration, and file size.
     """
     user_id = _user.id
-    # Pre-deduct daily usage immediately at submission time
-    await increment_daily_usage(user_id)
-    # ZS币预冻结
+    user_role = _user.role
+    # ZS币预冻结（含VIP/SVIP折扣）
     frozen_zs = 0
     task_id_for_log = None
     if request_body.estimated_seconds:
-        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds)
+        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds, user_role)
         if not ok:
-            await decrement_daily_usage(user_id)
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
         frozen_zs = frozen
         task_id_for_log = f"sync_{int(datetime.now().timestamp())}_{user_id}"
@@ -219,10 +217,10 @@ async def generate_video_sync(
         # Convert path to URL
         video_url = path_to_url(request, result.video_path)
         
-        # ZS币结算（生成成功）
+        # ZS币结算（生成成功，应用折扣）
         if task_id_for_log and frozen_zs > 0:
             actual_seconds = int(result.duration)  # 向下取整到秒
-            await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True)
+            await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True, user_role=user_role)
         
         return VideoGenerateResponse(
             video_url=video_url,
@@ -233,9 +231,7 @@ async def generate_video_sync(
     except Exception as e:
         # ZS币退款（生成失败）
         if task_id_for_log and frozen_zs > 0:
-            await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
-        # Refund daily usage on unexpected errors
-        await decrement_daily_usage(user_id)
+            await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False, user_role=user_role)
         logger.error(f"Sync video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -265,15 +261,13 @@ async def generate_video_async(
     Returns task_id for tracking progress.
     """
     user_id = _user.id
-    # Pre-deduct daily usage immediately at submission time (prevents concurrent overuse)
-    await increment_daily_usage(user_id)
-    # ZS币预冻结
+    user_role = _user.role
+    # ZS币预冻结（含VIP/SVIP折扣）
     frozen_zs = 0
     task_id_for_log = None
     if request_body.estimated_seconds:
-        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds)
+        ok, frozen, msg = await freeze_balance(user_id, request_body.estimated_seconds, user_role)
         if not ok:
-            await decrement_daily_usage(user_id)
             raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail=msg)
         frozen_zs = frozen
         task_id_for_log = f"async_{int(datetime.now().timestamp())}_{user_id}"
@@ -374,15 +368,12 @@ async def generate_video_async(
             except asyncio.CancelledError:
                 # ZS币退款（取消任务时全额退还）
                 if task_id_for_log and frozen_zs > 0:
-                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
-                await decrement_daily_usage(user_id)
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False, user_role=user_role)
                 raise
             except Exception:
                 # ZS币退款（生成失败）
                 if task_id_for_log and frozen_zs > 0:
-                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False)
-                # Generation failed, refund the deducted daily usage
-                await decrement_daily_usage(user_id)
+                    await settle_generation(task_id_for_log, user_id, frozen_zs, 0, success=False, user_role=user_role)
                 raise
             
             # Get file size
@@ -391,11 +382,11 @@ async def generate_video_async(
             # Convert path to URL
             video_url = path_to_url(request, result.video_path)
             
-            # ZS币结算（生成成功）
+            # ZS币结算（生成成功，应用折扣）
             deducted_zs = 0
             if task_id_for_log and frozen_zs > 0:
                 actual_seconds = int(result.duration)  # 向下取整到秒
-                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True)
+                settle_result = await settle_generation(task_id_for_log, user_id, frozen_zs, actual_seconds, success=True, user_role=user_role)
                 deducted_zs = settle_result.get("deducted_zs", 0)
             
             # 将实际扣除的ZS币写入元数据
@@ -428,8 +419,6 @@ async def generate_video_async(
         )
         
     except Exception as e:
-        # Refund on unexpected errors during task creation / setup
-        await decrement_daily_usage(user_id)
         logger.error(f"Async video generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -461,6 +450,7 @@ async def generate_video_batch(
     - n_scenes and other shared config: Applied to all videos
     """
     user_id = _user.id
+    user_role = _user.role
     try:
         n_topics = len(request_body.topics)
         logger.info(f"Batch video generation: {n_topics} topics")
@@ -553,9 +543,6 @@ async def generate_video_batch(
                 try:
                     logger.info(f"Batch task {idx}/{total}: {topic}")
                     
-                    # Each video in batch consumes one daily quota
-                    await increment_daily_usage(user_id)
-                    
                     # Build per-video params
                     video_params = dict(shared_config)
                     video_params["text"] = topic
@@ -588,8 +575,6 @@ async def generate_video_batch(
                     logger.info(f"Batch task {idx}/{total} completed: {result.video_path}")
                     
                 except Exception as e:
-                    # Generation failed, refund the deducted daily usage for this video
-                    await decrement_daily_usage(user_id)
                     logger.error(f"Batch task {idx}/{total} failed: {e}")
                     errors.append({
                         "index": idx,

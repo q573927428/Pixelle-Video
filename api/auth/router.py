@@ -584,6 +584,14 @@ async def get_admin_config(admin: UserInfo = Depends(require_admin)):
     register_bonus = await get_sys_config("register_bonus", "600")
     min_recharge = await get_sys_config("min_recharge", "10")
     invite_bonus = await get_sys_config("invite_bonus", "200")
+    vip_price = await get_sys_config("vip_price", "29")
+    svip_price = await get_sys_config("svip_price", "89")
+    vip_bonus_zs = await get_sys_config("vip_bonus_zs", "3900")
+    svip_bonus_zs = await get_sys_config("svip_bonus_zs", "10000")
+    vip_discount = await get_sys_config("vip_discount", "90")
+    svip_discount = await get_sys_config("svip_discount", "80")
+    vip_queue_priority = await get_sys_config("vip_queue_priority", "1")
+    svip_queue_priority = await get_sys_config("svip_queue_priority", "2")
 
     return SysConfigResponse(
         zs_per_second=zs_per_second,
@@ -591,6 +599,14 @@ async def get_admin_config(admin: UserInfo = Depends(require_admin)):
         register_bonus=register_bonus,
         min_recharge=min_recharge,
         invite_bonus=invite_bonus,
+        vip_price=vip_price,
+        svip_price=svip_price,
+        vip_bonus_zs=vip_bonus_zs,
+        svip_bonus_zs=svip_bonus_zs,
+        vip_discount=vip_discount,
+        svip_discount=svip_discount,
+        vip_queue_priority=vip_queue_priority,
+        svip_queue_priority=svip_queue_priority,
     )
 
 
@@ -601,9 +617,12 @@ async def update_admin_config(
     admin: UserInfo = Depends(require_admin),
 ):
     """修改系统配置（管理员）
-    可修改：zs_per_second, exchange_rate, register_bonus, invite_bonus, min_recharge
+    可修改：zs_per_second, exchange_rate, register_bonus, invite_bonus, min_recharge,
+            vip_price, svip_price, vip_bonus_zs, svip_bonus_zs, vip_discount, svip_discount
     """
-    valid_keys = ["zs_per_second", "exchange_rate", "register_bonus", "invite_bonus", "min_recharge"]
+    valid_keys = ["zs_per_second", "exchange_rate", "register_bonus", "invite_bonus", "min_recharge",
+                  "vip_price", "svip_price", "vip_bonus_zs", "svip_bonus_zs", "vip_discount", "svip_discount",
+                  "vip_queue_priority", "svip_queue_priority"]
     if config_key not in valid_keys:
         raise HTTPException(status_code=400, detail=f"无效的配置键，允许的值: {valid_keys}")
 

@@ -60,6 +60,34 @@ export function useAuth() {
     return '普通用户'
   })
   const zsBalance = computed(() => currentUser.value?.zs_balance ?? 0)
+  const vipExpiresAt = computed(() => currentUser.value?.vip_expires_at ?? null)
+  
+  // VIP是否有效（角色为vip/svip且未过期）
+  const isVipEffective = computed(() => {
+    const role = currentUser.value?.role
+    if (role !== 'vip' && role !== 'svip') return false
+    if (!currentUser.value?.vip_expires_at) return false
+    return new Date(currentUser.value.vip_expires_at) > new Date()
+  })
+  
+  // 是否为会员（VIP或SVIP）
+  const isMember = computed(() => isVipEffective.value)
+  
+  // 用户折扣率（100=无折扣, 90=9折, 80=8折）
+  const userDiscount = computed(() => {
+    const role = currentUser.value?.role
+    if (role === 'svip') return 80
+    if (role === 'vip') return 90
+    return 100
+  })
+  
+  // 用户队列优先级
+  const userQueuePriority = computed(() => {
+    const role = currentUser.value?.role
+    if (role === 'svip') return 2
+    if (role === 'vip') return 1
+    return 0
+  })
 
   async function login(username: string, password: string): Promise<UserInfo> {
     const res = await request<{ access_token: string; refresh_token: string; user: UserInfo }>('/api/auth/login', {
@@ -181,6 +209,11 @@ export function useAuth() {
     isSvip,
     roleLabel,
     zsBalance,
+    vipExpiresAt,
+    isVipEffective,
+    isMember,
+    userDiscount,
+    userQueuePriority,
     login,
     loginByPhone,
     register,

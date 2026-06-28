@@ -122,16 +122,36 @@ async def decrement_daily_usage(user_id: int):
     pass
 
 
-# ====== ZS币 扣费核心逻辑 ======
+# ====== ZS币 扣费核心逻辑（含VIP/SVIP折扣支持）======
 
 
-async def freeze_balance(user_id: int, estimated_seconds: int) -> tuple[bool, int, str]:
+async def _get_user_discount(user_role: str) -> int:
     """
-    预冻结余额。
+    根据用户角色获取折扣率（百分比）。
+    返回：100=无折扣, 90=9折, 80=8折
+    """
+    if user_role == 'svip':
+        return int(await get_sys_config("svip_discount", "80"))
+    elif user_role == 'vip':
+        return int(await get_sys_config("vip_discount", "90"))
+    else:
+        return 100  # normal用户无折扣
+
+
+async def freeze_balance(user_id: int, estimated_seconds: int, user_role: str = 'normal') -> tuple[bool, int, str]:
+    """
+    预冻结余额（含角色折扣）。
+    VIP: 9折, SVIP: 8折, normal: 无折扣
     返回 (成功?, 冻结金额, 消息)
     """
     zs_per_sec = int(await get_sys_config("zs_per_second", "5"))
-    frozen = estimated_seconds * zs_per_sec  # 整数，无需 round
+    discount = await _get_user_discount(user_role)
+    # 冻结金额 = 预估秒数 × 每秒价格 × 折扣率 ÷ 100
+    frozen = estimated_seconds * zs_per_sec * discount // 100  # 整数运算，无精度问题
+    
+    if frozen == 0 and estimated_seconds > 0:
+        # 防止折扣后为0（极小概率），至少扣1
+        frozen = 1
     
     affected = await Database.execute(
         "UPDATE users SET zs_balance = zs_balance - %s WHERE id = %s AND zs_balance >= %s",
@@ -148,10 +168,11 @@ async def freeze_balance(user_id: int, estimated_seconds: int) -> tuple[bool, in
 
 
 async def settle_generation(task_id: str, user_id: int, frozen_zs: int,
-                            actual_seconds: int, success: bool) -> dict:
+                            actual_seconds: int, success: bool,
+                            user_role: str = 'normal') -> dict:
     """
-    结算生成任务：
-    - 成功：按实际时长扣费，退还差额
+    结算生成任务（含角色折扣）：
+    - 成功：按实际时长扣费（应用折扣），退还差额
     - 失败：全额退款
     
     Returns:
@@ -173,7 +194,13 @@ async def settle_generation(task_id: str, user_id: int, frozen_zs: int,
         return {"deducted_zs": 0, "frozen_zs": frozen_zs, "success": False}
     
     zs_per_sec = int(await get_sys_config("zs_per_second", "5"))
-    actual_cost = actual_seconds * zs_per_sec
+    discount = await _get_user_discount(user_role)
+    # 实际扣费 = 实际秒数 × 每秒价格 × 折扣率 ÷ 100
+    actual_cost = actual_seconds * zs_per_sec * discount // 100
+    
+    if actual_cost == 0 and actual_seconds > 0:
+        actual_cost = 1  # 至少扣1
+    
     refund = frozen_zs - actual_cost
     
     if refund > 0:

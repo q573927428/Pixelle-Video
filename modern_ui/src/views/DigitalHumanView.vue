@@ -62,6 +62,10 @@
                 <span>扣费说明</span>
                 <span>按实际视频时长 × 5 ZS币/秒 结算，多退少补</span>
               </div>
+              <div v-if="auth.userDiscount.value < 100" class="cost-row" style="color:#22c55e;font-size:12px;">
+                <span>会员折扣</span>
+                <span><strong>{{ auth.userDiscount.value / 10 }}折</strong>（原价 <s style="color:#888;">{{ estimatedOriginalCost }}</s> ZS币）</span>
+              </div>
               <div class="cost-row">
                 <span>预估消耗</span>
                 <span><strong style="color:#fbbf24;">{{ estimatedCost }}</strong> ZS币（预冻结）</span>
@@ -203,7 +207,16 @@ const estimatedSeconds = computed(() => {
   const cleanText = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
   return Math.ceil(cleanText.length / 4 / speed) || 0
 })
-const estimatedCost = computed(() => estimatedSeconds.value * 5)
+const estimatedCost = computed(() => {
+  const baseCost = estimatedSeconds.value * 5
+  const discount = auth.userDiscount.value
+  if (discount < 100) {
+    return Math.max(1, Math.floor(baseCost * discount / 100))
+  }
+  return baseCost
+})
+// 原价（无折扣时显示）
+const estimatedOriginalCost = computed(() => estimatedSeconds.value * 5)
 
 // 批量模式：计算每个文案/主题的费用
 const batchCostPreview = computed(() => {
