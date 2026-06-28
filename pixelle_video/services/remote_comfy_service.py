@@ -141,13 +141,6 @@ class RemoteComfyService:
         
         # Debug: log workflow structure
         logger.debug(f"Workflow '{workflow_id}' template has {len(workflow_template)} nodes")
-        for nid, ndef in list(workflow_template.items())[:10]:
-            logger.debug(f"  Node {nid}: class_type={ndef.get('class_type')}, title={ndef.get('_meta', {}).get('title')}")
-        logger.debug(f"API config keys: {list(api_config.keys())}")
-        if api_config.get("enabledParams"):
-            logger.debug(f"enabledParams: {api_config['enabledParams']}")
-        if api_config.get("customLabels"):
-            logger.debug(f"customLabels: {api_config['customLabels']}")
         
         # Strategy 0: Direct node scan - match by node title or input field names
         # This is the most robust approach, works with any workflow structure
@@ -407,6 +400,43 @@ class RemoteComfyService:
             logger.error(f"Failed to upload file to remote ComfyUI: {e}")
             return None
     
+    async def interrupt_workflow(self, prompt_id: str) -> bool:
+        """
+        Cancel/interrupt a running workflow on remote ComfyUI.
+        
+        Uses ComfyUI's native /api/interrupt endpoint via the panel proxy.
+        
+        Args:
+            prompt_id: The prompt_id of the running workflow
+            
+        Returns:
+            True if interrupt was successful, False otherwise
+        """
+        try:
+            client = await self._get_client()
+            # Try ComfyUI native interrupt via proxy
+            resp = await client.post(
+                f"{self.base_url}/api/comfy/proxy/interrupt",
+                timeout=10.0,
+            )
+            if resp.status_code == 200:
+                logger.info(f"✅ Interrupted workflow {prompt_id} on remote ComfyUI")
+                return True
+            # Try queue clear as fallback
+            resp2 = await client.post(
+                f"{self.base_url}/api/comfy/proxy/queue",
+                json={"clear": True},
+                timeout=10.0,
+            )
+            if resp2.status_code == 200:
+                logger.info(f"✅ Cleared queue on remote ComfyUI (prompt_id={prompt_id})")
+                return True
+            logger.warning(f"Interrupt returned status {resp.status_code}")
+            return False
+        except Exception as e:
+            logger.warning(f"Failed to interrupt remote workflow: {e}")
+            return False
+
     async def run_workflow(
         self,
         workflow_id: str,
@@ -477,8 +507,16 @@ class RemoteComfyService:
         
         logger.info(f"✅ Workflow submitted, prompt_id={prompt_id}")
         
-        # Get the task_id from ComfyUI history to check for errors
-        # Also check workflow result
+        # Store prompt_id in the local task for cancellation via contextvar
+        try:
+            from api.tasks.manager import current_task_id_var, task_manager
+            local_task_id = current_task_id_var.get()
+            if local_task_id:
+                task_manager.set_task_runninghub_id(local_task_id, prompt_id)
+                logger.info(f"🔗 Bound remote prompt_id '{prompt_id}' to local task {local_task_id} (cancel-ready)")
+        except Exception:
+            pass
+        
         # Step 2: Poll for results
         start_time = time.time()
         last_log_time = 0

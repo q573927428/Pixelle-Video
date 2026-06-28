@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 from pixelle_video.config import config_manager
+from pixelle_video.services.remote_comfy_service import RemoteComfyService
 
 from api.tasks import task_manager, Task, TaskStatus
 from api.dependencies import PixelleVideoDep
@@ -353,33 +354,48 @@ async def cancel_task(
             if task.user_id is not None:
                 raise HTTPException(status_code=401, detail="请先登录")
 
-        # Try to cancel on RunningHub using official openapi endpoint
-        runninghub_id = task_manager.get_runninghub_task_id(task_id)
-        if runninghub_id:
-            try:
-                comfyui_cfg = config_manager.get_comfyui_config()
-                rh_api_key = comfyui_cfg.get("runninghub_api_key") or ""
-                rh_url = "https://www.runninghub.cn"
-                payload = {
-                    "apiKey": rh_api_key,
-                    "taskId": runninghub_id,
-                }
-                async with httpx.AsyncClient(timeout=10) as client:
-                    cancel_resp = await client.post(
-                        f"{rh_url}/task/openapi/cancel",
-                        json=payload,
-                        headers={
-                            "Host": "www.runninghub.cn",
-                            "Authorization": f"Bearer {rh_api_key}",
-                            "Content-Type": "application/json",
-                        },
-                    )
-                    if cancel_resp.is_success:
-                        logger.info(f"RunningHub task {runninghub_id} cancelled successfully via openapi")
-                    else:
-                        logger.warning(f"RunningHub openapi cancel returned {cancel_resp.status_code}: {cancel_resp.text}")
-            except Exception as rh_e:
-                logger.warning(f"Failed to cancel RunningHub task {runninghub_id}: {rh_e}")
+        # Try to cancel on RunningHub or Remote ComfyUI
+        remote_id = task_manager.get_runninghub_task_id(task_id)
+        if remote_id:
+            comfyui_cfg = config_manager.get_comfyui_config()
+            remote_comfy_cfg = comfyui_cfg.get("remote_comfy", {})
+            remote_enabled = remote_comfy_cfg.get("enabled", False)
+            
+            if remote_enabled and remote_comfy_cfg.get("base_url"):
+                # Cancel on remote ComfyUI (zealman mirror)
+                try:
+                    remote_url = remote_comfy_cfg["base_url"]
+                    svc = RemoteComfyService(remote_url)
+                    await svc.interrupt_workflow(remote_id)
+                    await svc.close()
+                    logger.info(f"✅ Remote ComfyUI task interrupted: remote_id={remote_id}")
+                except Exception as e:
+                    logger.warning(f"Failed to interrupt remote ComfyUI: {e}")
+            else:
+                # Cancel on RunningHub
+                try:
+                    rh_api_key = comfyui_cfg.get("runninghub_api_key") or ""
+                    rh_url = "https://www.runninghub.cn"
+                    payload = {
+                        "apiKey": rh_api_key,
+                        "taskId": remote_id,
+                    }
+                    async with httpx.AsyncClient(timeout=10) as client:
+                        cancel_resp = await client.post(
+                            f"{rh_url}/task/openapi/cancel",
+                            json=payload,
+                            headers={
+                                "Host": "www.runninghub.cn",
+                                "Authorization": f"Bearer {rh_api_key}",
+                                "Content-Type": "application/json",
+                            },
+                        )
+                        if cancel_resp.is_success:
+                            logger.info(f"RunningHub task {remote_id} cancelled successfully via openapi")
+                        else:
+                            logger.warning(f"RunningHub openapi cancel returned {cancel_resp.status_code}: {cancel_resp.text}")
+                except Exception as rh_e:
+                    logger.warning(f"Failed to cancel RunningHub task {remote_id}: {rh_e}")
 
         # Cancel local task
         success = task_manager.cancel_task(task_id)
