@@ -86,16 +86,16 @@
 
           <!-- VoxCPM API 选项 -->
           <div v-if="form.tts_engine === 'voxcpm_api'" class="voxcpm-section">
-            <!-- <el-form-item label="CFG 强度">
+            <el-form-item label="CFG 强度" v-if="false">
               <el-slider v-model="form.voxcpm_cfg" :min="1.0" :max="3.0" :step="0.1" show-input />
-            </el-form-item> -->
-            <!-- <el-form-item label="控制指令">
+            </el-form-item>
+            <el-form-item label="控制指令" v-if="false">
               <el-input v-model="form.voxcpm_control_instruction" placeholder="例如：自然、温柔" />
-            </el-form-item> -->
-            <!-- <div class="checkbox-row">
+            </el-form-item>
+            <div class="checkbox-row" v-if="false">
               <el-checkbox v-model="form.voxcpm_normalize">归一化 Normalize</el-checkbox>
               <el-checkbox v-model="form.voxcpm_denoise">降噪 Denoise</el-checkbox>
-            </div> -->
+            </div>
               <el-form-item label="参考音频">
               <div class="upload-field-container">
                 <UploadBox category="ref_audio" accept="audio/*,.amr" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
@@ -132,11 +132,11 @@
 
         <!-- ComfyUI 模式 -->
         <div v-if="form.tts_inference_mode === 'comfyui'" class="soft-panel">
-          <!-- <el-form-item label="TTS 工作流">
+          <el-form-item label="TTS 工作流" v-if="false">
             <el-select v-model="form.tts_workflow" filterable clearable placeholder="选择 TTS 工作流" style="width:100%;">
               <el-option v-for="wf in ttsWorkflows" :key="wf.key" :label="wf.display_name" :value="wf.key" />
             </el-select>
-          </el-form-item> -->
+          </el-form-item>
           <el-form-item label="参考音频">
             <div class="upload-field-container">
                <UploadBox category="ref_audio" accept="audio/*,.amr" @upload="(f, c) => $emit('upload', f, c, 'digital_ref_audio')" @select-history="(c) => $emit('select-history', c)" />
