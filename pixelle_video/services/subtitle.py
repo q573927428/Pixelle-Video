@@ -93,46 +93,46 @@ class SubtitleService:
     字幕服务：生成 SRT 时间轴、Pillow 字幕帧图像
     """
 
-    # 默认字体路径（按优先级搜索）
+    # 默认字体路径（按优先级搜索）- 优先使用粗体，与前端预览保持一致
     DEFAULT_FONT_PATHS = [
-        # ===== 最高优先级：思源黑体 / 思源宋体 (安装脚本 install_chinese_fonts.sh 安装到 /usr/share/fonts/chinese/) =====
+        # ===== 最高优先级：思源黑体 / 思源宋体（安装脚本 install_chinese_fonts.sh 安装到 /usr/share/fonts/chinese/）=====
         "/usr/share/fonts/chinese/NotoSansSC-Bold.otf",
         "/usr/share/fonts/chinese/NotoSansSC-Regular.otf",
         "/usr/share/fonts/chinese/NotoSerifSC-Bold.otf",
         "/usr/share/fonts/chinese/NotoSerifSC-Regular.otf",
-        # Ubuntu / Debian (apt install fonts-noto-cjk)
+        # Ubuntu / Debian（apt install fonts-noto-cjk）
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansSC-Regular.otf",
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSerifCJK-Regular.ttc",
-        # CentOS / RHEL / Fedora (yum install google-noto-cjk-fonts)
+        # CentOS / RHEL / Fedora（yum install google-noto-cjk-fonts）
         "/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/google-noto-cjk/NotoSerifCJK-Regular.ttc",
-        # Alpine Linux (apk add font-noto-cjk)
+        # Alpine Linux（apk add font-noto-cjk）
         "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/noto-cjk/NotoSerifCJK-Regular.ttc",
         # Windows
-        "C:/Windows/Fonts/NotoSansSC-Bold.otf", 
-        "C:/Windows/Fonts/NotoSansSC-Regular.otf", 
+        "C:/Windows/Fonts/NotoSansSC-Bold.otf",
+        "C:/Windows/Fonts/NotoSansSC-Regular.otf",
         "C:/Windows/Fonts/NotoSerifSC-Bold.otf",
         "C:/Windows/Fonts/NotoSerifSC-Regular.otf",
         "C:/Windows/Fonts/simhei.ttf",  # 黑体
-        "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         "C:/Windows/Fonts/msyhbd.ttc",  # 微软雅黑粗体
+        "C:/Windows/Fonts/msyh.ttc",  # 微软雅黑
         # macOS
         "/System/Library/Fonts/PingFang.ttc",
         "/System/Library/Fonts/STHeiti Light.ttc",
         "/System/Library/Fonts/STSongti.ttc",
-        # Ubuntu / Debian 系统包 (apt install fonts-wqy-microhei)
+        # Ubuntu / Debian 系统包（apt install fonts-wqy-microhei）
         "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
         "/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc",
-        # CentOS / RHEL / Fedora 系统包 (yum install wqy-microhei-fonts)
+        # CentOS / RHEL / Fedora 系统包（yum install wqy-microhei-fonts）
         "/usr/share/fonts/wqy-microhei/wqy-microhei.ttc",
         "/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc",
         # 其他阿里/霞鹜字体安装位置
+        "/usr/share/fonts/chinese/LXGWWenKai-Bold.ttf",
         "/usr/share/fonts/chinese/AlibabaPuHuiTi-3-55-Regular.otf",
         "/usr/share/fonts/chinese/LXGWWenKai-Regular.ttf",
-        "/usr/share/fonts/chinese/LXGWWenKai-Bold.ttf",
         # 通用后备
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     ]
@@ -515,14 +515,9 @@ class SubtitleService:
         frames_dir = os.path.join(output_dir, "subtitle_frames")
         os.makedirs(frames_dir, exist_ok=True)
 
-        # 字体：优先使用粗体（Bold），以匹配 Canvas 预览的 font-weight 效果
+        # 字体：使用普通字体，与前端预览保持一致
         font_size = config.font_size
         font_path = self._font_path
-        if config.font_border_width > 0:
-            # 尝试加载 Bold 版本的字体
-            bold_path = self._find_bold_font(font_path)
-            if bold_path:
-                font_path = bold_path
         try:
             font = ImageFont.truetype(font_path, font_size)
         except Exception as e:
@@ -596,7 +591,7 @@ class SubtitleService:
             # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
                 # 水平居中：x 坐标是文本中心
-                line_x = base_x + offset_x
+                line_x = base_x + offset_x +10
                 # 垂直居中：计算每行的中心位置
                 # 背景框的中心是 bg_y1 + bg_height / 2
                 # 多行文本时，第一行的中心位置是：

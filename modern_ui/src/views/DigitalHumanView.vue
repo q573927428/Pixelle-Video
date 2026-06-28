@@ -535,16 +535,19 @@ function renderSubtitlePreview() {
   }
   if (currentLine) lines.push(currentLine)
 
-  // 行高 = ascent + descent (与后端 Pillow font.getmetrics() 保持一致)
-  // 对于中文字体，ascent + descent ≈ fontSize * 1.2
-  const lineHeight = Math.round(fontSize * 1.2)
+  // 模拟 Canvas 的字体 metrics 来获得更好的行高估算，与后端一致
+  const metrics = c.measureText('中')
+  const approximateAscent = metrics.actualBoundingBoxAscent || fontSize * 0.8
+  const approximateDescent = metrics.actualBoundingBoxDescent || fontSize * 0.2
+  const lineHeight = approximateAscent + approximateDescent // 与后端一致：ascent + descent
+  
   const maxLineWidth = Math.max(...lines.map(l => getLineWidth(l)))
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB
 
-  // 位置：底部向上 100px（1080p 尺寸），按比例缩放
+  // 位置：底部向上 50px（1080p 尺寸），按比例缩放，与后端保持一致
   const baseX = cw / 2 + offsetX
-  const baseY = ch - Math.round(100 * scale) + offsetY
+  const baseY = ch - Math.round(50 * scale) + offsetY
   const bgX = baseX - bgWidth / 2
   const bgY = baseY - bgHeight
 
@@ -576,9 +579,11 @@ function renderSubtitlePreview() {
 
   // 绘制文字（每行在背景框内居中，与后端 Pillow 渲染一致）
   c.fillStyle = cfg.font_color || '#FFFFFF'
+  // 与后端一致：添加 y_correction 补偿
+  const yCorrection = (approximateAscent + approximateDescent - fontSize) / 2
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight
+    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight + yCorrection + 2
     const lineWidth = getLineWidth(line)
     // 每行在背景框内居中
     const startX = bgX + (bgWidth - lineWidth) / 2

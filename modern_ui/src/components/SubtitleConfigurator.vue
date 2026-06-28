@@ -190,7 +190,7 @@ const presetStyles: PresetStyle[] = [
       background_opacity: 0.8,
       background_padding: '10 20',
       background_radius: 15,
-      font_border_width: 0,
+      font_border_width: 1,
     },
     preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0, bgColor: '#000000', bgAlpha: 0.8 },
   },
@@ -210,9 +210,7 @@ const presetStyles: PresetStyle[] = [
       font_color: '#FFFFFF',
       background_color: '#1a1a2e',
       background_opacity: 0.7,
-      background_padding: '8 16',
-      background_radius: 15,
-      font_border_width: 0,
+      font_border_width: 1,
     },
     preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0, bgColor: '#1a1a2e', bgAlpha: 0.7 },
   },
@@ -222,9 +220,7 @@ const presetStyles: PresetStyle[] = [
       font_color: '#FFFFFF',
       background_color: '#1890ff',
       background_opacity: 0.9,
-      background_padding: '10 20',
-      background_radius: 15,
-      font_border_width: 0,
+      font_border_width: 1,
     },
     preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0, bgColor: '#1890ff', bgAlpha: 0.9 },
   },
@@ -236,8 +232,6 @@ const presetStyles: PresetStyle[] = [
       font_border_width: 1,
       background_color: '#000000',
       background_opacity: 0.6,
-      background_padding: '6 14',
-      background_radius: 15,
     },
     preview: { fontColor: '#00FFCC', borderColor: '#00FFCC', borderWidth: 1, bgColor: '#000000', bgAlpha: 0.6 },
   },
@@ -245,7 +239,7 @@ const presetStyles: PresetStyle[] = [
     name: '简约灰调',
     config: {
       font_color: '#CCCCCC',
-      font_border_width: 0,
+      font_border_width: 1,
       background_opacity: 0,
     },
     preview: { fontColor: '#CCCCCC', borderColor: '#000000', borderWidth: 0, bgColor: '#000000', bgAlpha: 0 },
@@ -256,8 +250,6 @@ const presetStyles: PresetStyle[] = [
       font_color: '#FFFFFF',
       background_color: '#000000',
       background_opacity: 0.75,
-      background_padding: '6 16',
-      background_radius: 15,
       font_border_color: '#333333',
       font_border_width: 1,
     },
@@ -354,14 +346,20 @@ function renderSubtitlePreview() {
   }
   if (curLine) lines.push(curLine)
 
-  const lineHeight = Math.round(fontSize * 1.2)
+  // 模拟 Canvas 的字体 metrics 来获得更好的行高估算
+  const metrics = ctxSafe.measureText('中')
+  const approximateAscent = metrics.actualBoundingBoxAscent || fontSize * 0.8
+  const approximateDescent = metrics.actualBoundingBoxDescent || fontSize * 0.2
+  const lineHeight = approximateAscent + approximateDescent // 与后端一致：ascent + descent
+  
   const lineWidths = lines.map(l => getLineWidth(l))
   const maxLineWidth = Math.max(...lineWidths)
   const bgWidth = maxLineWidth + padL + padR
   const bgHeight = lines.length * lineHeight + padT + padB
-
+  
   const baseX = CANVAS_PREVIEW_WIDTH / 2 + offsetX
-  const baseY = CANVAS_PREVIEW_HEIGHT - 100 * scale + offsetY
+  const baseY = CANVAS_PREVIEW_HEIGHT - 50 * scale + offsetY // 与后端保持一致：video_height - 50 + offsetY
+  
   const bgX = baseX - bgWidth / 2
   const bgY = baseY - bgHeight
 
@@ -390,10 +388,12 @@ function renderSubtitlePreview() {
   }
 
   ctxSafe.fillStyle = cfg.font_color || '#FFFFFF'
-  // 每行垂直居中：与后端 Pillow 公式 line_y = bgY + (padT+padB)/2 + lineHeight/2 + i*lineHeight 一致
+  // 与后端一致：添加 y_correction 补偿
+  const yCorrection = (approximateAscent + approximateDescent - fontSize) / 2
+  // 每行垂直居中：与后端 Pillow 公式 line_y = bgY + (padT+padB)/2 + lineHeight/2 + i*lineHeight + y_correction 一致
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
-    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight
+    const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight + yCorrection + 2
     const lineWidth = getLineWidth(line)
     const startX = bgX + (bgWidth - lineWidth) / 2
     if (letterSpacing > 0 && line.length > 1) {
