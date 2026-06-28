@@ -67,18 +67,18 @@ class DigitalWorkflowConfig(BaseModel):
 class SubtitleRequestConfig(BaseModel):
     """字幕配置（与前端 SubtitleConfig 接口对应）"""
     enabled: bool = False
-    font_size: int = 48
+    font_size: int = 56
     font_color: str = "#FFFFFF"
-    font_family: str = "PingFang SC"
+    font_family: str = "NotoSansSC-Bold"
     position_x: int = 0
-    position_y: int = 0
+    position_y: int = -390
     max_width: int = 900
-    letter_spacing: int = 0
+    letter_spacing: int = 3
     background_color: str = "#000000"
-    background_opacity: float = 0.6
-    background_padding: str = "10 20"
-    background_radius: int = 8
-    font_border_width: int = 0
+    background_opacity: float = 0
+    background_padding: str = "15 25"
+    background_radius: int = 20
+    font_border_width: int = 1
     font_border_color: str = "#000000"
 
 

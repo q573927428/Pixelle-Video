@@ -173,8 +173,6 @@ const presetStyles: PresetStyle[] = [
       font_color: '#FFFFFF',
       background_color: '#000000',
       background_opacity: 0.8,
-      background_padding: '10 20',
-      background_radius: 15,
       font_border_width: 1,
     },
     preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0, bgColor: '#000000', bgAlpha: 0.8 },

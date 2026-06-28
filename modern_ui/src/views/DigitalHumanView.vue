@@ -287,7 +287,7 @@ const digitalForm = ref<DigitalForm>({
     enabled: false,
     font_size: 56,
     font_color: '#FFFFFF',
-    font_family: 'PingFang SC',
+    font_family: 'NotoSansSC-Bold',
     position_x: 0,
     position_y: -390,
     max_width: 900,
