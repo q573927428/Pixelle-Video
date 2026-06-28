@@ -591,7 +591,7 @@ class SubtitleService:
             # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
                 # 水平居中：x 坐标是文本中心
-                line_x = base_x + offset_x +10
+                line_x = base_x + offset_x + 10
                 # 垂直居中：计算每行的中心位置
                 # 背景框的中心是 bg_y1 + bg_height / 2
                 # 多行文本时，第一行的中心位置是：
