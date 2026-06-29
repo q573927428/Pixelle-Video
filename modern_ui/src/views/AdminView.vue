@@ -560,6 +560,10 @@ async function handleAdjustBalance() {
     ElMessage.success(`已${adjustBalanceType.value === 'add' ? '增加' : '减少'}用户「${adjustBalanceUser.value.username}」${amount} ZS币`)
     adjustBalanceDialogVisible.value = false
     loadUsers()
+    // 如果调整的是当前登录用户，同步刷新 UserMenu 中的余额
+    if (auth.currentUser.value?.id === userId) {
+      await auth.fetchMe()
+    }
   } catch (e: any) {
     ElMessage.error(`调整失败：${e.message}`)
   } finally {
