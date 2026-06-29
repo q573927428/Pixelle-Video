@@ -49,6 +49,7 @@ class ComfyUIConfig(BaseModel):
     runninghub_api_key: str = ""
     runninghub_concurrent_limit: int = 1
     runninghub_instance_type: str = ""
+    autodl_api_key: str = ""
     remote_comfy: RemoteComfyConfig = RemoteComfyConfig()
 
 
@@ -119,6 +120,7 @@ async def get_config(admin: UserInfo = Depends(require_admin)):
             runninghub_api_key=comfyui_cfg.get("runninghub_api_key", ""),
             runninghub_concurrent_limit=comfyui_cfg.get("runninghub_concurrent_limit", 1),
             runninghub_instance_type=comfyui_cfg.get("runninghub_instance_type") or "",
+            autodl_api_key=comfyui_cfg.get("autodl_api_key", ""),
             remote_comfy=RemoteComfyConfig(
                 enabled=rc.get("enabled", False),
                 base_url=rc.get("base_url", ""),
@@ -168,6 +170,10 @@ async def save_config(request: SaveConfigRequest, admin: UserInfo = Depends(requ
                 runninghub_concurrent_limit=request.comfyui.runninghub_concurrent_limit,
                 runninghub_instance_type=request.comfyui.runninghub_instance_type or "",
             )
+
+        # Save AutoDL API key (instance management token, separate from runninghub_api_key)
+        if request.comfyui.autodl_api_key:
+            config_manager.update({"comfyui": {"autodl_api_key": request.comfyui.autodl_api_key}})
 
         # Save remote ComfyUI config
         rc = request.comfyui.remote_comfy

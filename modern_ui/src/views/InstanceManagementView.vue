@@ -329,10 +329,11 @@ function isMaster(uuid: string) {
   return masterUuid.value && uuid === masterUuid.value
 }
 
-// 打开创建弹窗时自动填充实例名称序号
+// 打开创建弹窗时自动填充实例名称序号和 AutoDL Token
 watch(showCreateDialog, (val) => {
   if (val) {
     createName.value = generateNextInstanceName()
+    createToken.value = listToken.value  // 自动填充配置中的 AutoDL Token
   }
 })
 
@@ -351,6 +352,11 @@ onMounted(async () => {
       if (match) {
         masterUuid.value = 'pro-' + match[1]
       }
+    }
+    // 从配置中读取 AutoDL API Key 作为默认 Token
+    if (cfg.comfyui?.autodl_api_key) {
+      listToken.value = cfg.comfyui.autodl_api_key
+      localStorage.setItem('pixelle_autodl_token', listToken.value)
     }
   } catch (_) {}
   await refreshScalingStatus()

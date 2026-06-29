@@ -269,11 +269,11 @@ class Database:
                     "daily_limit = 1 "
                     "WHERE role IN ('vip', 'svip')"
                 )
-                cleared_count = cursor.rowcount
-                if cleared_count > 0:
-                    logger.info(f"✅ 已清除 {cleared_count} 个会员用户（vip/svip → normal），统一转为按次计费模式")
-                else:
-                    logger.info("ℹ️ 无会员用户需要清理（已全部为普通用户）")
+                # cleared_count = cursor.rowcount
+                # if cleared_count > 0:
+                #     logger.info(f"✅ 已清除 {cleared_count} 个会员用户（vip/svip → normal），统一转为按次计费模式")
+                # else:
+                #     logger.info("ℹ️ 无会员用户需要清理（已全部为普通用户）")
             
             # Check if vip_expires_at column exists
             cursor.execute(

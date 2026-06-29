@@ -100,9 +100,26 @@ class AutoDLInstanceManager:
             },
             timeout=30.0,
         )
-        data = resp.json()
+        # 检查 HTTP 状态码，处理非 2xx 响应
+        if resp.status_code >= 400:
+            try:
+                error_body = resp.text
+            except Exception:
+                error_body = "(unable to read response body)"
+            raise InstanceActionError(
+                f"List instances failed: HTTP {resp.status_code} - {error_body[:500]}"
+            )
+        try:
+            data = resp.json()
+        except Exception as e:
+            raise InstanceActionError(
+                f"List instances failed: invalid JSON response (HTTP {resp.status_code}): {e}"
+            )
         if not data.get("success"):
-            raise InstanceActionError(f"List instances failed: {data.get('message', 'unknown error')}")
+            raise InstanceActionError(
+                f"List instances failed: {data.get('message', 'unknown error')} "
+                f"(HTTP {resp.status_code})"
+            )
         return data
     
     # ---- Instance Status ----
@@ -566,11 +583,13 @@ class AutoScalingMonitor:
         idle_shutdown_minutes: int = 10,
         idle_release_days: int = 7,
         check_interval_seconds: int = 60,
+        max_jobs_per_instance: int = 2,
     ):
         self.panel_base_url = panel_base_url
         self.idle_shutdown_minutes = idle_shutdown_minutes
         self.idle_release_days = idle_release_days
         self.check_interval_seconds = check_interval_seconds
+        self.max_jobs_per_instance = max_jobs_per_instance  # 每台实例最大并发任务数
         # 主控机实例 UUID（永远不会自动关机/释放）
         self._master_instance_uuid: Optional[str] = None
         
@@ -589,6 +608,14 @@ class AutoScalingMonitor:
         # 日志目录
         self._log_dir = Path("output") / "instance_logs"
         self._log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # ===== 幂等开机追踪（多实例并发支持）=====
+        # 记录正在开机中的实例 UUID 集合，允许多个不同实例并发开机
+        self._pending_power_ons: set[str] = set()
+        # 每个开机中实例对应的异步事件（dict: instance_uuid -> Event）
+        self._power_on_events: dict[str, asyncio.Event] = {}
+        # 每个开机中实例完成后的结果缓存（dict: instance_uuid -> (mirror_url, instance_uuid) or None）
+        self._power_on_results: dict[str, Optional[tuple[str, str]]] = {}
     
     async def start(self, token: str = ""):
         """启动监控"""
@@ -715,12 +742,18 @@ class AutoScalingMonitor:
         self,
         token: str = "",
         max_instances: int = 5,
+        skip_uuids: Optional[set[str]] = None,
     ) -> Optional[str]:
         """
-        自动开机一台关机中的镜像机
+        自动开机一台关机中的镜像机，支持跳过已经在开机中的实例。
+        
+        Args:
+            token: AutoDL Token
+            max_instances: 最大实例数（保留参数，兼容旧接口）
+            skip_uuids: 需要跳过的实例 UUID 集合（已在开机中或已尝试过的）
         
         Returns:
-            开机的实例 UUID，如果没有可用关机实例返回 None
+            开机的实例 UUID，如果没有可用的关机实例返回 None
         """
         token = token or self._default_token
         if not token:
@@ -755,8 +788,17 @@ class AutoScalingMonitor:
             logger.warning("No shutdown instances available for auto power-on")
             return None
         
+        # 过滤掉需要跳过的实例（已在开机中的）
+        candidates = [
+            inst for inst in shutdown_instances
+            if skip_uuids is None or inst.instance_uuid not in skip_uuids
+        ]
+        if not candidates:
+            logger.warning("All shutdown instances are already being powered on or excluded")
+            return None
+        
         # 选一台关机最久的
-        target = min(shutdown_instances, key=lambda x: x.created_at)
+        target = min(candidates, key=lambda x: x.created_at)
         
         logger.info(f"🔌 Auto power-on instance {target.name} ({target.instance_uuid})")
         try:
@@ -787,7 +829,8 @@ class AutoScalingMonitor:
             max_wait: 最大等待时间
         
         Returns:
-            镜像机面板 URL，失败返回 None
+            镜像机面板 URL，仅当实例开机 AND ComfyUI 都就绪时才返回
+            任一环节失败返回 None
         """
         token = token or self._default_token
         inst = self.instances.get(instance_uuid)
@@ -806,25 +849,30 @@ class AutoScalingMonitor:
         inst.mirror_url = mirror_url
         inst.status = "running"
         
-        # 2. 启动 ComfyUI
+        # 2. 启动 ComfyUI 并等待它完全就绪
         if start_comfyui:
             logger.info(f"🚀 Starting ComfyUI on {mirror_url}")
             try:
                 await self._mirror_controller.start_comfyui(mirror_url)
                 inst.comfy_status = "starting"
                 
-                # 等待 ComfyUI 就绪
+                # 等待 ComfyUI 就绪（会阻塞直到 running 或超时）
                 ready = await self._mirror_controller.wait_for_comfy_ready(mirror_url)
                 if ready:
                     inst.comfy_status = "running"
                     logger.info(f"✅ ComfyUI ready on {mirror_url}")
+                    return mirror_url  # ✅ 实例 + ComfyUI 都就绪
                 else:
-                    logger.warning(f"⚠️ ComfyUI start timeout on {mirror_url}")
+                    # ComfyUI 启动超时，实例不可用
+                    logger.warning(f"⚠️ ComfyUI start timeout on {mirror_url}, instance not ready")
                     inst.comfy_status = "stopped"
+                    return None  # ❌ 返回 None 表示未就绪
             except Exception as e:
                 logger.error(f"Failed to start ComfyUI on {mirror_url}: {e}")
                 inst.comfy_status = "stopped"
+                return None  # ❌ 返回 None 表示未就绪
         
+        # 如果没有 start_comfyui，直接返回
         return mirror_url
     
     # ---- 自动关机 ----
@@ -903,47 +951,226 @@ class AutoScalingMonitor:
     
     # ---- 智能扩缩容主逻辑 ----
     
-    async def ensure_ready_instance(self, token: str = "") -> Optional[str]:
+    async def ensure_ready_instance(self, token: str = "") -> Optional[tuple[str, str]]:
         """
         核心方法：确保有一台就绪的镜像机可用。
         
-        1. 检查是否有空闲运行中的实例（ComfyUI running）
-        2. 有 -> 返回其 mirror_url
-        3. 没有 -> 尝试自动开机一台
-        4. 等待开机 -> 启动 ComfyUI -> 返回 mirror_url
+        策略按以下顺序：
+        
+        阶段1 - 立即检查：找空闲/有容量实例 -> 直接返回
+        阶段2 - 短时轮询(30s)：等现有满载实例释放槽位 -> 返回
+        阶段3 - 等待已有开机：如果有其他实例正在开机中，等一台完成 -> 检查容量
+        阶段4 - 发起新开机：没有等待中的开机，也没有容量释放 -> 关机开机
+        阶段5 - 开机完成后容量仍不足 -> 继续启动下一台关机实例
+        
+        v2 修复：支持多台关机实例并发自动开机。
+        原版 Bug：_pending_power_on 单槽设计导致后续所有任务都阻塞等待同一台实例，
+        开机完成后所有任务扎堆到同一台实例上，其他关机实例永远不会被启动。
         
         Returns:
-            就绪的镜像机面板 URL，如果无法获取返回 None
+            (mirror_url, instance_uuid) 或 None
         """
         token = token or self._default_token
         
-        # 1. 找空闲实例
+        # ===== 阶段1：立即检查是否有可用容量 =====
+        result = self._find_available_instance()
+        if result:
+            return result
+        
+        # ===== 阶段2：短时轮询等待现有实例释放容量（30秒内） =====
+        POLL_COUNT = 6
+        POLL_INTERVAL = 5
+        for i in range(POLL_COUNT):
+            await asyncio.sleep(POLL_INTERVAL)
+            result = self._find_available_instance()
+            if result:
+                logger.info(f"⏳ Waited {POLL_INTERVAL * (i+1)}s, instance capacity freed up!")
+                return result
+        
+        # ===== 阶段3：如果有其他任务已在开机中，等待一台完成 =====
+        # 可能有多个实例同时在开机（因为 Phase 4 允许多并发），
+        # 我们等待任意一个完成，然后检查容量是否足够。
+        # 如果依然不够，会走到 Phase 4/5 继续启动更多实例。
+        if self._pending_power_ons:
+            logger.info(f"⏳ Other instances already powering on ({len(self._pending_power_ons)} pending), waiting for one to complete...")
+            
+            # 等待已有的开机事件中任意一个完成
+            # 收集所有事件的 wait 协程
+            wait_tasks = []
+            for puuid in list(self._pending_power_ons):
+                event = self._power_on_events.get(puuid)
+                if event:
+                    wait_tasks.append(event.wait())
+            
+            if wait_tasks:
+                # 等待任意一个完成（只要有一台就绪就唤醒）
+                done_set, _ = await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
+                logger.info(f"⏳ At least one pending power-on completed, checking capacity... ({len(done_set)} of {len(wait_tasks)} completed)")
+                
+                # 检查是否有可用的开机结果
+                for puuid in list(self._pending_power_ons):
+                    result = self._power_on_results.get(puuid)
+                    if result:
+                        logger.info(f"✅ Found completed power-on result: {result}")
+                        return result
+            
+            # 开机完成后再检查是否有容量释放
+            result = self._find_available_instance()
+            if result:
+                return result
+            
+            # 还有开机中的实例继续等待（但先尝试自己开一台新的，避免串行等待）
+            # 如果所有 pending 都在启动中但还没完成，我们不走无限等待，
+            # 而是继续 Phase 4 尝试启动新的关机实例
+            if self._pending_power_ons:
+                logger.info(f"⏳ {len(self._pending_power_ons)} instances still powering on, but will try to start another too")
+        
+        # ===== 阶段4：发起新开机 =====
+        logger.info("🔄 No capacity freed up, starting auto power-on for a shutdown instance...")
+        
+        # 使用 skip_uuids 跳过已经在开机中的实例
+        instance_uuid = await self.auto_power_on(token, skip_uuids=self._pending_power_ons)
+        if not instance_uuid:
+            logger.error("❌ No shutdown instance available for auto power-on")
+            return None
+        
+        # 注册到多实例幂等保护集
+        self._pending_power_ons.add(instance_uuid)
+        if instance_uuid not in self._power_on_events:
+            self._power_on_events[instance_uuid] = asyncio.Event()
+        self._power_on_results[instance_uuid] = None
+        
+        power_on_event = self._power_on_events[instance_uuid]
+        power_on_event.clear()
+        
+        try:
+            mirror_url = await self.wait_and_setup_instance(instance_uuid, token)
+            if not mirror_url:
+                logger.error(f"❌ Instance {instance_uuid} failed to become ready")
+                self._power_on_results[instance_uuid] = None
+                return None
+            
+            result = (mirror_url, instance_uuid)
+            self._power_on_results[instance_uuid] = result
+            logger.info(f"✅ Auto-powered and ready: {mirror_url} (instance={instance_uuid})")
+            
+            # ===== 阶段5：检查容量是否仍然不足，如果是则继续启动下一台 =====
+            # 即使这一台已经就绪，如果当前总容量仍然不够（例如5个任务同时涌入，
+            # 1台实例只有3个槽位），会继续后台启动下一台关机实例
+            running = self.get_running_instances()
+            total_capacity = len(running) * self.max_jobs_per_instance
+            total_pending = sum(1 for i in self.instances.values() if i.status == "starting")
+            total_pending_or_running = len(running) + total_pending
+            
+            # 检查还有多少关机实例可以启动
+            available_shutdown = len([
+                i for i in self.get_shutdown_instances()
+                if i.instance_uuid not in self._pending_power_ons
+            ])
+            
+            if available_shutdown > 0 and total_pending_or_running < 3:  # 最多启动到3台
+                logger.info(
+                    f"🔍 Capacity check: running={len(running)} pending={total_pending} "
+                    f"shutdown_available={available_shutdown}, starting next instance..."
+                )
+                # 在后台启动下一台，不阻塞当前任务返回
+                asyncio.create_task(self._background_power_on_next(token))
+            
+            return result
+        finally:
+            if power_on_event:
+                power_on_event.set()
+            # 注意：不从 _pending_power_ons 移除，避免重复开机
+            # 但理论上实例状态已变为 running，get_shutdown_instances 不会再返回它
+    
+    async def _background_power_on_next(self, token: str):
+        """
+        后台启动下一台关机实例（异步非阻塞）。
+        当检测到容量仍然不足时，在后台启动额外的关机实例。
+        注意：这个方法的调用者已经拿到了一台可用实例，所以可以安全地在后台继续启动。
+        """
+        try:
+            # 先检查是否真的还需要更多实例
+            result = self._find_available_instance()
+            if result:
+                logger.info("⏭️ Background power-on skipped: capacity already sufficient")
+                return
+            
+            # 跳过已经在开机中的
+            instance_uuid = await self.auto_power_on(token, skip_uuids=self._pending_power_ons)
+            if not instance_uuid:
+                logger.info("⏭️ Background power-on skipped: no more shutdown instances")
+                return
+            
+            # 注册到多实例幂等保护集
+            self._pending_power_ons.add(instance_uuid)
+            if instance_uuid not in self._power_on_events:
+                self._power_on_events[instance_uuid] = asyncio.Event()
+            self._power_on_results[instance_uuid] = None
+            
+            logger.info(f"🔌 Background power-on: instance {instance_uuid}")
+            mirror_url = await self.wait_and_setup_instance(instance_uuid, token)
+            if mirror_url:
+                result = (mirror_url, instance_uuid)
+                self._power_on_results[instance_uuid] = result
+                logger.info(f"✅ Background power-on complete: {mirror_url} (instance={instance_uuid})")
+                
+                # 如果还不够，继续递归启动下一台
+                available_shutdown = len([
+                    i for i in self.get_shutdown_instances()
+                    if i.instance_uuid not in self._pending_power_ons
+                ])
+                total_running_or_starting = len(self.get_running_instances()) + len([
+                    i for i in self.instances.values() if i.status == "starting"
+                ])
+                if available_shutdown > 0 and total_running_or_starting < 3:
+                    asyncio.create_task(self._background_power_on_next(token))
+            else:
+                logger.warning(f"❌ Background power-on failed for {instance_uuid}")
+                self._power_on_results[instance_uuid] = None
+            
+            # 触发事件通知等待者
+            event = self._power_on_events.get(instance_uuid)
+            if event:
+                event.set()
+                
+        except Exception as e:
+            logger.error(f"Background power-on error: {e}")
+
+    def _find_available_instance(self) -> Optional[tuple[str, str]]:
+        """
+        查找当前可用的实例（同步方法，无阻塞）
+        1. 优先找空闲实例（current_jobs==0 且 comfy running）
+        2. 找有容量且 ComfyUI 已就绪的实例
+        注意：ComfyUI 必须为 running 状态才会分配任务
+        """
+        # 1. 找空闲实例（current_jobs=0 且 comfy running）
         idle = self.get_idle_instances()
         if idle:
             target = idle[0]
             logger.info(f"✅ Found idle instance {target.name}: {target.mirror_url}")
-            return target.mirror_url
+            return (target.mirror_url, target.instance_uuid)
         
-        # 2. 找 running 中有任务的实例（看是否还有能力接收）
+        # 2. 找 running 中负载未满且 ComfyUI 就绪的实例
         running = self.get_running_instances()
         if running:
-            # 如果 running 实例很多且任务少，选任务最少的
-            min_jobs = min(inst.current_jobs for inst in running)
-            if min_jobs < 2:
-                target = [i for i in running if i.current_jobs == min_jobs][0]
-                logger.info(f"✅ Using busy-but-available instance {target.name} (jobs={target.current_jobs})")
-                return target.mirror_url
+            # 必须同时满足：有空余槽位 + ComfyUI 已就绪
+            available = [
+                i for i in running
+                if i.current_jobs < self.max_jobs_per_instance
+                and i.comfy_status == "running"  # ComfyUI 必须就绪才能接任务
+            ]
+            if available:
+                min_jobs = min(inst.current_jobs for inst in available)
+                target = [i for i in available if i.current_jobs == min_jobs][0]
+                logger.info(
+                    f"✅ Using available instance {target.name} "
+                    f"(jobs={target.current_jobs}/{self.max_jobs_per_instance}, "
+                    f"comfy={target.comfy_status})"
+                )
+                return (target.mirror_url, target.instance_uuid)
         
-        # 3. 尝试自动开机
-        logger.info("🔄 No ready instance, trying auto power-on...")
-        instance_uuid = await self.auto_power_on(token)
-        if not instance_uuid:
-            logger.error("❌ No instance available for auto power-on")
-            return None
-        
-        # 4. 等待就绪
-        mirror_url = await self.wait_and_setup_instance(instance_uuid, token)
-        return mirror_url
+        return None
     
     # ---- 后台监控循环 ----
     

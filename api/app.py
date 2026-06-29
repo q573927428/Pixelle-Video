@@ -91,14 +91,15 @@ async def lifespan(app: FastAPI):
         comfyui_cfg = config_manager.get_comfyui_config()
         rc = comfyui_cfg.get("remote_comfy", {})
         panel_base_url = rc.get("base_url", "")
-        token = comfyui_cfg.get("runninghub_api_key", "")
+        # 仅使用 autodl_api_key，与 runninghub_api_key 完全独立
+        token = comfyui_cfg.get("autodl_api_key", "")
         if panel_base_url and token:
             monitor = get_global_monitor()
             monitor.panel_base_url = panel_base_url
             await monitor.start(token=token)
             logger.info("✅ Auto-scaling monitor auto-started on server boot")
         elif panel_base_url and not token:
-            logger.warning("⚠️ Auto-scaling monitor not started: AutoDL token not configured (runninghub_api_key)")
+            logger.warning("⚠️ Auto-scaling monitor not started: AutoDL token not configured (autodl_api_key)")
         else:
             logger.info("ℹ️ Auto-scaling monitor not started: remote_comfy panel not configured")
     except Exception as e:

@@ -253,6 +253,7 @@ export interface ComfyUIConfig {
   runninghub_api_key: string
   runninghub_concurrent_limit: number
   runninghub_instance_type: string
+  autodl_api_key: string
   remote_comfy: RemoteComfyConfig
 }
 

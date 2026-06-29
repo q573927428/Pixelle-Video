@@ -594,17 +594,26 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
     if remote_enabled and remote_base_url:
         logger.info(f"🌐 Using remote ComfyUI mode: {remote_base_url}")
         
-        # ===== [实例管理] 自动确保有就绪镜像机 =====
+        # ===== [实例管理] 自动确保有就绪镜像机并获取动态地址 =====
+        assigned_instance_uuid = None
+        effective_base_url = remote_base_url  # 默认使用主控机地址
+        monitor = None  # 预初始化，确保后续引用安全
+        
         try:
             from pixelle_video.services.instance_manager import get_global_monitor
             monitor = get_global_monitor()
             if monitor._running:
-                # 使用 AutoDL Token（从 comfyui 配置获取）
                 comfyui_cfg_all = config_manager.get_comfyui_config()
-                autodl_token = comfyui_cfg_all.get("runninghub_api_key", "")
-                ready_mirror_url = await monitor.ensure_ready_instance(token=autodl_token)
-                if ready_mirror_url:
-                    logger.info(f"✅ [实例管理] 就绪镜像机: {ready_mirror_url}")
+                # 使用 autodl_api_key 作为实例管理 Token，与 runninghub_api_key 完全独立
+                autodl_token = comfyui_cfg_all.get("autodl_api_key") or monitor._default_token or ""
+                result = await monitor.ensure_ready_instance(token=autodl_token)
+                if result:
+                    dynamic_mirror_url, assigned_instance_uuid = result
+                    # 使用动态分配的镜像机地址，而不是固定的主控机地址
+                    effective_base_url = dynamic_mirror_url
+                    # 通知 monitor 该实例有新的任务
+                    monitor.on_task_submitted(assigned_instance_uuid)
+                    logger.info(f"✅ [实例管理] 分配镜像机: {dynamic_mirror_url} (instance={assigned_instance_uuid})")
                 else:
                     logger.warning("⚠️ [实例管理] 无法获取就绪镜像机，使用默认面板地址")
             else:
@@ -619,8 +628,8 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
         # Generate TTS locally first
         await _run_tts(pixelle_video, request_body, generated_text, audio_path)
         
-        # Create remote ComfyUI service
-        remote_svc = RemoteComfyService(remote_base_url)
+        # Create remote ComfyUI service with the dynamically assigned mirror URL
+        remote_svc = RemoteComfyService(effective_base_url)
         try:
             if request_body.mode == "customize":
                 # 口播模式: 人物图 + 音频 → 直接走 digital_combination 生成口播视频
@@ -664,6 +673,12 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
             
             return final_path
         finally:
+            # 无论成功还是失败，都确保任务计数被释放
+            if assigned_instance_uuid and monitor is not None and monitor._running:
+                try:
+                    monitor.on_task_completed(assigned_instance_uuid)
+                except Exception as e:
+                    logger.warning(f"⚠️ [实例管理] on_task_completed 异常: {e}")
             await remote_svc.close()
 
     # Normalize API workflow paths: ensure they have the "api/" prefix expected by media service

@@ -135,6 +135,7 @@ class ConfigManager:
             "runninghub_api_key": self.config.comfyui.runninghub_api_key,
             "runninghub_concurrent_limit": self.config.comfyui.runninghub_concurrent_limit,
             "runninghub_instance_type": self.config.comfyui.runninghub_instance_type,
+            "autodl_api_key": self.config.comfyui.autodl_api_key,
             "remote_comfy": {
                 "enabled": rc.enabled,
                 "base_url": rc.base_url,

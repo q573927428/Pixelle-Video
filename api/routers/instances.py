@@ -469,17 +469,20 @@ async def auto_scaling_ensure_ready(
         
         actual_token = token or comfyui_cfg.get("runninghub_api_key", "")
         
-        mirror_url = await monitor.ensure_ready_instance(token=actual_token)
-        if mirror_url:
+        result = await monitor.ensure_ready_instance(token=actual_token)
+        if result:
+            mirror_url, instance_uuid = result
             return {
                 "success": True,
                 "mirror_url": mirror_url,
+                "instance_uuid": instance_uuid,
                 "message": "就绪的镜像机可用",
             }
         else:
             return {
                 "success": False,
                 "mirror_url": None,
+                "instance_uuid": None,
                 "message": "无法获取就绪的镜像机",
             }
     except Exception as e:
