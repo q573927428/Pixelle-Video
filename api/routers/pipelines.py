@@ -126,6 +126,18 @@ class DigitalHumanRequest(BaseModel):
     pip_mix_config: dict[str, Any] = Field(default_factory=dict)
 
 
+def _get_user_priority(role: str) -> int:
+    """
+    根据用户角色获取队列优先级。
+    0 = 普通用户, 1 = VIP, 2 = SVIP
+    """
+    if role == "svip":
+        return 2
+    if role == "vip":
+        return 1
+    return 0
+
+
 def _is_api_workflow(workflow_key: str | None) -> bool:
     return bool(workflow_key and workflow_key.startswith("api/"))
 
@@ -561,7 +573,13 @@ def _burn_subtitles_sync(
         return video_path
 
 
-async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalHumanRequest) -> str:
+async def _run_digital_human_pipeline(
+    pixelle_video: Any,
+    request_body: DigitalHumanRequest,
+    user_id: str = "",
+    priority: int = 0,
+    task_id: str = "",
+) -> str:
     task_dir, _task_id = create_task_output_dir()
     final_video_path = os.path.join(task_dir, "final.mp4")
     audio_path = os.path.join(task_dir, "narration.mp3")
@@ -606,20 +624,33 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
                 comfyui_cfg_all = config_manager.get_comfyui_config()
                 # 使用 autodl_api_key 作为实例管理 Token，与 runninghub_api_key 完全独立
                 autodl_token = comfyui_cfg_all.get("autodl_api_key") or monitor._default_token or ""
-                result = await monitor.ensure_ready_instance(token=autodl_token)
+                # ⭐ 使用优先级队列调度（新版本）
+                # 如果任务已经被 task_manager 创建，使用其 task_id
+                task_id_for_queue = task_id if task_id else ""
+                if not task_id_for_queue:
+                    import uuid
+                    task_id_for_queue = str(uuid.uuid4())
+                result = await monitor.enqueue_and_wait(
+                    task_id=task_id_for_queue,
+                    user_id=user_id,
+                    priority=priority,
+                    token=autodl_token,
+                )
                 if result:
                     dynamic_mirror_url, assigned_instance_uuid = result
                     # 使用动态分配的镜像机地址，而不是固定的主控机地址
                     effective_base_url = dynamic_mirror_url
                     # 通知 monitor 该实例有新的任务
                     monitor.on_task_submitted(assigned_instance_uuid)
-                    logger.info(f"✅ [实例管理] 分配镜像机: {dynamic_mirror_url} (instance={assigned_instance_uuid})")
+                    logger.info(f"✅ [实例管理] 优先级队列分配镜像机: {dynamic_mirror_url} (instance={assigned_instance_uuid}, priority={priority})")
                 else:
-                    logger.warning("⚠️ [实例管理] 无法获取就绪镜像机，使用默认面板地址")
+                    # ⭐ 如果 enqueue_and_wait 返回 None（任务被取消/超时）
+                    # 不应该降级使用默认面板，而是让任务失败，保证排队机制的完整性
+                    logger.warning("⚠️ [实例管理] 无法获取就绪镜像机")
             else:
                 logger.info("⏹️ [实例管理] 自动扩缩容未启动，跳过")
         except Exception as e:
-            logger.warning(f"⚠️ [实例管理] ensure_ready_instance 异常，继续使用默认面板: {e}")
+            logger.warning(f"⚠️ [实例管理] enqueue_and_wait 异常，继续使用默认面板: {e}")
         
         # Get workflow IDs from config:
         compose_workflow_id = rc.get("customize_workflow_id", "digital_customize")
@@ -1135,7 +1166,12 @@ async def generate_digital_human_async(
             nonlocal frozen_zs, task_id_for_log
             task_manager.update_progress(task.task_id, 80, 100, "preparing")
             try:
-                final_path = await _run_digital_human_pipeline(pixelle_video, request_body)
+                final_path = await _run_digital_human_pipeline(
+                    pixelle_video, request_body,
+                    user_id=str(user_id),
+                    priority=_get_user_priority(_user.role),
+                    task_id=task.task_id,
+                )
             except asyncio.CancelledError:
                 # ZS币退款（取消任务时全额退还）
                 if task_id_for_log and frozen_zs > 0:

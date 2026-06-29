@@ -8,9 +8,11 @@ Instance Manager - AutoDL Instance Management & Auto-Scaling Service
 2. 镜像机 ComfyUI 控制：start/stop/comfy-status/versions/switch-version/interrupt/free
 3. 任务调度：空闲检测、自动开机、自动关机、自动释放
 4. 空闲监控：无任务时自动 power_off，连续7天无任务自动释放
+5. 优先级队列：支持 VIP/SVIP 优先排队，根据队列深度自动扩容
 """
 
 import asyncio
+import heapq
 import time
 import os
 from pathlib import Path
@@ -556,6 +558,109 @@ class InstanceState:
 
 
 # ========================================================================
+# Priority Task Queue
+# ========================================================================
+
+class QueuedTask:
+    """
+    优先级队列中的任务项。
+    
+    使用 heapq 排序，排序规则：
+    1. 优先级高（priority 值大）的排在前面
+    2. 同优先级按入队时间（enqueued_at）FIFO
+    """
+    
+    def __init__(self, task_id: str, user_id: str, priority: int = 0):
+        self.task_id = task_id
+        self.user_id = user_id
+        # priority: 0=普通用户, 1=VIP, 2=SVIP
+        self.priority = priority
+        self.enqueued_at = time.time()
+        # 用于阻塞等待调度结果：(mirror_url, instance_uuid)
+        self.future: asyncio.Future = asyncio.get_event_loop().create_future()
+    
+    def __lt__(self, other: "QueuedTask") -> bool:
+        """heapq 用小顶堆，我们要让 priority 大的先出"""
+        if self.priority != other.priority:
+            return self.priority > other.priority  # 高优先级在前
+        return self.enqueued_at < other.enqueued_at  # 同优先级先到先得
+    
+    def __repr__(self) -> str:
+        return (
+            f"QueuedTask(task_id={self.task_id[:8]}..., "
+            f"user_id={self.user_id}, priority={self.priority}, "
+            f"enqueued_at={self.enqueued_at:.1f})"
+        )
+
+
+class TaskPriorityQueue:
+    """
+    线程安全的优先级任务队列。
+    
+    特点：
+    - 基于 heapq 实现，O(log n) 入队/出队
+    - 优先级：SVIP(2) > VIP(1) > 普通(0)
+    - 同优先级按入队顺序 FIFO
+    - 支持取消（移除）队列中的任务
+    """
+    
+    def __init__(self):
+        self._queue: list[QueuedTask] = []
+        self._lock = asyncio.Lock()
+    
+    async def put(self, task: QueuedTask):
+        """加入队列"""
+        async with self._lock:
+            heapq.heappush(self._queue, task)
+            logger.info(f"📥 [队列] 任务入队: {task}, 当前排队: {len(self._queue)}")
+    
+    async def get_next(self) -> Optional[QueuedTask]:
+        """取出最高优先级的任务"""
+        async with self._lock:
+            if not self._queue:
+                return None
+            return heapq.heappop(self._queue)
+    
+    async def peek_next(self) -> Optional[QueuedTask]:
+        """查看下一个要处理的任务（不移除）"""
+        async with self._lock:
+            return self._queue[0] if self._queue else None
+    
+    async def remove(self, task_id: str) -> bool:
+        """
+        从队列中移除指定任务（用于取消）
+        
+        Returns:
+            True 如果找到了并移除，False 如果任务不在队列中
+        """
+        async with self._lock:
+            old_len = len(self._queue)
+            self._queue = [t for t in self._queue if t.task_id != task_id]
+            if len(self._queue) < old_len:
+                heapq.heapify(self._queue)
+                # 如果任务还在等待 future，标记为取消
+                logger.info(f"🗑️ [队列] 任务已移除: {task_id[:8]}...")
+                return True
+            return False
+    
+    async def qsize(self) -> int:
+        """获取当前队列长度"""
+        async with self._lock:
+            return len(self._queue)
+    
+    def waiting_count(self) -> int:
+        """
+        快速获取等待中任务数量（不加锁，用于近似判断，线程安全）
+        """
+        return len(self._queue)
+    
+    async def get_all(self) -> list[QueuedTask]:
+        """获取所有排队中的任务（用于状态查看）"""
+        async with self._lock:
+            return list(self._queue)
+
+
+# ========================================================================
 # Auto-Scaling & Idle Monitor
 # ========================================================================
 
@@ -571,6 +676,8 @@ class AutoScalingMonitor:
     5. 分发任务
     6. 连续一段时间无任务（默认 10 分钟）后自动 power_off（主控机除外）
     7. 连续 7 天无任务自动释放实例（主控机除外）
+    8. 优先级队列调度，VIP/SVIP 优先排队
+    9. 根据等待队列深度自动扩容
     
     使用方式：
         monitor = AutoScalingMonitor(panel_base_url)
@@ -583,13 +690,15 @@ class AutoScalingMonitor:
         idle_shutdown_minutes: int = 10,
         idle_release_days: int = 7,
         check_interval_seconds: int = 60,
-        max_jobs_per_instance: int = 2,
+        max_jobs_per_instance: int = 1,
     ):
         self.panel_base_url = panel_base_url
         self.idle_shutdown_minutes = idle_shutdown_minutes
         self.idle_release_days = idle_release_days
         self.check_interval_seconds = check_interval_seconds
-        self.max_jobs_per_instance = max_jobs_per_instance  # 每台实例最大并发任务数
+        # ⭐ 每台实例一次只处理 1 个任务（GPU 密集型任务不适合并行）
+        self.max_jobs_per_instance = max_jobs_per_instance
+        
         # 主控机实例 UUID（永远不会自动关机/释放）
         self._master_instance_uuid: Optional[str] = None
         
@@ -597,6 +706,7 @@ class AutoScalingMonitor:
         self.instances: dict[str, InstanceState] = {}  # instance_uuid -> InstanceState
         self._running = False
         self._monitor_task: Optional[asyncio.Task] = None
+        self._dispatch_task: Optional[asyncio.Task] = None  # 后台调度循环
         
         # 默认 AutoDL Token (从配置读取)
         self._default_token: str = ""
@@ -608,6 +718,9 @@ class AutoScalingMonitor:
         # 日志目录
         self._log_dir = Path("output") / "instance_logs"
         self._log_dir.mkdir(parents=True, exist_ok=True)
+        
+        # ===== 优先级任务队列 =====
+        self._task_queue = TaskPriorityQueue()
         
         # ===== 幂等开机追踪（多实例并发支持）=====
         # 记录正在开机中的实例 UUID 集合，允许多个不同实例并发开机
@@ -636,15 +749,27 @@ class AutoScalingMonitor:
         
         self._running = True
         self._monitor_task = asyncio.create_task(self._monitor_loop())
+        # ⭐ 启动后台调度循环（负责队列出队、分配实例、自动扩容）
+        self._dispatch_task = asyncio.create_task(self._dispatch_loop())
         logger.info(
             f"✅ AutoScalingMonitor started "
             f"(idle_shutdown={self.idle_shutdown_minutes}min, "
-            f"idle_release={self.idle_release_days}d)"
+            f"idle_release={self.idle_release_days}d, "
+            f"max_jobs_per_instance={self.max_jobs_per_instance})"
         )
     
     async def stop(self):
         """停止监控"""
         self._running = False
+        
+        # 停止调度循环
+        if self._dispatch_task:
+            self._dispatch_task.cancel()
+            try:
+                await self._dispatch_task
+            except asyncio.CancelledError:
+                pass
+        
         if self._monitor_task:
             self._monitor_task.cancel()
             try:
@@ -679,6 +804,82 @@ class AutoScalingMonitor:
         self.instances.pop(instance_uuid, None)
         logger.info(f"🗑️ Unregistered instance {instance_uuid}")
     
+    # ====================================================================
+    # ⭐ 优先级队列调度（新功能）
+    # ====================================================================
+    
+    async def enqueue_and_wait(
+        self,
+        task_id: str,
+        user_id: str = "",
+        priority: int = 0,
+        token: str = "",
+    ) -> Optional[tuple[str, str]]:
+        """
+        将任务加入优先级队列并等待调度。
+        
+        这是外部调用（pipelines.py）使用的入口方法：
+        1. 将任务加入优先级队列
+        2. 阻塞等待被调度到一台实例
+        3. 返回 (mirror_url, instance_uuid)
+        
+        Args:
+            task_id: 任务 ID
+            user_id: 用户 ID
+            priority: 优先级（0=普通, 1=VIP, 2=SVIP）
+            token: AutoDL Token
+        
+        Returns:
+            (mirror_url, instance_uuid) 或 None（如果队列已关闭或任务被取消）
+        """
+        token = token or self._default_token
+        
+        # 先尝试立即分配（如果刚好有空闲实例，跳过排队）
+        found = self._find_available_instance()
+        if found:
+            logger.info(f"⚡ [调度] 有空闲实例，直接分配: {found.name}")
+            return self._reserve_and_return(found)
+        
+        # 创建排队任务
+        queued = QueuedTask(
+            task_id=task_id,
+            user_id=user_id,
+            priority=priority,
+        )
+        
+        # 加入优先级队列
+        await self._task_queue.put(queued)
+        
+        qsize = self._task_queue.waiting_count()
+        logger.info(
+            f"⏳ [调度] 任务 {task_id[:8]}... 加入优先级队列 "
+            f"(priority={priority}, 排队位置=~{qsize})"
+        )
+        
+        # ⭐ 唤醒调度循环立即处理（不等待下一次轮询）
+        # 如果调度循环正在 sleep，提前唤醒它
+        # （通过 _dispatch_loop 的下一轮检测自然触发）
+        
+        try:
+            # 阻塞等待调度结果
+            result = await asyncio.wait_for(queued.future, timeout=None)
+            return result
+        except asyncio.CancelledError:
+            # 任务被取消，从队列中移除
+            await self._task_queue.remove(task_id)
+            logger.info(f"🗑️ [调度] 任务 {task_id[:8]}... 已取消，从队列移除")
+            return None
+    
+    async def cancel_queued_task(self, task_id: str):
+        """
+        取消队列中的任务。
+        
+        当用户取消任务时调用，确保任务不会在队列中无限等待。
+        """
+        removed = await self._task_queue.remove(task_id)
+        if removed:
+            logger.info(f"🗑️ [调度] 已取消队列中的任务: {task_id[:8]}...")
+    
     # ---- 任务状态更新 ----
     
     def on_task_submitted(self, instance_uuid: str):
@@ -690,12 +891,18 @@ class AutoScalingMonitor:
             inst.last_active_time = datetime.now()
     
     def on_task_completed(self, instance_uuid: str):
-        """任务完成时调用"""
+        """任务完成时调用，释放实例槽位并触发下一轮调度"""
         inst = self.instances.get(instance_uuid)
         if inst:
             inst.current_jobs = max(0, inst.current_jobs - 1)
             inst.total_jobs_completed += 1
             inst.last_active_time = datetime.now()
+            logger.info(
+                f"🔄 [调度] 实例 {inst.name} 任务完成, "
+                f"current_jobs={inst.current_jobs}/{self.max_jobs_per_instance}"
+            )
+        # ⭐ 任务完成 → 触发下一轮调度（队列中等待的任务可以立即分配）
+        # 不需要主动触发，_dispatch_loop 每 2 秒轮询一次
     
     # ---- 查找空闲实例 ----
     
@@ -767,18 +974,16 @@ class AutoScalingMonitor:
             try:
                 result = await self._instance_manager.list_instances(token)
                 for item in result.get("list", []):
-                    # AutoDL API 返回的字段是 uuid 而不是 instance_uuid
                     uuid = item.get("uuid") or item.get("instance_uuid") or ""
                     if not uuid or uuid in self.instances:
                         continue
-                    # 检测主控机（从面板 base_url 提取的 UUID）
                     is_master = uuid == self._master_instance_uuid
                     self.register_instance(InstanceState(
                         instance_uuid=uuid,
                         status=item.get("status", "shutdown"),
                         name=item.get("name") or item.get("machine_alias") or uuid,
                         gpu_name=item.get("gpu_name") or item.get("gpu_spec_uuid", ""),
-                        auto_managed=not is_master,  # 主控机不会自动管理
+                        auto_managed=not is_master,
                     ))
                 shutdown_instances = self.get_shutdown_instances()
             except Exception as e:
@@ -857,23 +1062,20 @@ class AutoScalingMonitor:
                 await self._mirror_controller.start_comfyui(mirror_url)
                 inst.comfy_status = "starting"
                 
-                # 等待 ComfyUI 就绪（会阻塞直到 running 或超时）
                 ready = await self._mirror_controller.wait_for_comfy_ready(mirror_url)
                 if ready:
                     inst.comfy_status = "running"
                     logger.info(f"✅ ComfyUI ready on {mirror_url}")
-                    return mirror_url  # ✅ 实例 + ComfyUI 都就绪
+                    return mirror_url
                 else:
-                    # ComfyUI 启动超时，实例不可用
                     logger.warning(f"⚠️ ComfyUI start timeout on {mirror_url}, instance not ready")
                     inst.comfy_status = "stopped"
-                    return None  # ❌ 返回 None 表示未就绪
+                    return None
             except Exception as e:
                 logger.error(f"Failed to start ComfyUI on {mirror_url}: {e}")
                 inst.comfy_status = "stopped"
-                return None  # ❌ 返回 None 表示未就绪
+                return None
         
-        # 如果没有 start_comfyui，直接返回
         return mirror_url
     
     # ---- 自动关机 ----
@@ -889,7 +1091,7 @@ class AutoScalingMonitor:
         now = datetime.now()
         if inst._last_shutdown_attempt:
             cooldown_elapsed = (now - inst._last_shutdown_attempt).total_seconds()
-            if cooldown_elapsed < 180:  # 3 分钟冷却期
+            if cooldown_elapsed < 180:
                 logger.warning(f"⏳ Instance {instance_uuid} shutdown attempted {cooldown_elapsed:.0f}s ago, skipping (cooldown)")
                 return
         
@@ -912,7 +1114,6 @@ class AutoScalingMonitor:
             inst.power_on_time = None
             logger.info(f"✅ Instance {instance_uuid} powered off")
         except Exception as e:
-            # 即使 API 返回错误，也标记为已关机，防止无限重试
             logger.error(f"Power off failed for {instance_uuid}: {e}")
             logger.warning(f"⚠️ Marking instance {instance_uuid} as shutdown despite error to prevent retry loop")
             inst.status = "shutdown"
@@ -932,14 +1133,13 @@ class AutoScalingMonitor:
         now = datetime.now()
         if inst._last_shutdown_attempt:
             cooldown_elapsed = (now - inst._last_shutdown_attempt).total_seconds()
-            if cooldown_elapsed < 300:  # 5 分钟冷却期
+            if cooldown_elapsed < 300:
                 logger.warning(f"⏳ Instance {instance_uuid} release attempted {cooldown_elapsed:.0f}s ago, skipping (cooldown)")
                 return
         
         inst._last_shutdown_attempt = now
         logger.warning(f"🔥 Auto-releasing instance {inst.name} ({instance_uuid}) - idle > {self.idle_release_days}d")
         
-        # 先关机
         if inst.status == "running":
             await self.auto_power_off(instance_uuid, token)
         
@@ -989,14 +1189,9 @@ class AutoScalingMonitor:
                 return self._reserve_and_return(found)
         
         # ===== 阶段3：如果有其他任务已在开机中，等待一台完成 =====
-        # 可能有多个实例同时在开机（因为 Phase 4 允许多并发），
-        # 我们等待任意一个完成，然后检查容量是否足够。
-        # 如果依然不够，会走到 Phase 4/5 继续启动更多实例。
         if self._pending_power_ons:
             logger.info(f"⏳ Other instances already powering on ({len(self._pending_power_ons)} pending), waiting for one to complete...")
             
-            # 等待已有的开机事件中任意一个完成
-            # 收集所有事件的 wait 协程
             wait_tasks = []
             for puuid in list(self._pending_power_ons):
                 event = self._power_on_events.get(puuid)
@@ -1004,34 +1199,25 @@ class AutoScalingMonitor:
                     wait_tasks.append(asyncio.create_task(event.wait()))
             
             if wait_tasks:
-                # 等待任意一个完成（只要有一台就绪就唤醒）
                 done_set, _ = await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
                 logger.info(f"⏳ At least one pending power-on completed, checking capacity... ({len(done_set)} of {len(wait_tasks)} completed)")
                 
-                # 🐛 FIX: 不用缓存结果！等待完成后重新调用 _find_available_instance 检查容量
-                # 因为缓存的结果可能已经被其它等待线程抢走，
-                # 且缓存结果不包含槽位预占，导致所有任务都分配到同一台实例
                 found = self._find_available_instance()
                 if found:
                     logger.info(f"✅ Power-on completed, reclaiming instance {found.name}")
                     return self._reserve_and_return(found)
             
-            # 还有开机中的实例继续等待（但先尝试自己开一台新的，避免串行等待）
-            # 如果所有 pending 都在启动中但还没完成，我们不走无限等待，
-            # 而是继续 Phase 4 尝试启动新的关机实例
             if self._pending_power_ons:
                 logger.info(f"⏳ {len(self._pending_power_ons)} instances still powering on, but will try to start another too")
         
         # ===== 阶段4：发起新开机 =====
         logger.info("🔄 No capacity freed up, starting auto power-on for a shutdown instance...")
         
-        # 使用 skip_uuids 跳过已经在开机中的实例
         instance_uuid = await self.auto_power_on(token, skip_uuids=self._pending_power_ons)
         if not instance_uuid:
             logger.error("❌ No shutdown instance available for auto power-on")
             return None
         
-        # 注册到多实例幂等保护集
         self._pending_power_ons.add(instance_uuid)
         if instance_uuid not in self._power_on_events:
             self._power_on_events[instance_uuid] = asyncio.Event()
@@ -1047,7 +1233,6 @@ class AutoScalingMonitor:
                 self._power_on_results[instance_uuid] = None
                 return None
             
-            # 开机完成后，为自己预占一个槽位
             inst = self.instances.get(instance_uuid)
             if inst:
                 result = self._reserve_and_return(inst)
@@ -1056,55 +1241,44 @@ class AutoScalingMonitor:
             self._power_on_results[instance_uuid] = result
             logger.info(f"✅ Auto-powered and ready: {mirror_url} (instance={instance_uuid})")
             
-            # ===== 阶段5：检查容量是否仍然不足，如果是则继续启动下一台 =====
-            # 即使这一台已经就绪，如果当前总容量仍然不够（例如5个任务同时涌入，
-            # 1台实例只有3个槽位），会继续后台启动下一台关机实例
+            # ===== 阶段5：检查容量是否仍然不足 =====
             running = self.get_running_instances()
-            total_capacity = len(running) * self.max_jobs_per_instance
             total_pending = sum(1 for i in self.instances.values() if i.status == "starting")
             total_pending_or_running = len(running) + total_pending
             
-            # 检查还有多少关机实例可以启动
             available_shutdown = len([
                 i for i in self.get_shutdown_instances()
                 if i.instance_uuid not in self._pending_power_ons
             ])
             
-            if available_shutdown > 0 and total_pending_or_running < 3:  # 最多启动到3台
+            if available_shutdown > 0 and total_pending_or_running < 3:
                 logger.info(
                     f"🔍 Capacity check: running={len(running)} pending={total_pending} "
                     f"shutdown_available={available_shutdown}, starting next instance..."
                 )
-                # 在后台启动下一台，不阻塞当前任务返回
                 asyncio.create_task(self._background_power_on_next(token))
             
             return result
         finally:
             if power_on_event:
                 power_on_event.set()
-            # 注意：不从 _pending_power_ons 移除，避免重复开机
-            # 但理论上实例状态已变为 running，get_shutdown_instances 不会再返回它
     
     async def _background_power_on_next(self, token: str):
         """
         后台启动下一台关机实例（异步非阻塞）。
-        当检测到容量仍然不足时，在后台启动额外的关机实例。
-        注意：这个方法的调用者已经拿到了一台可用实例，所以可以安全地在后台继续启动。
+        （保留原有实现，兼容旧调用方）
         """
         try:
-            # 先检查是否真的还需要更多实例
             result = self._find_available_instance()
             if result:
                 logger.info("⏭️ Background power-on skipped: capacity already sufficient")
                 return
             
-            # 跳过已经在开机中的
             instance_uuid = await self.auto_power_on(token, skip_uuids=self._pending_power_ons)
             if not instance_uuid:
                 logger.info("⏭️ Background power-on skipped: no more shutdown instances")
                 return
             
-            # 注册到多实例幂等保护集
             self._pending_power_ons.add(instance_uuid)
             if instance_uuid not in self._power_on_events:
                 self._power_on_events[instance_uuid] = asyncio.Event()
@@ -1117,7 +1291,6 @@ class AutoScalingMonitor:
                 self._power_on_results[instance_uuid] = result
                 logger.info(f"✅ Background power-on complete: {mirror_url} (instance={instance_uuid})")
                 
-                # 如果还不够，继续递归启动下一台
                 available_shutdown = len([
                     i for i in self.get_shutdown_instances()
                     if i.instance_uuid not in self._pending_power_ons
@@ -1131,7 +1304,6 @@ class AutoScalingMonitor:
                 logger.warning(f"❌ Background power-on failed for {instance_uuid}")
                 self._power_on_results[instance_uuid] = None
             
-            # 触发事件通知等待者
             event = self._power_on_events.get(instance_uuid)
             if event:
                 event.set()
@@ -1142,18 +1314,27 @@ class AutoScalingMonitor:
     def _reserve_and_return(self, instance: InstanceState) -> tuple[str, str]:
         """
         预占一个任务槽位并返回镜像信息。
-        这是多实例并发安全的关键：在返回实例给调用方之前，先 increment current_jobs，
-        这样其他并发调用的 _find_available_instance 就不会再次返回同一台实例（直到槽位被占满）。
+        
+        Returns:
+            (mirror_url, instance_uuid)
+            mirror_url 是 ComfyUI 的访问地址：
+            - 镜像机（auto_managed=True）使用其独立的 service_6008_domain
+            - 主控机（auto_managed=False）使用面板 base_url，因为主控机本身就是调度面板，
+              所有 API 请求通过面板代理转发到主控机上的 ComfyUI
         """
         instance.current_jobs += 1
         instance.last_active_time = datetime.now()
+        mirror_url = instance.mirror_url
+        # 主控机没有独立的 mirror_url，使用面板地址作为 ComfyUI 入口
+        if not mirror_url and self.panel_base_url:
+            mirror_url = self.panel_base_url
         logger.info(
             f"🔒 Reserved slot on {instance.name} "
             f"(jobs={instance.current_jobs}/{self.max_jobs_per_instance})"
         )
-        return (instance.mirror_url, instance.instance_uuid)
+        return (mirror_url, instance.instance_uuid)
 
-    def _find_available_instance(self) -> Optional[tuple[str, str]]:
+    def _find_available_instance(self) -> Optional[InstanceState]:
         """
         查找当前可用的实例（同步方法，无阻塞）
         1. 优先找空闲实例（current_jobs==0 且 comfy running）
@@ -1170,11 +1351,10 @@ class AutoScalingMonitor:
         # 2. 找 running 中负载未满且 ComfyUI 就绪的实例
         running = self.get_running_instances()
         if running:
-            # 必须同时满足：有空余槽位 + ComfyUI 已就绪
             available = [
                 i for i in running
                 if i.current_jobs < self.max_jobs_per_instance
-                and i.comfy_status == "running"  # ComfyUI 必须就绪才能接任务
+                and i.comfy_status == "running"
             ]
             if available:
                 min_jobs = min(inst.current_jobs for inst in available)
@@ -1187,6 +1367,194 @@ class AutoScalingMonitor:
                 return target
         
         return None
+
+    # ====================================================================
+    # ⭐ 后台调度循环（核心新功能）
+    # ====================================================================
+    
+    async def _dispatch_loop(self):
+        """
+        后台调度循环，负责：
+        
+        1. 检查优先级队列中的等待任务
+        2. 如果队列非空且有空闲实例 → 分配任务
+        3. 如果队列非空且无空闲实例 → 根据队列深度自动开机
+        4. 扩缩容规则：
+           - 等待 > 0 且无空闲实例 → 开机 1 台关机实例
+           - 等待 > 5 且无空闲实例 → 开机第 2 台关机实例（如果有）
+           - 等待 > 10 → 开机所有可用关机实例
+        5. 每 2 秒轮询一次
+        """
+        POLL_INTERVAL = 2.0  # 调度轮询间隔（秒）
+        
+        logger.info("🚀 [调度循环] 后台调度循环已启动 (poll_interval=2s)")
+        
+        while self._running:
+            try:
+                await self._dispatch_tick()
+            except Exception as e:
+                logger.error(f"❌ [调度循环] 异常: {e}")
+            
+            await asyncio.sleep(POLL_INTERVAL)
+        
+        logger.info("🛑 [调度循环] 已停止")
+    
+    async def _dispatch_tick(self):
+        """
+        单次调度 tick。
+        
+        1. 从优先级队列取出最高优先级的任务
+        2. 如果队列为空，什么都不做
+        3. 尝试查找空闲实例
+        4. 如果有空闲实例 → 分配，设置 future 结果
+        5. 如果无空闲实例 → 检查是否需要自动开机
+        6. 如果队列非空但无实例可用 → 下一个 tick 重试
+        """
+        # 读取队列长度（不加锁，近似值即可）
+        waiting = self._task_queue.waiting_count()
+        if waiting == 0:
+            return
+        
+        # ===== 出队所有可分配的任务 =====
+        while waiting > 0:
+            # 查找可用实例
+            found = self._find_available_instance()
+            if found:
+                # 有可用实例，出队一个任务
+                task = await self._task_queue.get_next()
+                if task is None:
+                    break  # 队列为空
+                
+                # 预占实例槽位
+                mirror_url, instance_uuid = self._reserve_and_return(found)
+                
+                # 设置 future 结果，唤醒等待的调用方
+                if not task.future.done():
+                    task.future.set_result((mirror_url, instance_uuid))
+                    logger.info(
+                        f"✅ [调度] 分配实例 {found.name} 给任务 "
+                        f"{task.task_id[:8]}... (priority={task.priority})"
+                    )
+                waiting = self._task_queue.waiting_count()
+                continue
+            
+            # ===== 没有可用实例，检查是否需要扩容 =====
+            # ⭐ 先尝试从 AutoDL 拉取最新实例列表，确保 self.instances 完整
+            # 因为真实环境中可能是首次使用，实例还未被注册
+            try:
+                if self._instance_manager and self._default_token:
+                    result = await self._instance_manager.list_instances(self._default_token)
+                    for item in result.get("list", []):
+                        uuid = item.get("uuid") or item.get("instance_uuid") or ""
+                        if not uuid or uuid in self.instances:
+                            continue
+                        is_master = uuid == self._master_instance_uuid
+                        item_status = item.get("status", "shutdown")
+                        new_inst = InstanceState(
+                            instance_uuid=uuid,
+                            status=item_status,
+                            name=item.get("name") or item.get("machine_alias") or uuid,
+                            gpu_name=item.get("gpu_name") or item.get("gpu_spec_uuid", ""),
+                            auto_managed=not is_master,
+                        )
+                        # ⭐ 如果实例已经是 running 状态（如主控机），将 comfy_status 也设为 running
+                        # 因为它的 ComfyUI 已经在运行中，可以立即接任务
+                        if item_status == "running":
+                            new_inst.comfy_status = "running"
+                        self.register_instance(new_inst)
+            except Exception as e:
+                logger.warning(f"⚠️ [调度] 拉取实例列表异常: {e}")
+            
+            shutdown_instances = self.get_shutdown_instances()
+            shutdown_count = len(shutdown_instances)
+            running_count = len(self.get_running_instances())
+            
+            if shutdown_count == 0:
+                logger.info(
+                    f"⏳ [调度] 队列有 {waiting} 个等待任务，"
+                    f"运行中={running_count}，但无空闲实例且无关机实例可启动"
+                )
+                break
+            
+            logger.info(
+                f"⏳ [调度] 队列有 {waiting} 个等待任务，"
+                f"运行中={running_count}，关机={shutdown_count}"
+            )
+            
+            # ----- 扩容决策 -----
+            # 计算当前可用槽位：空闲实例数（current_jobs=0 且 comfy running）
+            available_slots = len(self.get_idle_instances())
+            # 计算已经在开机中的实例数（排除已完成的）
+            already_starting = len(self._pending_power_ons)
+            # 计算真正需要启动的数量
+            # = 排队任务数 - 已可用槽位 - 正在开机中的（完成后会提供新槽位）
+            needed = max(0, waiting - available_slots - already_starting)
+            instances_to_start = min(shutdown_count, needed)
+            
+            if instances_to_start > 0:
+                logger.info(
+                    f"🚀 [调度] 决定启动 {instances_to_start} 台实例 "
+                    f"(waiting={waiting}, shutdown={shutdown_count}, "
+                    f"already_starting={already_starting})"
+                )
+                for _ in range(instances_to_start):
+                    await self._power_on_and_setup_next()
+            
+            break  # while 循环退出
+    
+    async def _power_on_and_setup_next(self) -> Optional[str]:
+        """
+        在后台启动一台关机实例，并注册事件。
+        与 _background_power_on_next 类似，但被 dispatch 循环使用。
+        
+        Returns:
+            开机中的实例 UUID，或 None（没有可用的关机实例）
+        """
+        token = self._default_token
+        if not token:
+            logger.warning("[调度] No token configured for auto power-on")
+            return None
+        
+        instance_uuid = await self.auto_power_on(token, skip_uuids=self._pending_power_ons)
+        if not instance_uuid:
+            return None
+        
+        # 注册到幂等保护集
+        self._pending_power_ons.add(instance_uuid)
+        if instance_uuid not in self._power_on_events:
+            self._power_on_events[instance_uuid] = asyncio.Event()
+        self._power_on_results[instance_uuid] = None
+        
+        # 在后台等待开机完成（不阻塞 dispatch 循环）
+        asyncio.create_task(self._wait_and_finalize_power_on(instance_uuid, token))
+        
+        return instance_uuid
+    
+    async def _wait_and_finalize_power_on(self, instance_uuid: str, token: str):
+        """
+        等待实例开机完成并注册就绪状态（后台任务，不阻塞 dispatch 循环）。
+        """
+        try:
+            mirror_url = await self.wait_and_setup_instance(instance_uuid, token)
+            inst = self.instances.get(instance_uuid)
+            
+            if mirror_url and inst:
+                self._power_on_results[instance_uuid] = (mirror_url, instance_uuid)
+                logger.info(f"✅ [调度] 实例 {instance_uuid} 开机就绪: {mirror_url}")
+            else:
+                self._power_on_results[instance_uuid] = None
+                if inst:
+                    logger.warning(f"❌ [调度] 实例 {inst.name} 开机失败")
+                else:
+                    logger.warning(f"❌ [调度] 实例 {instance_uuid} 开机失败（未注册）")
+        except Exception as e:
+            logger.error(f"❌ [调度] 实例 {instance_uuid} 开机异常: {e}")
+            self._power_on_results[instance_uuid] = None
+        finally:
+            # 触发事件通知等待者
+            event = self._power_on_events.get(instance_uuid)
+            if event:
+                event.set()
     
     # ---- 后台监控循环 ----
     
@@ -1201,14 +1569,24 @@ class AutoScalingMonitor:
             await asyncio.sleep(self.check_interval_seconds)
     
     async def _check_idle_instances(self):
-        """检查所有实例的空间状态，执行关机/释放"""
+        """
+        检查所有实例的空闲状态，执行关机/释放。
+        
+        ⭐ 改进：如果优先级队列中还有等待任务，不关机任何实例。
+        避免一边排队一边关机的矛盾情况。
+        """
+        # 如果有排队等待的任务，跳过关机检查
+        waiting = self._task_queue.waiting_count()
+        if waiting > 0:
+            return
+        
         now = datetime.now()
         
         for inst in list(self.instances.values()):
             if inst.status != "running":
                 continue
             if inst.current_jobs > 0:
-                continue  # 还有任务在跑
+                continue
             
             idle_seconds = (now - inst.last_active_time).total_seconds()
             idle_days = (now - inst.created_at).total_seconds() / 86400
@@ -1228,12 +1606,13 @@ class AutoScalingMonitor:
     # ---- 快照 ----
     
     def get_snapshot(self) -> dict:
-        """获取当前状态快照"""
+        """获取当前状态快照（包含队列信息）"""
         return {
             "total_instances": len(self.instances),
             "running": len(self.get_running_instances()),
             "idle": len(self.get_idle_instances()),
             "shutdown": len(self.get_shutdown_instances()),
+            "queue_waiting": self._task_queue.waiting_count(),
             "instances": [inst.to_dict() for inst in self.instances.values()],
         }
 
