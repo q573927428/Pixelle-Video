@@ -216,7 +216,7 @@ const digitalForm = ref<DigitalForm>({
   // ===== 网感剪辑相关配置（默认全部开启） =====
   internet_clip_enabled: true,
   title_overlay_config: {
-    enabled: true,
+    enabled: false,
     text: '爆款视频标题预览效果',
     font_size: 76,
     font_color: '#FF69B4',
@@ -227,7 +227,7 @@ const digitalForm = ref<DigitalForm>({
     duration_seconds: 2,
   },
   business_card_config: {
-    enabled: true,
+    enabled: false,
     title: '创始人 & CEO',
     subtitle: '专注AI视频生成',
     display_mode: 'duration',

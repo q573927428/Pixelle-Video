@@ -334,12 +334,12 @@
       </div>
         </div>
       </div>
-      <!-- ====== 网感剪辑 ====== -->
+      <!-- ====== 视频剪辑 ====== -->
       <div class="form-section-wrapper">
         <div class="form-section">
           <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>🎬 网感剪辑</span>
-            <div style="display:flex;align-items:center;gap:6px;">
+            <span>🎬 视频剪辑</span>
+            <div style="display:flex;align-items:center;gap:6px;" v-if="false">
               <span style="font-size:13px;font-weight:400;">开关</span>
               <el-switch
                 :model-value="form.internet_clip_enabled"
@@ -368,7 +368,7 @@
               />
             </div>
             <!-- 个人名片 -->
-            <div style="margin-bottom:16px;">
+            <div style="margin-bottom:16px;" v-if="form.business_card_config.enabled">
               <BusinessCardConfigurator
                 :enabled="form.business_card_config.enabled"
                 :config="form.business_card_config"
@@ -396,6 +396,7 @@
               @update:config="form.pip_mix_config = $event"
               @upload="(f, c, t) => $emit('upload', f, c, t)"
               @select-history="(c) => $emit('select-history', c)"
+              v-if="form.pip_mix_config.enabled"
             />
           </div>
         </div>
