@@ -139,15 +139,8 @@ const auth = getAuth()
 
 // ZS币计费：根据文案字数自动计算预估时长（1秒=4字，计入语速因子）
 const estimatedSeconds = computed(() => {
-  let text = digitalForm.value.goods_text?.trim() || ''
+  const text = digitalForm.value.goods_text?.trim() || ''
   const speed = digitalForm.value.tts_speed || 1.0
-  if (!text && digitalForm.value.mode === 'digital' && digitalForm.value.goods_title?.trim()) {
-    // 带货模式：填了标题没填文案 → AI会生成约60字文案
-    text = digitalForm.value.goods_title
-    // AI生成约60字，取标题字数与60字较大值
-    const cleanTitle = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
-    return Math.ceil(Math.max(cleanTitle.length, 60) / 4 / speed) || 0
-  }
   if (!text) return 0
   // 去掉标点只算有效字数
   const cleanText = text.replace(/[。！？；，、：；“”''—…（）【】《》〈〉.!?,;:()\[\]{}<>""''\-/\s]/g, '')
@@ -178,7 +171,7 @@ function getVideoWorkflowPath(): string {
 
 const digitalForm = ref<DigitalForm>({
   mode: 'customize',
-  character_asset: null, goods_asset: null, goods_title: '', goods_text: '',
+  character_asset: null, goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',
     second_workflow_path: getVideoWorkflowPath(),//根据角色选择视频生成工作流
@@ -829,7 +822,7 @@ async function handleSubtitlePreview() {
 }
 
 const currentAssets = computed<string[]>(() => {
-  return [digitalForm.value.character_asset, digitalForm.value.goods_asset, digitalForm.value.ref_audio].filter((x): x is string => !!x)
+  return [digitalForm.value.character_asset, digitalForm.value.ref_audio].filter((x): x is string => !!x)
 })
 
 
@@ -837,7 +830,6 @@ async function handleUpload(rawFile: File, category: string, target?: string) {
   const result = await uploadResource(rawFile, category, target)
   if (result) {
     if (target === 'digital_character') digitalForm.value.character_asset = result.path
-    else if (target === 'digital_goods') digitalForm.value.goods_asset = result.path
     else if (target === 'digital_ref_audio') digitalForm.value.ref_audio = result.path
     else if (category === 'ref_audio') digitalForm.value.ref_audio = result.path
   }
@@ -862,7 +854,6 @@ function onHistorySelect(record: any) {
   const cat = historyFilterCategory.value || record.category || 'misc'
   if (cat === 'ref_audio') digitalForm.value.ref_audio = record.path
   else if (cat === 'character_image') digitalForm.value.character_asset = record.path
-  else if (cat === 'goods_image') digitalForm.value.goods_asset = record.path
   historyVisible.value = false
   historyFilterCategory.value = undefined
   ElMessage.success(`已选择：${record.name}`)
@@ -871,9 +862,8 @@ function onHistorySelect(record: any) {
 function buildPayload(): Record<string, any> {
   const payload: Record<string, any> = {}
   payload.character_assets = digitalForm.value.character_asset ? [digitalForm.value.character_asset] : []
-  payload.goods_assets = digitalForm.value.goods_asset ? [digitalForm.value.goods_asset] : []
+  payload.goods_assets = []
   payload.mode = digitalForm.value.mode
-  payload.goods_title = digitalForm.value.goods_title
   payload.goods_text = digitalForm.value.goods_text
   payload.estimated_seconds = estimatedSeconds.value
   payload.workflow_config = { ...digitalForm.value.workflow_config }
@@ -978,12 +968,9 @@ async function generate() {
 
   if (!digitalForm.value.character_asset) { ElMessage.warning('请上传角色图片'); return }
 
-  if (digitalForm.value.mode === 'digital' && !digitalForm.value.goods_asset) { ElMessage.warning('请上传商品图片'); return }
-
   const payload = buildPayload()
   payload.mode = digitalForm.value.mode
   payload.goods_text = digitalForm.value.goods_text
-  payload.goods_title = digitalForm.value.goods_title
 
   try {
     const auth = getAuth()

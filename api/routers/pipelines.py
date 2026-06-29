@@ -87,10 +87,9 @@ class SubtitleRequestConfig(BaseModel):
 
 
 class DigitalHumanRequest(BaseModel):
-    mode: Literal["digital", "customize"] = "digital"
+    mode: Literal["customize"] = "customize"
     character_assets: list[str] = Field(default_factory=list)
     goods_assets: list[str] = Field(default_factory=list)
-    goods_title: str = Field("", max_length=30, description="商品标题，最长30字")
     goods_text: str = Field("", max_length=368, description="口播文案，最长368字")
     workflow_config: DigitalWorkflowConfig = Field(default_factory=DigitalWorkflowConfig)
 
@@ -574,28 +573,11 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
     if not character_assets:
         raise ValueError("Please upload at least one character image.")
 
-    if request_body.mode == "digital" and not goods_assets:
-        raise ValueError("Please upload at least one goods/product image in digital mode.")
-
-    if request_body.mode == "customize" and not request_body.goods_text.strip():
-        raise ValueError("Please provide speech text in customize mode.")
-
-    if request_body.mode == "digital" and not (request_body.goods_text.strip() or request_body.goods_title.strip()):
-        raise ValueError("Please provide goods title or speech text in digital mode.")
+    if not request_body.goods_text.strip():
+        raise ValueError("Please provide speech text.")
 
     async def get_script_text() -> str:
-        if request_body.mode == "customize":
-            return request_body.goods_text.strip()
-        if request_body.goods_text.strip():
-            return request_body.goods_text.strip()
-        return await pixelle_video.llm(
-            prompt=(
-                f"请为商品“{request_body.goods_title}”写一段适合数字人口播短视频的中文推广文案。"
-                "要求自然、有吸引力，控制在60字以内，只输出文案正文。"
-            ),
-            temperature=0.7,
-            max_tokens=300,
-        )
+        return request_body.goods_text.strip()
 
     generated_text = await get_script_text()
 
@@ -1097,7 +1079,7 @@ async def generate_digital_human_async(
     # 必须与前端 DigitalHumanView.vue 中 estimatedSeconds computed 逻辑完全一致
     frozen_zs = 0
     task_id_for_log = None
-    goods_text = request_body.goods_text or request_body.goods_title or ""
+    goods_text = request_body.goods_text or ""
     clean_text = re.sub(PATTERN_CLEAN_TEXT, '', goods_text)
     tts_speed = max(0.5, min(3.0, getattr(request_body, 'tts_speed', 1.0)))
     # 基础：ceil(有效字数 / 4 / 语速) = 预估秒数（与前端公式完全一致）

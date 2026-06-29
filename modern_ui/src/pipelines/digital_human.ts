@@ -23,15 +23,7 @@ export function validateDigitalForm(form: DigitalForm): DigitalHumanValidation {
   if (!form.character_asset) {
     return { valid: false, message: '请上传角色图片' }
   }
-  if (form.mode === 'digital') {
-    if (!form.goods_asset) {
-      return { valid: false, message: '请上传商品图片' }
-    }
-    if (!form.goods_text && !form.goods_title) {
-      return { valid: false, message: '请填写口播文案或商品标题' }
-    }
-  }
-  if (form.mode === 'customize' && !form.goods_text) {
+  if (!form.goods_text) {
     return { valid: false, message: '请填写自定义口播文案' }
   }
   return { valid: true, message: '' }
@@ -86,8 +78,6 @@ export function buildDigitalPayload(form: DigitalForm): Record<string, any> {
     Object.entries({
       mode: form.mode,
       character_asset: form.character_asset,
-      goods_asset: form.goods_asset,
-      goods_title: form.goods_title,
       goods_text: form.goods_text,
       workflow_config: form.workflow_config,
       tts_inference_mode: form.tts_inference_mode,

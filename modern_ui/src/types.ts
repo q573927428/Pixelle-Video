@@ -142,10 +142,8 @@ export interface PipMixConfig {
 }
 
 export interface DigitalForm {
-  mode: 'digital' | 'customize'
+  mode: 'customize'
   character_asset: string | null
-  goods_asset: string | null
-  goods_title: string
   goods_text: string
   workflow_config: DigitalWorkflowConfig
   tts_inference_mode: string

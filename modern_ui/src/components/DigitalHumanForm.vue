@@ -147,31 +147,7 @@
         <div class="form-section-title">💫 选择生成模式</div>
         <div class="form-section-body">
 
-        <!-- 模式选择：始终可见 -->
-        <el-form-item label="模式">
-          <el-radio-group v-model="form.mode">
-            <el-radio-button value="customize">🧐 口播模式</el-radio-button>
-            <el-radio-button value="digital">💻 带货模式</el-radio-button>
-          </el-radio-group>
-        </el-form-item>
-
-          <!-- 带货模式 -->
-          <div v-if="form.mode === 'digital'" class="soft-panel">
-            <el-form-item label="商品图片">
-              <div class="upload-field-container">
-                <UploadBox category="goods_image" accept="image/*,.heic,.heif" @upload="(f, c) => $emit('upload', f, c, 'digital_goods')" @select-history="(c) => $emit('select-history', c)" />
-                <FilePreview v-if="form.goods_asset" :items="[form.goods_asset]" @remove="form.goods_asset = null" />
-              </div>
-            </el-form-item>
-            <el-form-item label="商品标题">
-              <el-input v-model="form.goods_title" placeholder="例如：智能保温杯" :maxlength="30" show-word-limit />
-            </el-form-item>
-            <el-form-item label="口播文案（可留空自动生成）">
-              <el-input v-model="form.goods_text" type="textarea" :rows="5" maxlength="500" show-word-limit placeholder="可填写固定口播文案；留空时 AI 自动根据商品标题生成" />
-            </el-form-item>
-          </div>
-
-          <!-- 自定义模式 -->
+        <!-- 口播模式 -->
           <div v-if="form.mode === 'customize'" class="soft-panel">
             <el-form-item label="自定义口播文案">
               <el-input v-model="form.goods_text" type="textarea" :rows="6" maxlength="500" show-word-limit placeholder="填写固定口播文案内容" />
