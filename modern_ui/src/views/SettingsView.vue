@@ -110,6 +110,13 @@
               </div>
             </el-form-item>
 
+            <el-form-item label="AutoDL API Key（实例管理令牌）">
+              <el-input v-model="autodlApiKey" type="password" show-password placeholder="autodl_xxx..." />
+              <div class="small muted" style="margin-top:4px;">
+                用于自动开机/关机 AutoDL 实例。在 https://www.autodl.com/console/center/settings/token 获取，与 RunningHub API Key 不同。
+              </div>
+            </el-form-item>
+
             <el-divider />
 
             <el-form-item label="商品图片合成工作流">
@@ -291,6 +298,7 @@ const remoteComfyConfig = reactive({
   customize_workflow_id: 'digital_customize',
   tts_workflow_id: 'tts_edge',
 })
+const autodlApiKey = ref('')
 const testingRemoteComfy = ref(false)
 const loadingRemoteWorkflows = ref(false)
 const remoteWorkflowList = ref<any[]>([])
@@ -358,6 +366,9 @@ onMounted(async () => {
     comfyuiConfig.runninghub_concurrent_limit = cfg.comfyui.runninghub_concurrent_limit
     comfyuiConfig.runninghub_instance_type = cfg.comfyui.runninghub_instance_type
     instanceTypeDisplay.value = cfg.comfyui.runninghub_instance_type === 'plus' ? 'plus' : '24g'
+
+    // AutoDL API Key
+    autodlApiKey.value = cfg.comfyui.autodl_api_key || ''
 
     // Remote ComfyUI
     const rc = cfg.comfyui.remote_comfy
@@ -543,6 +554,7 @@ async function handleSave() {
         runninghub_api_key: comfyuiConfig.runninghub_api_key,
         runninghub_concurrent_limit: comfyuiConfig.runninghub_concurrent_limit,
         runninghub_instance_type: runninghubInstanceType.value,
+        autodl_api_key: autodlApiKey.value,
         remote_comfy: {
           enabled: executionMode.value === 'remote_comfy',
           base_url: remoteComfyConfig.base_url,

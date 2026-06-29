@@ -685,7 +685,8 @@ class AutoScalingMonitor:
         """任务提交到实例时调用"""
         inst = self.instances.get(instance_uuid)
         if inst:
-            inst.current_jobs += 1
+            # current_jobs 已在 ensure_ready_instance 中预占，这里不再增加
+            # 仅更新最后活跃时间
             inst.last_active_time = datetime.now()
     
     def on_task_completed(self, instance_uuid: str):
@@ -973,19 +974,19 @@ class AutoScalingMonitor:
         token = token or self._default_token
         
         # ===== 阶段1：立即检查是否有可用容量 =====
-        result = self._find_available_instance()
-        if result:
-            return result
+        found = self._find_available_instance()
+        if found:
+            return self._reserve_and_return(found)
         
         # ===== 阶段2：短时轮询等待现有实例释放容量（30秒内） =====
         POLL_COUNT = 6
         POLL_INTERVAL = 5
         for i in range(POLL_COUNT):
             await asyncio.sleep(POLL_INTERVAL)
-            result = self._find_available_instance()
-            if result:
+            found = self._find_available_instance()
+            if found:
                 logger.info(f"⏳ Waited {POLL_INTERVAL * (i+1)}s, instance capacity freed up!")
-                return result
+                return self._reserve_and_return(found)
         
         # ===== 阶段3：如果有其他任务已在开机中，等待一台完成 =====
         # 可能有多个实例同时在开机（因为 Phase 4 允许多并发），
@@ -1000,24 +1001,20 @@ class AutoScalingMonitor:
             for puuid in list(self._pending_power_ons):
                 event = self._power_on_events.get(puuid)
                 if event:
-                    wait_tasks.append(event.wait())
+                    wait_tasks.append(asyncio.create_task(event.wait()))
             
             if wait_tasks:
                 # 等待任意一个完成（只要有一台就绪就唤醒）
                 done_set, _ = await asyncio.wait(wait_tasks, return_when=asyncio.FIRST_COMPLETED)
                 logger.info(f"⏳ At least one pending power-on completed, checking capacity... ({len(done_set)} of {len(wait_tasks)} completed)")
                 
-                # 检查是否有可用的开机结果
-                for puuid in list(self._pending_power_ons):
-                    result = self._power_on_results.get(puuid)
-                    if result:
-                        logger.info(f"✅ Found completed power-on result: {result}")
-                        return result
-            
-            # 开机完成后再检查是否有容量释放
-            result = self._find_available_instance()
-            if result:
-                return result
+                # 🐛 FIX: 不用缓存结果！等待完成后重新调用 _find_available_instance 检查容量
+                # 因为缓存的结果可能已经被其它等待线程抢走，
+                # 且缓存结果不包含槽位预占，导致所有任务都分配到同一台实例
+                found = self._find_available_instance()
+                if found:
+                    logger.info(f"✅ Power-on completed, reclaiming instance {found.name}")
+                    return self._reserve_and_return(found)
             
             # 还有开机中的实例继续等待（但先尝试自己开一台新的，避免串行等待）
             # 如果所有 pending 都在启动中但还没完成，我们不走无限等待，
@@ -1050,7 +1047,12 @@ class AutoScalingMonitor:
                 self._power_on_results[instance_uuid] = None
                 return None
             
-            result = (mirror_url, instance_uuid)
+            # 开机完成后，为自己预占一个槽位
+            inst = self.instances.get(instance_uuid)
+            if inst:
+                result = self._reserve_and_return(inst)
+            else:
+                result = (mirror_url, instance_uuid)
             self._power_on_results[instance_uuid] = result
             logger.info(f"✅ Auto-powered and ready: {mirror_url} (instance={instance_uuid})")
             
@@ -1137,6 +1139,20 @@ class AutoScalingMonitor:
         except Exception as e:
             logger.error(f"Background power-on error: {e}")
 
+    def _reserve_and_return(self, instance: InstanceState) -> tuple[str, str]:
+        """
+        预占一个任务槽位并返回镜像信息。
+        这是多实例并发安全的关键：在返回实例给调用方之前，先 increment current_jobs，
+        这样其他并发调用的 _find_available_instance 就不会再次返回同一台实例（直到槽位被占满）。
+        """
+        instance.current_jobs += 1
+        instance.last_active_time = datetime.now()
+        logger.info(
+            f"🔒 Reserved slot on {instance.name} "
+            f"(jobs={instance.current_jobs}/{self.max_jobs_per_instance})"
+        )
+        return (instance.mirror_url, instance.instance_uuid)
+
     def _find_available_instance(self) -> Optional[tuple[str, str]]:
         """
         查找当前可用的实例（同步方法，无阻塞）
@@ -1149,7 +1165,7 @@ class AutoScalingMonitor:
         if idle:
             target = idle[0]
             logger.info(f"✅ Found idle instance {target.name}: {target.mirror_url}")
-            return (target.mirror_url, target.instance_uuid)
+            return target
         
         # 2. 找 running 中负载未满且 ComfyUI 就绪的实例
         running = self.get_running_instances()
@@ -1168,7 +1184,7 @@ class AutoScalingMonitor:
                     f"(jobs={target.current_jobs}/{self.max_jobs_per_instance}, "
                     f"comfy={target.comfy_status})"
                 )
-                return (target.mirror_url, target.instance_uuid)
+                return target
         
         return None
     
