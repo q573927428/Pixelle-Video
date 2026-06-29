@@ -46,6 +46,8 @@ from api.config import api_config
 from api.tasks import task_manager
 from api.dependencies import shutdown_pixelle_video
 from api.auth.database import Database
+from pixelle_video.services.instance_manager import get_global_monitor
+from pixelle_video.config import config_manager
 
 # Import routers
 from pixelle_video.patches.comfykit_patch import apply_patches
@@ -84,6 +86,24 @@ async def lifespan(app: FastAPI):
     apply_patches()  # Apply comfykit monkey patches
     await task_manager.start()
     
+    # Auto-start auto-scaling monitor if configured
+    try:
+        comfyui_cfg = config_manager.get_comfyui_config()
+        rc = comfyui_cfg.get("remote_comfy", {})
+        panel_base_url = rc.get("base_url", "")
+        token = comfyui_cfg.get("runninghub_api_key", "")
+        if panel_base_url and token:
+            monitor = get_global_monitor()
+            monitor.panel_base_url = panel_base_url
+            await monitor.start(token=token)
+            logger.info("✅ Auto-scaling monitor auto-started on server boot")
+        elif panel_base_url and not token:
+            logger.warning("⚠️ Auto-scaling monitor not started: AutoDL token not configured (runninghub_api_key)")
+        else:
+            logger.info("ℹ️ Auto-scaling monitor not started: remote_comfy panel not configured")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to auto-start auto-scaling monitor: {e}")
+    
     # Initialize MySQL database connection and auto-create tables
     try:
         await Database.get_pool()
@@ -102,6 +122,14 @@ async def lifespan(app: FastAPI):
     await task_manager.stop()
     await shutdown_pixelle_video()
     await Database.close()
+    # Stop auto-scaling monitor
+    try:
+        monitor = get_global_monitor()
+        if monitor.is_running():
+            await monitor.stop()
+            logger.info("✅ Auto-scaling monitor stopped")
+    except Exception as e:
+        logger.warning(f"⚠️ Failed to stop auto-scaling monitor: {e}")
     logger.info("✅ Pixelle-Video API shutdown complete")
 
 

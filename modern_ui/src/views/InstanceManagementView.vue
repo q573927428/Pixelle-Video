@@ -73,7 +73,7 @@
         <el-table :data="instances" style="width:100%;" stripe size="small" v-if="instances.length > 0">
           <el-table-column prop="name" label="名称" min-width="100" />
           <el-table-column prop="instance_uuid" label="UUID" min-width="110" show-overflow-tooltip />
-          <el-table-column prop="gpu_name" label="GPU" width="120" />
+          <el-table-column prop="gpu_name" label="GPU" width="180" />
           <el-table-column label="状态" width="150">
             <template #default="{ row }">
               <el-tag :type="row.status === 'running' ? 'success' : (row.status === 'starting' ? 'warning' : 'info')" size="small">
