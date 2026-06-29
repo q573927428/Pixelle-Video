@@ -18,28 +18,38 @@
             <span style="font-size:13px;font-weight:500;color:var(--el-color-primary);">🎨 预制字幕样式</span>
             <el-tag size="small" type="info" effect="plain">点击切换</el-tag>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="display:flex;gap:6px;flex-wrap:nowrap;">
             <div
               v-for="preset in presetStyles"
               :key="preset.name"
               @click="applyPreset(preset)"
-              style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--el-border-color-light);cursor:pointer;transition:all 0.2s;"
-              @mouseenter="(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-color-primary)'; (e.currentTarget as HTMLElement).style.background = 'var(--el-fill-color-light)'; }"
-              @mouseleave="(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-border-color-light)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }"
+              :style="{
+                display:'flex',
+                alignItems:'center',
+                justifyContent:'center',
+                width:'42px',
+                height:'38px',
+                borderRadius:'6px',
+                border: selectedPresetName === preset.name ? '2px solid var(--el-color-primary)' : '1px solid var(--el-border-color-light)',
+                cursor:'pointer',
+                transition:'all 0.2s',
+                position:'relative',
+                background:'#1a1a2e',
+                boxShadow: selectedPresetName === preset.name ? '0 0 8px rgba(64,158,255,0.5)' : 'none',
+              }"
+              @mouseenter="(e) => { if (selectedPresetName !== preset.name) { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-color-primary)'; (e.currentTarget as HTMLElement).style.boxShadow = '0 0 4px rgba(64,158,255,0.3)'; } }"
+              @mouseleave="(e) => { if (selectedPresetName !== preset.name) { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-border-color-light)'; (e.currentTarget as HTMLElement).style.boxShadow = 'none'; } }"
+              :title="preset.name"
             >
-              <!-- 风格预览：小画布 -->
-              <div style="flex-shrink:0;width:36px;height:24px;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;background:#1a1a2e;">
-                <span style="font-size:10px;font-weight:bold;z-index:1;line-height:1;"
-                  :style="{
-                    color: preset.preview.fontColor,
-                    textShadow: preset.preview.borderWidth > 0 ? `0 0 0 ${preset.preview.borderColor}, 0 0 1px ${preset.preview.borderColor}` : 'none',
-                  }"
-                >字</span>
-                <div v-if="preset.preview.bgAlpha > 0" style="position:absolute;inset:2px 2px;border-radius:2px;pointer-events:none;"
-                  :style="{ background: preset.preview.bgColor, opacity: preset.preview.bgAlpha }"
-                ></div>
-              </div>
-              <span style="font-size:12px;font-weight:500;white-space:nowrap;">{{ preset.name }}</span>
+              <span style="font-size:16px;font-weight:bold;z-index:1;line-height:1;"
+                :style="{
+                  color: preset.preview.fontColor,
+                  textShadow: preset.preview.borderWidth > 0 ? `0 0 0 ${preset.preview.borderColor}, 0 0 1px ${preset.preview.borderColor}` : 'none',
+                }"
+              >字</span>
+              <div v-if="preset.preview.bgAlpha > 0" style="position:absolute;inset:2px;border-radius:3px;pointer-events:none;"
+                :style="{ background: preset.preview.bgColor, opacity: preset.preview.bgAlpha }"
+              ></div>
             </div>
           </div>
         </div>
@@ -144,6 +154,9 @@ watch(
 
 const activeNames = ref<string[]>([])
 
+// 当前选中的预设名称，默认选中第一个
+const selectedPresetName = ref<string>('经典白字')
+
 // ===== 预制字幕样式 =====
 interface PresetPreview {
   fontColor: string
@@ -244,6 +257,7 @@ const presetStyles: PresetStyle[] = [
 ]
 
 function applyPreset(preset: PresetStyle) {
+  selectedPresetName.value = preset.name
   Object.assign(localConfig, {
     ...localConfig,
     ...preset.config,
