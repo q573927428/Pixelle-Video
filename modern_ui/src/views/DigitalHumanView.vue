@@ -171,6 +171,8 @@ function getVideoWorkflowPath(): string {
 
 const digitalForm = ref<DigitalForm>({
   mode: 'customize',
+  ai_title: '',
+  ai_topics: '',
   character_asset: null, goods_text: '',
   workflow_config: {
     first_workflow_path: 'workflows/runninghub/digital_image.json',

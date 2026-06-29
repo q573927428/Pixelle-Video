@@ -143,6 +143,8 @@ export interface PipMixConfig {
 
 export interface DigitalForm {
   mode: 'customize'
+  ai_title: string
+  ai_topics: string
   character_asset: string | null
   goods_text: string
   workflow_config: DigitalWorkflowConfig
