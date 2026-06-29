@@ -74,7 +74,7 @@
           <el-table-column prop="name" label="名称" min-width="100" />
           <el-table-column prop="instance_uuid" label="UUID" min-width="110" show-overflow-tooltip />
           <el-table-column prop="gpu_name" label="GPU" width="120" />
-          <el-table-column label="状态" width="180">
+          <el-table-column label="状态" width="150">
             <template #default="{ row }">
               <el-tag :type="row.status === 'running' ? 'success' : (row.status === 'starting' ? 'warning' : 'info')" size="small">
                 {{ row.status }}
@@ -159,7 +159,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="实例名称">
-          <el-input v-model="createName" placeholder="并发生成-镜像机" />
+          <el-input v-model="createName" placeholder="并发镜像机01" />
         </el-form-item>
         <el-form-item label="GPU 数量">
           <el-input-number v-model="createGpuAmount" :min="1" :max="8" />
@@ -216,7 +216,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listInstances as apiListInstances,
@@ -270,9 +270,24 @@ const listToken = ref(localStorage.getItem('pixelle_autodl_token') || '')
 const showCreateDialog = ref(false)
 const createToken = ref('')
 const createSpecUuid = ref('')
-const createName = ref('并发生成-镜像机')
+const createName = ref('')
 const createGpuAmount = ref(1)
 const creatingInstance = ref(false)
+
+// 自动生成实例名称序号
+function generateNextInstanceName() {
+  const prefix = '并发镜像机'
+  let maxNum = 0
+  for (const inst of instances.value) {
+    const match = inst.name.match(new RegExp(`^${prefix}-?(\\d+)$`))
+    if (match) {
+      const num = parseInt(match[1], 10)
+      if (num > maxNum) maxNum = num
+    }
+  }
+  const nextNum = maxNum + 1
+  return `${prefix}${String(nextNum).padStart(2, '0')}`
+}
 
 const scalingRunning = ref(false)
 const scalingLoading = ref(false)
@@ -284,13 +299,14 @@ const scalingConfig = ref({
 
 const ensuringReady = ref(false)
 
-// GPU 规格下拉选项
+// GPU 规格下拉选项（含显存信息）
 const gpuSpecOptions = [
-  { value: '5090-p', label: 'RTX 5090 (5090-p)' },
-  { value: 'pro6000-p', label: 'RTX PRO 6000 (pro6000-p)' },
-  { value: '4090-p', label: 'RTX 4090 (4090-p)' },
-  { value: '4080super-p', label: 'RTX 4080 Super (4080super-p)' },
-  { value: 'a100-sxm', label: 'A100 SXM (a100-sxm)' },
+  { value: '5090-p', label: '5090-32G（性能型）- ￥2.78/时' },
+  { value: 'pro6000-p', label: 'PRO6000-96G（性能型）- ￥5.98/时' },
+  { value: 'h800', label: 'H800-80G（通用型）- ￥8.88/时' },
+  { value: 'v-48g', label: '4090-48G（通用型）- ￥2.88/时' },
+  { value: 'v-32g-p', label: 'vGPU-32G（性能型）- ' },
+  { value: 'v-48g-350w', label: 'vGPU-48G-350W（通用型）- ' },
 ]
 
 const showMirrorDialogVisible = ref(false)
@@ -312,6 +328,13 @@ const shutdownCount = computed(() => instances.value.filter(i => i.status === 's
 function isMaster(uuid: string) {
   return masterUuid.value && uuid === masterUuid.value
 }
+
+// 打开创建弹窗时自动填充实例名称序号
+watch(showCreateDialog, (val) => {
+  if (val) {
+    createName.value = generateNextInstanceName()
+  }
+})
 
 // ========== Lifecycle ==========
 
@@ -405,7 +428,7 @@ async function handleListInstances() {
   loadingList.value = true
   try {
     const res = await apiListInstances(listToken.value)
-    console.log('[InstanceList] raw response:', JSON.stringify(res, null, 2))
+    // console.log('[InstanceList] raw response:', JSON.stringify(res, null, 2))
     
     if (res.success) {
       const list: any[] = res.list || res.instances || []
@@ -414,16 +437,17 @@ async function handleListInstances() {
       // 自动探测第一个实例的所有字段
       if (list.length > 0) {
         const sample = list[0]
-        console.log('[InstanceList] sample fields:', Object.keys(sample))
-        console.log('[InstanceList] sample data:', JSON.stringify(sample, null, 2))
+        // console.log('[InstanceList] sample fields:', Object.keys(sample))
+        // console.log('[InstanceList] sample data:', JSON.stringify(sample, null, 2))
       }
 
       const gpuSpecNames: Record<string, string> = {
-        '5090-p': 'RTX 5090',
-        'pro6000-p': 'RTX PRO 6000',
-        '4090-p': 'RTX 4090',
-        '4080super-p': 'RTX 4080 Super',
-        'a100-sxm': 'A100 SXM',
+        '5090-p': '5090-32G（性能型）',
+        'pro6000-p': 'PRO6000-96G（性能型）',
+        'h800': 'H800-80G（通用型）',
+        'v-48g': '4090-48G（通用型）',
+        'v-32g-p': 'vGPU-32G（性能型）',
+        'v-48g-350w': 'vGPU-48G-350W（通用型）',
       }
 
       const newList: InstanceItem[] = []
@@ -489,7 +513,7 @@ async function queryInstanceSnapshot(inst: InstanceItem) {
   try {
     // 通过 GET /api/instances/snapshot 获取 service_6008_domain
     const snapshot = await getInstanceSnapshot(listToken.value, inst.instance_uuid)
-    console.log(`[Snapshot ${inst.name}]`, JSON.stringify(snapshot, null, 2))
+    // console.log(`[Snapshot ${inst.name}]`, JSON.stringify(snapshot, null, 2))
     const snap = snapshot.snapshot || {}
     const domain = snap.service_6008_domain || snap.domain || ''
     if (domain) {
