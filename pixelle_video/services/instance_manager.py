@@ -1081,10 +1081,15 @@ class AutoScalingMonitor:
     # ---- 自动关机 ----
     
     async def auto_power_off(self, instance_uuid: str, token: str = ""):
-        """自动关机指定实例"""
+        """自动关机指定实例（主控机不受自动关机影响）"""
         token = token or self._default_token
         inst = self.instances.get(instance_uuid)
         if not inst:
+            return
+        
+        # ⛔ 主控机永不自动关机
+        if instance_uuid == self._master_instance_uuid:
+            logger.warning(f"⛔ Skipping power-off for master instance {instance_uuid}")
             return
         
         # 冷却期检查：3分钟内不重复尝试关机同一实例
@@ -1123,10 +1128,15 @@ class AutoScalingMonitor:
     # ---- 自动释放 ----
     
     async def auto_release(self, instance_uuid: str, token: str = ""):
-        """自动释放（销毁）实例"""
+        """自动释放（销毁）实例（主控机不受自动释放影响）"""
         token = token or self._default_token
         inst = self.instances.get(instance_uuid)
         if not inst:
+            return
+        
+        # ⛔ 主控机永不自动释放
+        if instance_uuid == self._master_instance_uuid:
+            logger.warning(f"⛔ Skipping auto-release for master instance {instance_uuid}")
             return
         
         # 冷却期检查：5分钟内不重复尝试释放同一实例
@@ -1588,6 +1598,10 @@ class AutoScalingMonitor:
             if inst.current_jobs > 0:
                 continue
             
+            # ⛔ 主控机永不自动关机/释放
+            if inst.instance_uuid == self._master_instance_uuid:
+                continue
+            
             idle_seconds = (now - inst.last_active_time).total_seconds()
             idle_days = (now - inst.created_at).total_seconds() / 86400
             
@@ -1599,7 +1613,7 @@ class AutoScalingMonitor:
             
             # 检查是否满足关机条件（10分钟无任务）
             idle_minutes = idle_seconds / 60
-            if idle_minutes >= self.idle_shutdown_minutes and inst.auto_managed:
+            if idle_minutes >= self.idle_shutdown_minutes:
                 logger.info(f"🔄 Instance {inst.name} idle for {idle_minutes:.0f}min, shutting down...")
                 await self.auto_power_off(inst.instance_uuid)
     
