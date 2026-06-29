@@ -221,20 +221,20 @@ const digitalForm = ref<DigitalForm>({
     font_weight: 700,
     position_x: 0,
     position_y: -1600,
-    display_mode: 'full',
-    duration_seconds: 5,
+    display_mode: 'duration',
+    duration_seconds: 2,
   },
   business_card_config: {
     enabled: true,
     title: '创始人 & CEO',
     subtitle: '专注AI视频生成',
-    display_mode: 'full',
-    duration_seconds: 5,
+    display_mode: 'duration',
+    duration_seconds: 2,
   },
   bgm_config: {
     enabled: false,
     selected_bgm: null,
-    volume: 50,
+    volume: 15,
     custom_bgm: null,
   },
   pip_mix_config: {
@@ -781,6 +781,33 @@ async function handleSubtitlePreview() {
          font_border_width: digitalForm.value.subtitle_config.font_border_width,
          font_border_color: digitalForm.value.subtitle_config.font_border_color,
        },
+       // 标题叠加配置
+       title_overlay_config: {
+         enabled: digitalForm.value.title_overlay_config.enabled,
+         text: digitalForm.value.title_overlay_config.text,
+         font_size: digitalForm.value.title_overlay_config.font_size,
+         font_color: digitalForm.value.title_overlay_config.font_color,
+         font_weight: digitalForm.value.title_overlay_config.font_weight,
+         position_x: digitalForm.value.title_overlay_config.position_x,
+         position_y: digitalForm.value.title_overlay_config.position_y,
+         display_mode: digitalForm.value.title_overlay_config.display_mode,
+         duration_seconds: digitalForm.value.title_overlay_config.duration_seconds,
+       },
+       // 个人名片配置
+       business_card_config: {
+         enabled: digitalForm.value.business_card_config.enabled,
+         title: digitalForm.value.business_card_config.title,
+         subtitle: digitalForm.value.business_card_config.subtitle,
+         display_mode: digitalForm.value.business_card_config.display_mode,
+         duration_seconds: digitalForm.value.business_card_config.duration_seconds,
+       },
+       // BGM 配置
+       bgm_config: {
+         enabled: digitalForm.value.bgm_config.enabled,
+         selected_bgm: digitalForm.value.bgm_config.selected_bgm,
+         volume: digitalForm.value.bgm_config.volume,
+         custom_bgm: digitalForm.value.bgm_config.custom_bgm,
+       },
     }
     const res: any = await request('/api/pipelines/digital-human/subtitle-preview', {
       method: 'POST',
@@ -893,6 +920,36 @@ function buildPayload(): Record<string, any> {
      background_radius: digitalForm.value.subtitle_config.background_radius,
      font_border_width: digitalForm.value.subtitle_config.font_border_width,
      font_border_color: digitalForm.value.subtitle_config.font_border_color,
+   }
+
+  // ===== 标题叠加配置 =====
+   payload.title_overlay_config = {
+     enabled: digitalForm.value.title_overlay_config.enabled,
+     text: digitalForm.value.title_overlay_config.text,
+     font_size: digitalForm.value.title_overlay_config.font_size,
+     font_color: digitalForm.value.title_overlay_config.font_color,
+     font_weight: digitalForm.value.title_overlay_config.font_weight,
+     position_x: digitalForm.value.title_overlay_config.position_x,
+     position_y: digitalForm.value.title_overlay_config.position_y,
+     display_mode: digitalForm.value.title_overlay_config.display_mode,
+     duration_seconds: digitalForm.value.title_overlay_config.duration_seconds,
+   }
+
+  // ===== 个人名片配置 =====
+   payload.business_card_config = {
+     enabled: digitalForm.value.business_card_config.enabled,
+     title: digitalForm.value.business_card_config.title,
+     subtitle: digitalForm.value.business_card_config.subtitle,
+     display_mode: digitalForm.value.business_card_config.display_mode,
+     duration_seconds: digitalForm.value.business_card_config.duration_seconds,
+   }
+
+  // ===== BGM 配置 =====
+   payload.bgm_config = {
+     enabled: digitalForm.value.bgm_config.enabled,
+     selected_bgm: digitalForm.value.bgm_config.selected_bgm,
+     volume: digitalForm.value.bgm_config.volume,
+     custom_bgm: digitalForm.value.bgm_config.custom_bgm,
    }
 
   // 🔍 调试：打印 payload 中字幕配置，便于在浏览器 Console 排查

@@ -727,6 +727,7 @@ class VideoService:
             - BGM is mixed with original video audio
             - If loop=True, BGM repeats until video ends
             - Fade effects are applied to BGM only
+            - If video has no audio stream, BGM is used as the sole audio track
         """
         self._ensure_ffmpeg()
         logger.info(f"Adding BGM to video (volume={bgm_volume}, loop={loop})")
@@ -746,34 +747,49 @@ class VideoService:
             # Apply fade effects if specified
             if fade_in > 0:
                 bgm_audio = bgm_audio.filter('afade', type='in', duration=fade_in)
-            # Note: fade_out at the end requires knowing the duration, which is complex
-            # For now, we skip fade_out in this implementation
-            # A more advanced implementation would need to:
-            # 1. Get video duration
-            # 2. Calculate fade_out start time
-            # 3. Apply fade filter with specific start_time
             
-            # Mix original audio with BGM
-            mixed_audio = ffmpeg.filter(
-                [input_video.audio, bgm_audio],
-                'amix',
-                inputs=2,
-                duration='first'  # Use video's duration
-            )
+            # Check if video has audio stream
+            video_has_audio = self.has_audio_stream(video)
             
-            (
-                ffmpeg
-                .output(
-                    input_video.video,
-                    mixed_audio,
-                    output,
-                    vcodec='copy',
-                    acodec='aac',
-                    audio_bitrate='192k'
+            if not video_has_audio:
+                # Video has no audio: use BGM as the sole audio track
+                logger.info(f"Video has no audio stream, using BGM as sole audio track")
+                (
+                    ffmpeg
+                    .output(
+                        input_video.video,
+                        bgm_audio,
+                        output,
+                        vcodec='copy',
+                        acodec='aac',
+                        audio_bitrate='192k',
+                        **{'t': str(self._get_video_duration(video))},  # Limit to video duration
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
                 )
-                .overwrite_output()
-                .run(capture_stdout=True, capture_stderr=True)
-            )
+            else:
+                # Mix original audio with BGM
+                mixed_audio = ffmpeg.filter(
+                    [input_video.audio, bgm_audio],
+                    'amix',
+                    inputs=2,
+                    duration='first'  # Use video's duration
+                )
+                
+                (
+                    ffmpeg
+                    .output(
+                        input_video.video,
+                        mixed_audio,
+                        output,
+                        vcodec='copy',
+                        acodec='aac',
+                        audio_bitrate='192k'
+                    )
+                    .overwrite_output()
+                    .run(capture_stdout=True, capture_stderr=True)
+                )
             
             logger.success(f"BGM added successfully: {output}")
             return output
@@ -1021,7 +1037,7 @@ class VideoService:
         except ffmpeg.Error as e:
             error_msg = e.stderr.decode() if e.stderr else str(e)
             logger.error(f"FFmpeg error padding video: {error_msg}")
-            raise RuntimeError(f"Failed to pad video: {error_msg}")
+            raise RuntimeError(f"Failed to pad video: {e}")
 
     def burn_subtitle_frames(
         self,
@@ -1087,8 +1103,18 @@ class VideoService:
                 logger.warning(f"Subtitle frame not found, skipping: {frame_path}")
                 continue
 
-            start_time = frame_info["start_time"]
-            end_time = frame_info["end_time"]
+            # 兼容两种 metadata 格式：
+            # 1. 字幕格式：包含 start_time/end_time（秒）
+            # 2. 叠加层格式：包含 start_frame/end_frame（帧索引）+ meta.fps
+            start_time = frame_info.get("start_time")
+            end_time = frame_info.get("end_time")
+            if start_time is None or end_time is None:
+                # 用 start_frame/end_frame + fps 计算
+                sub_fps = frame_info.get("fps", meta.get("fps", 30))
+                start_frame = frame_info.get("start_frame", 0)
+                end_frame = frame_info.get("end_frame", 0)
+                start_time = start_frame / sub_fps
+                end_time = end_frame / sub_fps
             duration = end_time - start_time
 
             # 输入标签：[i+1:v]
@@ -1117,8 +1143,15 @@ class VideoService:
             if not os.path.exists(frame_path):
                 continue
 
-            start_time = frame_info["start_time"]
-            end_time = frame_info["end_time"]
+            # 兼容两种 metadata 格式（同上方逻辑）
+            start_time = frame_info.get("start_time")
+            end_time = frame_info.get("end_time")
+            if start_time is None or end_time is None:
+                sub_fps = frame_info.get("fps", meta.get("fps", 30))
+                start_frame = frame_info.get("start_frame", 0)
+                end_frame = frame_info.get("end_frame", 0)
+                start_time = start_frame / sub_fps
+                end_time = end_frame / sub_fps
 
             img_input_idx = i + 1
             if i < len(frame_files) - 1:
@@ -1160,12 +1193,14 @@ class VideoService:
 
             cmd.extend(["-filter_complex", filter_complex])
             cmd.extend(["-map", "[v_out]"])
-            cmd.extend(["-map", "0:a"])  # 保留原音频
+            # 检查视频是否有音轨，如果有则保留
+            if self.has_audio_stream(video):
+                cmd.extend(["-map", "0:a"])
             # -t 强制限制输出时长，防止无限循环图片流导致卡死
             cmd.extend(["-t", str(video_duration)])
             cmd.extend([
                 "-c:v", "libx264",
-                "-c:a", "copy",
+                "-c:a", "copy" if self.has_audio_stream(video) else "aac",
                 "-preset", "ultrafast",
                 "-crf", "28",
                 output,
@@ -1187,4 +1222,3 @@ class VideoService:
         except Exception as e:
             logger.error(f"Subtitle burn error: {e}")
             raise RuntimeError(f"Failed to burn subtitles: {e}")
-

@@ -210,59 +210,60 @@ class OverlayService:
         bg_y = center_y - bg_height // 2
 
         # 显示时长
+        # 关键修复：确保 video_duration > 0，避免全视频模式时长计算为0导致不显示
+        effective_duration = max(video_duration, 0.1)
         if config.display_mode == "duration":
             display_frames = int(config.duration_seconds * fps)
+            logger.info(f"[Overlay - 标题] display_mode=duration, duration_seconds={config.duration_seconds}s")
         else:
-            display_frames = int(video_duration * fps)
+            display_frames = int(effective_duration * fps)
+            logger.info(f"[Overlay - 标题] display_mode=full, video_duration={effective_duration:.2f}s")
+        display_frames = max(display_frames, 1)  # 至少1帧，防止显示为0
 
         # 生成单帧图像（所有帧相同）
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # 半透明黑底
-        draw.rounded_rectangle(
-            (bg_x, bg_y, bg_x + bg_width, bg_y + bg_height),
-            radius=int(12 * scale),
-            fill=(0, 0, 0, 180),
-        )
-
-        # 描边（黑色边框提升可读性）
+        # 描边（黑色边框提升可读性，与前端 Canvas 预览一致）
         border_width = max(1, int(2 * scale))
         stroke_color = (0, 0, 0, 255)
 
-        # 文字位置
+        # 文字位置（居中）
         text_x = center_x
         text_y = center_y
 
-        # 使用 anchor='mm' 居中
+        # 使用 anchor='mm' 居中，带描边无背景
         draw.text((text_x, text_y), config.text, fill=fg_color, font=font,
                   anchor='mm', stroke_width=border_width, stroke_fill=stroke_color)
 
-        # 保存帧
-        for i in range(display_frames):
-            frame_filename = f"title_{uuid.uuid4().hex[:8]}_{i:06d}.png"
-            frame_path = os.path.join(frames_dir, frame_filename)
-            img.save(frame_path, "PNG")
+        # 保存单帧（静态叠加层只需一帧，避免 FFmpeg 处理大量冗余 PNG 输入卡死）
+        frame_filename = f"title_{uuid.uuid4().hex[:8]}_000000.png"
+        frame_path = os.path.join(frames_dir, frame_filename)
+        img.save(frame_path, "PNG")
 
-        # 保存元数据
+        # 显示时长（秒）
+        display_seconds = display_frames / fps
+
+        # 保存元数据（单帧覆盖整个显示时段）
         metadata = {
             "video_width": video_width,
             "video_height": video_height,
             "fps": fps,
             "frames": [
                 {
-                    "path": os.path.join(frames_dir, f),
-                    "frame": i,
+                    "path": os.path.join(frames_dir, frame_filename),
+                    "frame": 0,
                     "start_frame": 0,
                     "end_frame": display_frames,
+                    "start_time": 0.0,
+                    "end_time": display_seconds,
                 }
-                for i, f in enumerate(sorted(os.listdir(frames_dir)))
             ],
         }
         with open(os.path.join(frames_dir, "metadata.json"), "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
 
-        logger.info(f"[Overlay] Generated {display_frames} title overlay frames in {frames_dir}")
+        logger.info(f"[Overlay] Generated 1 title overlay frame (duration={display_seconds:.1f}s) in {frames_dir}")
         return frames_dir
 
     def generate_business_card_frames(
@@ -307,10 +308,15 @@ class OverlayService:
             sub_font = ImageFont.load_default()
 
         # 显示时长
+        # 关键修复：确保 video_duration > 0，避免全视频模式时长计算为0导致不显示
+        effective_duration = max(video_duration, 0.1)
         if config.display_mode == "duration":
             display_frames = int(config.duration_seconds * fps)
+            logger.info(f"[Overlay - 名片] display_mode=duration, duration_seconds={config.duration_seconds}s")
         else:
-            display_frames = int(video_duration * fps)
+            display_frames = int(effective_duration * fps)
+            logger.info(f"[Overlay - 名片] display_mode=full, video_duration={effective_duration:.2f}s")
+        display_frames = max(display_frames, 1)  # 至少1帧，防止显示为0
 
         # 生成帧
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
@@ -358,29 +364,32 @@ class OverlayService:
             draw.text((text_x, sub_y), config.subtitle, fill=(204, 204, 204, 255),
                       font=sub_font, anchor='lm')
 
-        # 保存帧（所有帧相同）
-        for i in range(display_frames):
-            frame_filename = f"card_{uuid.uuid4().hex[:8]}_{i:06d}.png"
-            frame_path = os.path.join(frames_dir, frame_filename)
-            img.save(frame_path, "PNG")
+        # 保存单帧（静态名片只需一帧，避免 FFmpeg 处理大量冗余 PNG 输入卡死）
+        frame_filename = f"card_{uuid.uuid4().hex[:8]}_000000.png"
+        frame_path = os.path.join(frames_dir, frame_filename)
+        img.save(frame_path, "PNG")
 
-        # 保存元数据
+        # 显示时长（秒）
+        display_seconds = display_frames / fps
+
+        # 保存元数据（单帧覆盖整个显示时段）
         metadata = {
             "video_width": video_width,
             "video_height": video_height,
             "fps": fps,
             "frames": [
                 {
-                    "path": os.path.join(frames_dir, f),
-                    "frame": i,
+                    "path": os.path.join(frames_dir, frame_filename),
+                    "frame": 0,
                     "start_frame": 0,
                     "end_frame": display_frames,
+                    "start_time": 0.0,
+                    "end_time": display_seconds,
                 }
-                for i, f in enumerate(sorted(os.listdir(frames_dir)))
             ],
         }
         with open(os.path.join(frames_dir, "metadata.json"), "w", encoding="utf-8") as f:
             json.dump(metadata, f, ensure_ascii=False, indent=2)
 
-        logger.info(f"[Overlay] Generated {display_frames} business card frames in {frames_dir}")
+        logger.info(f"[Overlay] Generated 1 business card frame (duration={display_seconds:.1f}s) in {frames_dir}")
         return frames_dir

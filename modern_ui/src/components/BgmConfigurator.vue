@@ -26,6 +26,9 @@
               </div>
             </el-option>
           </el-select>
+          <div v-if="localConfig.selected_bgm" class="bgm-audio-player">
+            <audio ref="audioRef" :src="filePreviewUrl(localConfig.selected_bgm)" controls class="bgm-audio" />
+          </div>
         </el-form-item>
         <el-form-item label="自定义上传BGM">
           <div class="upload-field-container">
@@ -43,9 +46,21 @@
   </div>
 </template>
 
+<style scoped>
+.bgm-audio-player {
+  margin-top: 8px;
+  width: 100%;
+}
+.bgm-audio {
+  width: 100%;
+  height: 40px;
+}
+</style>
+
 <script setup lang="ts">
-import { ref, watch, reactive } from 'vue'
+import { ref, watch, reactive, computed } from 'vue'
 import type { BgmConfig, BgmInfo } from '../types'
+import { filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
 
@@ -63,6 +78,31 @@ const emit = defineEmits<{
 }>()
 
 const localConfig = reactive<BgmConfig>({ ...props.config })
+
+const audioRef = ref<HTMLAudioElement | null>(null)
+
+watch(
+  () => localConfig.volume,
+  (val) => {
+    if (audioRef.value) {
+      audioRef.value.volume = val / 100
+    }
+  }
+)
+
+watch(
+  () => localConfig.selected_bgm,
+  () => {
+    if (audioRef.value) {
+      audioRef.value.volume = localConfig.volume / 100
+    }
+  }
+)
+
+const selectedBgmName = computed(() => {
+  const bgm = props.bgmList.find((b) => b.path === localConfig.selected_bgm)
+  return bgm ? bgm.name : localConfig.selected_bgm
+})
 
 watch(
   () => props.config,

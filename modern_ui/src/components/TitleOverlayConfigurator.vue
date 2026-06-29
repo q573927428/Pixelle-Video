@@ -16,14 +16,12 @@
           <el-input v-model="localConfig.text" placeholder="请输入标题文字" :maxlength="50" show-word-limit />
         </el-form-item>
         <el-form-item label="显示时长">
-          <el-radio-group v-model="localConfig.display_mode">
-            <el-radio-button value="full">全视频时长</el-radio-button>
-            <el-radio-button value="duration">指定秒数</el-radio-button>
-          </el-radio-group>
-          <div v-if="localConfig.display_mode === 'duration'" style="margin-top:8px;">
-            <el-slider v-model="localConfig.duration_seconds" :min="1" :max="60" :step="1" show-input>
-              <template #prepend>⏱</template>
-            </el-slider>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <el-radio-group v-model="localConfig.display_mode">
+              <el-radio-button value="full">全视频时长</el-radio-button>
+              <el-radio-button value="duration">指定秒数</el-radio-button>
+            </el-radio-group>
+            <el-input-number v-if="localConfig.display_mode === 'duration'" v-model="localConfig.duration_seconds" :min="1" :max="60" :step="1" />
           </div>
         </el-form-item>
 

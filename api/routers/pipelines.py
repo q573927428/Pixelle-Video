@@ -115,11 +115,11 @@ class DigitalHumanRequest(BaseModel):
     title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
         "font_weight": 700, "position_x": 0, "position_y": -800,
-        "display_mode": "full", "duration_seconds": 5,
+        "display_mode": "duration", "duration_seconds": 2,
     })
     business_card_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "title": "", "subtitle": "",
-        "display_mode": "full", "duration_seconds": 5,
+        "display_mode": "duration", "duration_seconds": 2,
     })
     bgm_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "selected_bgm": None, "volume": 50, "custom_bgm": None,
@@ -315,47 +315,53 @@ async def _run_second_digital_workflow(
 
 def _burn_overlays_sync(
     video_path: str,
+    request_body: DigitalHumanRequest,
     task_dir: str,
     video_width: int,
     video_height: int,
     video_duration: float,
 ) -> str:
     """
-    同步叠加层烧录函数：标题叠加 + 个人名片
+    同步叠加层烧录函数：标题叠加 + 个人名片 + BGM
     使用 OverlayService 生成帧图像，通过 FFmpeg overlay 叠加到视频上
     """
-    # 从 request_body 中获取配置（通过调用栈获取）
-    import inspect
-    frame_insp = inspect.currentframe()
-    rb = None
-    while frame_insp:
-        local_vars = frame_insp.f_locals
-        if 'request_body' in local_vars:
-            rb = local_vars['request_body']
-            break
-        frame_insp = frame_insp.f_back
-    if rb is None:
-        logger.warning("⚠️ [叠层] 无法获取 request_body，跳过叠加层处理")
-        return video_path
+    rb = request_body
 
     try:
         import subprocess
         import json
+        import ffmpeg
 
         overlay_service = OverlayService()
         video_service = VideoService()
         current_video = video_path
 
+        # 关键修复：从实际视频文件中读取视频时长，替换传入的 audio_duration
+        # 避免全视频模式（display_mode=full）因为传入了音频时长而非视频时长导致显示异常
+        actual_video_duration = video_duration
+        try:
+            probe = ffmpeg.probe(video_path)
+            video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+            if video_stream:
+                actual_video_duration = float(probe['format']['duration'])
+                logger.info(f"[叠层] 从视频文件读取实际时长: {actual_video_duration:.2f}s (传入: {video_duration:.2f}s)")
+        except Exception as e:
+            logger.warning(f"[叠层] 无法从视频文件读取时长，使用传入值 {video_duration:.2f}s: {e}")
+            actual_video_duration = video_duration
+
         # 1. 标题叠加
         try:
             title_cfg = TitleOverlayConfig.from_dict(rb.title_overlay_config if hasattr(rb, 'title_overlay_config') else {})
             if title_cfg.enabled and title_cfg.text:
+                logger.info(f"[叠层] 标题叠加配置: enabled={title_cfg.enabled}, text={title_cfg.text}, "
+                           f"display_mode={title_cfg.display_mode}, duration_seconds={title_cfg.duration_seconds}, "
+                           f"actual_video_duration={actual_video_duration:.2f}s")
                 title_dir = overlay_service.generate_title_overlay_frames(
                     config=title_cfg,
                     video_width=video_width,
                     video_height=video_height,
                     output_dir=task_dir,
-                    video_duration=video_duration,
+                    video_duration=actual_video_duration,
                 )
                 if title_dir:
                     title_output = os.path.join(task_dir, "with_title.mp4")
@@ -374,12 +380,15 @@ def _burn_overlays_sync(
         try:
             card_cfg = BusinessCardConfig.from_dict(rb.business_card_config if hasattr(rb, 'business_card_config') else {})
             if card_cfg.enabled and card_cfg.title:
+                logger.info(f"[叠层] 个人名片配置: enabled={card_cfg.enabled}, title={card_cfg.title}, "
+                           f"display_mode={card_cfg.display_mode}, duration_seconds={card_cfg.duration_seconds}, "
+                           f"actual_video_duration={actual_video_duration:.2f}s")
                 card_dir = overlay_service.generate_business_card_frames(
                     config=card_cfg,
                     video_width=video_width,
                     video_height=video_height,
                     output_dir=task_dir,
-                    video_duration=video_duration,
+                    video_duration=actual_video_duration,
                 )
                 if card_dir:
                     card_output = os.path.join(task_dir, "with_card.mp4")
@@ -641,6 +650,19 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
             # ===== 字幕烧录 =====
             if request_body.subtitle_config and request_body.subtitle_config.enabled:
                 final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+
+            # ===== 标题叠加 + 个人名片 =====
+            try:
+                import ffmpeg
+                probe = ffmpeg.probe(final_path)
+                video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+                if video_stream:
+                    vw, vh = int(video_stream['width']), int(video_stream['height'])
+                    vs = VideoService()
+                    dur = vs._get_audio_duration(audio_path)
+                    final_path = _burn_overlays_sync(final_path, request_body, task_dir, vw, vh, dur)
+            except Exception as e:
+                logger.exception(f"⚠️ [叠层] 远程模式 overlays 处理异常: {e}")
             
             return final_path
         finally:
@@ -683,6 +705,19 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
         if request_body.subtitle_config and request_body.subtitle_config.enabled:
             final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
 
+        # ===== 标题叠加 + 个人名片 =====
+        try:
+            import ffmpeg
+            probe = ffmpeg.probe(final_path)
+            video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+            if video_stream:
+                vw, vh = int(video_stream['width']), int(video_stream['height'])
+                vs = VideoService()
+                dur = vs._get_audio_duration(audio_path)
+                final_path = _burn_overlays_sync(final_path, request_body, task_dir, vw, vh, dur)
+        except Exception as e:
+            logger.exception(f"⚠️ [叠层] api_video_workflow 模式 overlays 处理异常: {e}")
+
         return final_path
 
     if request_body.mode == "customize":
@@ -701,6 +736,19 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
         # ===== 字幕烧录 =====
         if request_body.subtitle_config and request_body.subtitle_config.enabled:
             final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
+
+        # ===== 标题叠加 + 个人名片 =====
+        try:
+            import ffmpeg
+            probe = ffmpeg.probe(final_path)
+            video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+            if video_stream:
+                vw, vh = int(video_stream['width']), int(video_stream['height'])
+                vs = VideoService()
+                dur = vs._get_audio_duration(audio_path)
+                final_path = _burn_overlays_sync(final_path, request_body, task_dir, vw, vh, dur)
+        except Exception as e:
+            logger.exception(f"⚠️ [叠层] customize 模式 overlays 处理异常: {e}")
 
         return final_path
 
@@ -766,6 +814,19 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
     if request_body.subtitle_config and request_body.subtitle_config.enabled:
         final_path = _burn_subtitles_sync(final_path, request_body, generated_text, audio_path, task_dir)
 
+    # ===== 标题叠加 + 个人名片 =====
+    try:
+        import ffmpeg
+        probe = ffmpeg.probe(final_path)
+        video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+        if video_stream:
+            vw, vh = int(video_stream['width']), int(video_stream['height'])
+            vs = VideoService()
+            dur = vs._get_audio_duration(audio_path)
+            final_path = _burn_overlays_sync(final_path, request_body, task_dir, vw, vh, dur)
+    except Exception as e:
+        logger.exception(f"⚠️ [叠层] digital 模式 overlays 处理异常: {e}")
+
     return final_path
 
 
@@ -780,6 +841,20 @@ class SubtitlePreviewRequest(BaseModel):
     video_width: int = Field(1080, description="视频宽度")
     video_height: int = Field(1920, description="视频高度")
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
+
+    # 标题叠加和个人名片配置（预览时也一并渲染）
+    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
+        "font_weight": 700, "position_x": 0, "position_y": -800,
+        "display_mode": "full", "duration_seconds": 5,
+    })
+    business_card_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "title": "", "subtitle": "",
+        "display_mode": "full", "duration_seconds": 5,
+    })
+    bgm_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "selected_bgm": None, "volume": 50, "custom_bgm": None,
+    })
 
 
 class SubtitlePreviewResponse(BaseModel):
@@ -900,6 +975,85 @@ async def subtitle_preview(
             output=preview_output,
             fps=30,
         )
+
+        # ===== 标题叠加（预览） =====
+        current_video = preview_output
+        overlay_service = OverlayService()
+
+        # 1. 标题叠加
+        try:
+            title_cfg = TitleOverlayConfig.from_dict(request_body.title_overlay_config if hasattr(request_body, 'title_overlay_config') else {})
+            if title_cfg.enabled and title_cfg.text:
+                title_dir = overlay_service.generate_title_overlay_frames(
+                    config=title_cfg,
+                    video_width=preview_video_width,
+                    video_height=preview_video_height,
+                    output_dir=task_dir,
+                    video_duration=preview_duration,
+                    fps=30,
+                )
+                if title_dir:
+                    title_output = os.path.join(task_dir, "preview_with_title.mp4")
+                    video_service.burn_subtitle_frames(
+                        video=current_video,
+                        subtitle_dir=title_dir,
+                        output=title_output,
+                        fps=30,
+                    )
+                    if os.path.exists(title_output):
+                        current_video = title_output
+                        logger.info(f"✅ [预览 - 标题叠加] 成功: {title_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [预览 - 标题叠加] 失败: {e}")
+
+        # 2. 个人名片
+        try:
+            card_cfg = BusinessCardConfig.from_dict(request_body.business_card_config if hasattr(request_body, 'business_card_config') else {})
+            if card_cfg.enabled and card_cfg.title:
+                card_dir = overlay_service.generate_business_card_frames(
+                    config=card_cfg,
+                    video_width=preview_video_width,
+                    video_height=preview_video_height,
+                    output_dir=task_dir,
+                    video_duration=preview_duration,
+                    fps=30,
+                )
+                if card_dir:
+                    card_output = os.path.join(task_dir, "preview_with_card.mp4")
+                    video_service.burn_subtitle_frames(
+                        video=current_video,
+                        subtitle_dir=card_dir,
+                        output=card_output,
+                        fps=30,
+                    )
+                    if os.path.exists(card_output):
+                        current_video = card_output
+                        logger.info(f"✅ [预览 - 个人名片] 成功: {card_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [预览 - 个人名片] 失败: {e}")
+
+        # 3. 背景音乐（预览）
+        try:
+            bgm_cfg = BgmOverlayConfig.from_dict(request_body.bgm_config if hasattr(request_body, 'bgm_config') else {})
+            if bgm_cfg.enabled:
+                bgm_path = bgm_cfg.custom_bgm or bgm_cfg.selected_bgm
+                if bgm_path:
+                    volume = max(0.0, min(1.0, bgm_cfg.volume / 100.0))
+                    bgm_output = os.path.join(task_dir, "preview_with_bgm.mp4")
+                    video_service.add_bgm(
+                        video=current_video,
+                        bgm=bgm_path,
+                        output=bgm_output,
+                        bgm_volume=volume,
+                        loop=True,
+                    )
+                    if os.path.exists(bgm_output):
+                        current_video = bgm_output
+                        logger.info(f"✅ [预览 - 背景音乐] 成功: {bgm_output}")
+        except Exception as e:
+            logger.exception(f"⚠️ [预览 - 背景音乐] 失败: {e}")
+
+        preview_output = current_video
 
         # 生成预览视频 URL
         preview_url = path_to_url(request, preview_output) if Path(preview_output).exists() else ""

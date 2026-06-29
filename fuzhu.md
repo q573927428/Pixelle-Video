@@ -57,3 +57,13 @@ cd modern_ui; pnpm approve-builds esbuild; pnpm build
 ## 待完成
 
 生成好的视频，添加可以分发到其他短视频平台的功能。
+
+
+modern_ui\src\views\DigitalHumanView.vue
+api\routers\pipelines.py
+pixelle_video\services\video.py
+生成预览效果，标题叠加和个人名片显示时长设置好像没有生效,
+
+标题叠加和个人名片选择指定描述的时候，滑块显示很窄修复一下，另外默认值2秒，最大值不能超过视频时长，
+
+字幕显示开始时间往后推迟0.1秒
