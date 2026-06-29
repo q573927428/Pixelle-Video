@@ -884,6 +884,7 @@ class SubtitlePreviewRequest(BaseModel):
     audio_duration: float = Field(..., description="音频时长（秒）")
     video_width: int = Field(1080, description="视频宽度")
     video_height: int = Field(1920, description="视频高度")
+    video_path: Optional[str] = Field(None, description="实际视频路径，如果提供则使用该视频替代 demo 视频")
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
 
     # 标题叠加和个人名片配置（预览时也一并渲染）
@@ -909,6 +910,32 @@ class SubtitlePreviewResponse(BaseModel):
     message: str = ""
 
 
+class ApplyEffectsRequest(BaseModel):
+    """应用后处理效果请求"""
+    video_path: str = Field(..., description="原始视频路径")
+    goods_text: str = Field("", description="口播文案")
+    subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
+    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
+        "font_weight": 700, "position_x": 0, "position_y": -800,
+        "display_mode": "duration", "duration_seconds": 2,
+    })
+    business_card_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "title": "", "subtitle": "",
+        "display_mode": "duration", "duration_seconds": 2,
+    })
+    bgm_config: dict[str, Any] = Field(default_factory=lambda: {
+        "enabled": False, "selected_bgm": None, "volume": 50, "custom_bgm": None,
+    })
+
+
+class ApplyEffectsResponse(BaseModel):
+    """应用后处理效果响应"""
+    success: bool = True
+    video_url: str = ""
+    message: str = ""
+
+
 @router.post("/digital-human/subtitle-preview", response_model=SubtitlePreviewResponse)
 async def subtitle_preview(
     request_body: SubtitlePreviewRequest,
@@ -922,15 +949,6 @@ async def subtitle_preview(
         import shutil
         from pixelle_video.utils.os_util import create_task_output_dir
 
-        # 使用 demo 视频作为预览基础
-        preview_video_dir = Path("modern_ui/public/videos")
-        preview_video_path = preview_video_dir / "shu-09.mp4"
-        if not preview_video_path.exists():
-            return SubtitlePreviewResponse(
-                success=False,
-                message=f"Preview video not found: {preview_video_path}"
-            )
-
         # 创建临时工作目录
         task_dir, _task_id = create_task_output_dir()
         
@@ -939,27 +957,58 @@ async def subtitle_preview(
         # 限制预览时长 5 秒
         preview_duration = min(request_body.audio_duration, 5.0)
 
-        # 根据前端传入的 video_width/video_height 等比缩放到预览尺寸（短边至少 540px）
-        vw = request_body.video_width or 1080
-        vh = request_body.video_height or 1920
-        if vw >= vh:
-            # 横图或方图：以高度为基准 540px
-            preview_video_height = 540
-            preview_video_width = max(540, round(540 * (vw / vh)))
-        else:
-            # 竖图：以宽度为基准 540px
-            preview_video_width = 540
-            preview_video_height = max(540, round(540 * (vh / vw)))
+        # 确定使用哪个视频：如果有提供 video_path 则使用实际视频，否则使用 demo 视频
+        source_video_path = None
+        if request_body.video_path:
+            # 尝试直接使用提供的路径
+            if os.path.exists(request_body.video_path):
+                source_video_path = request_body.video_path
+                logger.info(f"🎬 [字幕预览] 使用实际视频: {source_video_path}")
+            else:
+                # 处理 /api/files/ 开头的 URL
+                vp = request_body.video_path
+                if "/api/files/" in vp:
+                    parts = vp.split("/api/files/")
+                    if len(parts) > 1:
+                        rel_path = parts[1].replace("%2F", "/").replace("%5C", "/").replace("\\", "/")
+                        for root in ["output", "temp"]:
+                            candidate = os.path.join(root, rel_path.split(root, 1)[-1] if root in rel_path else rel_path)
+                            if os.path.exists(candidate):
+                                source_video_path = candidate
+                                logger.info(f"🎬 [字幕预览] 从URL解析实际视频: {source_video_path}")
+                                break
 
-        # 缩放视频（适配宽高比，保持比例，黑边填充）
-        preview_video_short = os.path.join(task_dir, "preview_demo_short.mp4")
+        if not source_video_path:
+            # 回退到 demo 视频
+            preview_video_dir = Path("modern_ui/public/videos")
+            source_video_path = str(preview_video_dir / "shu-09.mp4")
+            if not os.path.exists(source_video_path):
+                return SubtitlePreviewResponse(
+                    success=False,
+                    message=f"Preview video not found: {source_video_path}"
+                )
+            logger.info(f"🎬 [字幕预览] 使用 demo 视频: {source_video_path}")
+
+        # 从源视频中截取前5秒作为预览基础
+        preview_video_short = os.path.join(task_dir, "preview_short.mp4")
         subprocess.run(
-            ["ffmpeg", "-y", "-i", str(preview_video_path), "-t", "5",
-             "-vf", f"scale={preview_video_width}:{preview_video_height}:flags=bilinear",
-             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "30",
+            ["ffmpeg", "-y", "-i", source_video_path, "-t", "5",
+             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
              "-c:a", "aac", "-ar", "22050", "-ac", "1", preview_video_short],
             capture_output=True, text=True, check=True,
         )
+
+        # 获取截取视频的实际分辨率
+        import ffmpeg
+        probe = ffmpeg.probe(preview_video_short)
+        video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+        if video_stream:
+            preview_video_width = int(video_stream['width'])
+            preview_video_height = int(video_stream['height'])
+            logger.info(f"🎬 [字幕预览] 预览视频分辨率: {preview_video_width}x{preview_video_height}")
+        else:
+            preview_video_width = request_body.video_width or 540
+            preview_video_height = request_body.video_height or 960
 
         # 生成 SRT 字幕文件
         subtitle_service = SubtitleService()
@@ -972,28 +1021,28 @@ async def subtitle_preview(
         # 将 SubtitleRequestConfig 转换为 SubtitleConfigModel
         cfg_model = SubtitleConfigModel.from_dict(request_body.subtitle_config.model_dump())
 
-        # 缩放到 540x960 时需要按比例缩放字号、间距、内边距等参数
-        # 原配置是针对 1080x1920 设计的，缩放比例 = 540/1080 = 0.5
-        scale_factor = preview_video_width / request_body.video_width if request_body.video_width > 0 else 0.5
-        cfg_model.font_size = max(12, int(cfg_model.font_size * scale_factor))
-        cfg_model.max_width = int(cfg_model.max_width * scale_factor)
-        cfg_model.position_x = int(cfg_model.position_x * scale_factor)
-        cfg_model.position_y = int(cfg_model.position_y * scale_factor)
-        cfg_model.background_radius = max(0, int(cfg_model.background_radius * scale_factor))
-        cfg_model.letter_spacing = max(0, int(cfg_model.letter_spacing * scale_factor))
+        # 根据实际视频分辨率缩放字幕参数（配置基于1080x1920设计）
+        design_width = 1080
+        design_height = 1920
+        sf = min(preview_video_width / design_width, preview_video_height / design_height)
+        cfg_model.font_size = max(12, int(cfg_model.font_size * sf))
+        cfg_model.max_width = int(cfg_model.max_width * sf)
+        cfg_model.position_x = int(cfg_model.position_x * sf)
+        cfg_model.position_y = int(cfg_model.position_y * sf)
+        cfg_model.background_radius = max(0, int(cfg_model.background_radius * sf))
+        cfg_model.letter_spacing = max(0, int(cfg_model.letter_spacing * sf))
         if cfg_model.font_border_width > 0:
-            cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * scale_factor))
-        # 缩放 padding
+            cfg_model.font_border_width = max(1, int(cfg_model.font_border_width * sf))
         pad_parts = (cfg_model.background_padding or '10 20').split(' ')
         scaled_pad = []
         for p in pad_parts:
             p = p.strip()
             if p.isdigit():
-                scaled_pad.append(str(max(1, int(int(p) * scale_factor))))
+                scaled_pad.append(str(max(1, int(int(p) * sf))))
         if scaled_pad:
             cfg_model.background_padding = ' '.join(scaled_pad)
 
-        # 生成字幕帧图像（缩小分辨率）
+        # 生成字幕帧图像（使用实际视频分辨率）
         frames_dir = subtitle_service.generate_subtitle_frames(
             text=request_body.text,
             audio_duration=preview_duration,
@@ -1010,7 +1059,7 @@ async def subtitle_preview(
                 message="No subtitle frames generated"
             )
 
-        # 烧录字幕到缩放后的 demo 视频
+        # 烧录字幕到预览视频
         video_service = VideoService()
         preview_output = os.path.join(task_dir, "preview_subtitled.mp4")
         video_service.burn_subtitle_frames(
@@ -1115,6 +1164,144 @@ async def subtitle_preview(
     except Exception as e:
         logger.error(f"Subtitle preview error: {e}")
         return SubtitlePreviewResponse(
+            success=False,
+            message=str(e)
+        )
+
+
+@router.post("/digital-human/apply-effects", response_model=ApplyEffectsResponse)
+async def apply_effects(
+    request_body: ApplyEffectsRequest,
+    request: Request,
+    _user: UserInfo = Depends(check_daily_limit),
+):
+    """
+    将字幕/标题/名片/BGM等效果应用到已有的视频上（后处理编辑）。
+    复用现有的 _burn_subtitles_sync 和 _burn_overlays_sync 函数。
+    """
+    try:
+        video_path = request_body.video_path
+        if not video_path or not os.path.exists(video_path):
+            # 尝试从 URL 转换为本地路径
+            # 如果是 /api/files/ 开头的 URL，转换为本地文件路径
+            if video_path and "/api/files/" in video_path:
+                # 从 URL 中提取相对路径
+                parts = video_path.split("/api/files/")
+                if len(parts) > 1:
+                    rel_path = parts[1].replace("%2F", "/").replace("%5C", "/").replace("\\", "/")
+                    # 尝试多种可能的根目录
+                    for root in ["output", "temp"]:
+                        candidate = os.path.join(root, rel_path.split(root, 1)[-1] if root in rel_path else rel_path)
+                        if os.path.exists(candidate):
+                            video_path = candidate
+                            break
+
+        if not video_path or not os.path.exists(video_path):
+            return ApplyEffectsResponse(
+                success=False,
+                message=f"原始视频文件不存在: {video_path}"
+            )
+
+        goods_text = request_body.goods_text.strip()
+        if not goods_text:
+            return ApplyEffectsResponse(
+                success=False,
+                message="文案为空，无法生成字幕"
+            )
+
+        # 获取视频文件所在目录作为 task_dir
+        task_dir = os.path.dirname(video_path)
+        if not task_dir:
+            task_dir = os.path.join("output", "temp_effects")
+            os.makedirs(task_dir, exist_ok=True)
+
+        # 获取视频分辨率
+        import ffmpeg
+        probe = ffmpeg.probe(video_path)
+        video_stream = next((s for s in probe['streams'] if s['codec_type'] == 'video'), None)
+        if not video_stream:
+            return ApplyEffectsResponse(
+                success=False,
+                message="无法读取视频流信息"
+            )
+        video_width = int(video_stream['width'])
+        video_height = int(video_stream['height'])
+        logger.info(f"🎬 [ApplyEffects] 视频分辨率: {video_width}x{video_height}, path={video_path}")
+
+        # 获取视频时长
+        video_duration = float(probe['format']['duration'])
+
+        # 使用 ffmpeg 从视频中提取一段音频用于字幕时长计算
+        audio_path = os.path.join(task_dir, "extracted_audio.mp3")
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec", "libmp3lame", "-ar", "22050", "-ac", "1",
+                 audio_path],
+                capture_output=True, text=True, check=True, timeout=60,
+            )
+        except Exception as e:
+            logger.warning(f"[ApplyEffects] 提取音频失败，使用估算时长: {e}")
+            audio_path = ""
+
+        # ===== 1. 字幕烧录 =====
+        current_video = video_path
+        if request_body.subtitle_config.enabled:
+            try:
+                # 构造一个 DigitalHumanRequest 兼容对象
+                class ReqProxy:
+                    pass
+                proxy = ReqProxy()
+                proxy.subtitle_config = request_body.subtitle_config
+                proxy.title_overlay_config = request_body.title_overlay_config
+                proxy.business_card_config = request_body.business_card_config
+                proxy.bgm_config = request_body.bgm_config
+
+                subtitled = _burn_subtitles_sync(
+                    video_path=current_video,
+                    request_body=proxy,
+                    generated_text=goods_text,
+                    audio_path=audio_path,
+                    task_dir=task_dir,
+                )
+                if subtitled and os.path.exists(subtitled):
+                    current_video = subtitled
+                    logger.info(f"✅ [ApplyEffects] 字幕烧录成功: {subtitled}")
+            except Exception as e:
+                logger.exception(f"⚠️ [ApplyEffects] 字幕烧录异常，继续: {e}")
+
+        # ===== 2. 标题叠加 + 个人名片 + BGM =====
+        try:
+            overlayed = _burn_overlays_sync(
+                video_path=current_video,
+                request_body=proxy,
+                task_dir=task_dir,
+                video_width=video_width,
+                video_height=video_height,
+                video_duration=video_duration,
+            )
+            if overlayed and os.path.exists(overlayed):
+                current_video = overlayed
+                logger.info(f"✅ [ApplyEffects] 叠加层处理成功: {overlayed}")
+        except Exception as e:
+            logger.exception(f"⚠️ [ApplyEffects] 叠加层处理异常: {e}")
+
+        # 生成结果视频 URL
+        if os.path.exists(current_video):
+            video_url = path_to_url(request, current_video)
+            return ApplyEffectsResponse(
+                success=True,
+                video_url=video_url,
+                message="效果应用成功"
+            )
+        else:
+            return ApplyEffectsResponse(
+                success=False,
+                message="处理后的视频文件不存在"
+            )
+
+    except Exception as e:
+        logger.exception(f"❌ [ApplyEffects] 处理异常: {e}")
+        return ApplyEffectsResponse(
             success=False,
             message=str(e)
         )

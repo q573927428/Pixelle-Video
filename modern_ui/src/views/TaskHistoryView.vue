@@ -58,8 +58,11 @@
             <div v-else class="history-item-placeholder">🎬</div>
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
-            <div class="history-item-info">
-              <div class="history-item-title-row">
+          <div class="history-item-info">
+            <div v-if="task.status === 'completed'" class="history-item-edit-btn" @click.stop="openVideoEditor(task)">
+              <el-tag size="small" type="warning" effect="plain" style="cursor:pointer;">🎬 编辑</el-tag>
+            </div>
+            <div class="history-item-title-row">
                 <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
                   {{ task.status === 'completed' ? '已完成' : '失败' }}
                 </el-tag>
@@ -176,15 +179,27 @@
       </template>
       <div v-else class="empty-preview">未找到任务详情</div>
     </el-dialog>
+
+    <!-- 视频后处理编辑弹窗 -->
+    <el-dialog v-model="editVideoDialogVisible" title="🎬 视频后处理编辑" :close-on-click-modal="false" top="3vh" width="65%" class="video-edit-dialog" destroy-on-close>
+      <VideoPostProcessEditor
+        v-if="editTaskData"
+        :task-video-url="editTaskVideoUrl"
+        :task-video-path="editTaskVideoPath"
+        :task-text="editTaskText"
+        :task-id="editTaskData.task_id"
+      />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadTaskHistory, deleteTaskHistory, getTaskHistoryDetail } from '../api'
 import { ElMessageBox } from 'element-plus'
 import { useAuth } from '../composables/useAuth'
+import VideoPostProcessEditor from '../components/VideoPostProcessEditor.vue'
 
 const { isAdmin } = useAuth()
 
@@ -208,6 +223,45 @@ const stats = ref({
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const detailData = ref<any>(null)
+
+// Video post-process editor dialog
+const editVideoDialogVisible = ref(false)
+const editTaskData = ref<any>(null)
+const editTaskVideoUrl = ref('')
+const editTaskVideoPath = ref('')
+const editTaskText = ref('')
+
+async function openVideoEditor(task: any) {
+  // 从列表中已有的字段提取文案
+  let content = task.goods_text || ''
+  if (!content && task.input) {
+    let input: any = task.input
+    if (typeof input === 'string') {
+      try { input = JSON.parse(input) } catch { /* ignore */ }
+    }
+    content = input.goods_text || input.prompt || input.text || ''
+  }
+  // 如果列表数据没有文案，则调用详情接口获取完整 input
+  if (!content && task.task_id) {
+    try {
+      const data = await getTaskHistoryDetail(task.task_id)
+      const meta = data?.metadata || data
+      const input = meta.input
+      if (input) {
+        let obj: any = input
+        if (typeof obj === 'string') {
+          try { obj = JSON.parse(obj) } catch { /* ignore */ }
+        }
+        content = obj.goods_text || obj.prompt || obj.text || ''
+      }
+    } catch { /* ignore */ }
+  }
+  editTaskData.value = task
+  editTaskVideoPath.value = task.video_path || ''
+  editTaskVideoUrl.value = task.video_path ? previewUrl(task.video_path) : ''
+  editTaskText.value = content
+  editVideoDialogVisible.value = true
+}
 
 onMounted(() => {
   loadData()
@@ -523,12 +577,19 @@ async function handleDelete(task: any) {
   backdrop-filter: blur(4px);
   letter-spacing: 0.3px;
 }
+.history-item-edit-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
 .history-item-info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
 }
 .history-item-title-row {
   display: flex;
@@ -673,6 +734,25 @@ async function handleDelete(task: any) {
     min-width: 0 !important;
   }
   .detail-dialog .el-dialog__body {
+    padding: 12px;
+  }
+}
+
+/* 视频编辑弹窗：宽屏大弹窗 */
+.video-edit-dialog {
+  max-width: 95vw !important;
+}
+.video-edit-dialog .el-dialog__body {
+  padding: 16px;
+  padding-top: 8px;
+  overflow-x: hidden;
+}
+@media (max-width: 1024px) {
+  .video-edit-dialog {
+    width: 100vw !important;
+    max-width: 100vw !important;
+  }
+  .video-edit-dialog .el-dialog__body {
     padding: 12px;
   }
 }

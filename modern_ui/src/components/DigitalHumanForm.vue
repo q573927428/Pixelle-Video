@@ -204,73 +204,6 @@
         </div>
       </div>
 
-      <!-- ====== 视频剪辑 ====== -->
-      <div class="form-section-wrapper">
-        <div class="form-section">
-          <div class="form-section-title" style="display:flex;justify-content:space-between;align-items:center;">
-            <span>🎬 视频剪辑</span>
-            <div style="display:flex;align-items:center;gap:6px;" v-if="false">
-              <span style="font-size:13px;font-weight:400;">开关</span>
-              <el-switch
-                :model-value="form.internet_clip_enabled"
-                @update:model-value="form.internet_clip_enabled = $event"
-              />
-            </div>
-          </div>
-          <div class="form-section-body" v-if="form.internet_clip_enabled">
-            <!-- 字幕配置 -->
-            <div style="margin-bottom:16px;">
-              <SubtitleConfigurator
-                :enabled="form.subtitle_enabled"
-                :config="form.subtitle_config"
-                :preview-text="form.goods_text"
-                @update:enabled="form.subtitle_enabled = $event"
-                @update:config="form.subtitle_config = $event"
-              />
-            </div>
-            <!-- 标题叠加 -->
-            <div style="margin-bottom:16px;">
-              <TitleOverlayConfigurator
-                :enabled="form.title_overlay_config.enabled"
-                :config="form.title_overlay_config"
-                @update:enabled="form.title_overlay_config.enabled = $event"
-                @update:config="form.title_overlay_config = $event"
-              />
-            </div>
-            <!-- 个人名片 -->
-            <div style="margin-bottom:16px;" v-if="form.business_card_config.enabled">
-              <BusinessCardConfigurator
-                :enabled="form.business_card_config.enabled"
-                :config="form.business_card_config"
-                @update:enabled="form.business_card_config.enabled = $event"
-                @update:config="form.business_card_config = $event"
-              />
-            </div>
-            <!-- 背景音乐 -->
-            <div style="margin-bottom:16px;">
-              <BgmConfigurator
-                :enabled="form.bgm_config.enabled"
-                :config="form.bgm_config"
-                :bgm-list="bgmList"
-                @update:enabled="form.bgm_config.enabled = $event"
-                @update:config="form.bgm_config = $event"
-                @upload="(f, c, t) => $emit('upload', f, c, t)"
-                @select-history="(c) => $emit('select-history', c)"
-              />
-            </div>
-            <!-- 画中画混剪（最后一项不需要底部间距） -->
-            <PipMixConfigurator
-              :enabled="form.pip_mix_config.enabled"
-              :config="form.pip_mix_config"
-              @update:enabled="form.pip_mix_config.enabled = $event"
-              @update:config="form.pip_mix_config = $event"
-              @upload="(f, c, t) => $emit('upload', f, c, t)"
-              @select-history="(c) => $emit('select-history', c)"
-              v-if="form.pip_mix_config.enabled"
-            />
-          </div>
-        </div>
-      </div>
     </div>
   </el-form>
 </template>
@@ -281,11 +214,6 @@ import type { DigitalForm, WorkflowInfo, TtsVoiceInfo, BgmInfo } from '../types'
 import { request, filePreviewUrl } from '../api'
 import UploadBox from './UploadBox.vue'
 import FilePreview from './FilePreview.vue'
-import SubtitleConfigurator from './SubtitleConfigurator.vue'
-import TitleOverlayConfigurator from './TitleOverlayConfigurator.vue'
-import BusinessCardConfigurator from './BusinessCardConfigurator.vue'
-import BgmConfigurator from './BgmConfigurator.vue'
-import PipMixConfigurator from './PipMixConfigurator.vue'
 import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
