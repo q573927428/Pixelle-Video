@@ -11,7 +11,6 @@
       <div class="page-form">
         <DigitalHumanForm
           :form="digitalForm"
-          :media-workflows="mediaWorkflows"
           :tts-workflows="ttsWorkflows"
           :tts-voices="ttsVoices"
           :bgm-list="bgmFiles"
@@ -134,7 +133,7 @@ import DigitalHumanForm from '../components/DigitalHumanForm.vue'
 import HistoryDialog from '../components/HistoryDialog.vue'
 
 const { running, progress, statusText, result, submitTask, currentTaskId, submitted, cancelCurrentTask } = useTaskRunner()
-const { mediaWorkflows, ttsWorkflows, ttsVoices, bgmFiles, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
+const { ttsWorkflows, ttsVoices, bgmFiles, handleUpload: uploadResource, loadT: refreshTaskList } = useResources()
 
 const auth = getAuth()
 

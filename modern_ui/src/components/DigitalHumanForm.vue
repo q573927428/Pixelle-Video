@@ -214,126 +214,6 @@
         </div>
       </div>
 
-      <!-- ====== 第四板块：服务配置（注释保留） ====== -->
-      <div class="form-section-wrapper" v-if="false">
-        <div class="form-section">
-        <div class="form-section-title">⚙️ 服务配置</div>
-        <div class="form-section-body">
-
-        <!-- 3.1 前置图片生成服务 -->
-        <div class="sub-section">
-          <div class="sub-section-title">3.1 前置图片生成服务来源</div>
-          <el-form-item >
-            <el-radio-group v-model="form.image_service_mode">
-              <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
-              <el-radio-button value="api">API 模型</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-
-          <!-- RunningHub 模式 -->
-          <div v-if="form.image_service_mode === 'runninghub'" class="soft-panel">
-            <el-form-item label="工作流">
-              <el-select v-model="form.workflow_config.first_workflow_path" filterable placeholder="选择 RunningHub 工作流" style="width:100%;">
-                <el-option
-                  v-for="wf in imageWorkflows"
-                  :key="wf.key"
-                  :label="wf.display_name"
-                  :value="wf.key"
-                />
-              </el-select>
-            </el-form-item>
-          </div>
-
-          <!-- API 模型模式 -->
-          <div v-if="form.image_service_mode === 'api'" class="soft-panel">
-            <el-form-item label="API 模型">
-              <el-select v-model="form.image_api_model" filterable placeholder="选择 API 图片模型" style="width:100%;">
-                <el-option label="wan2.7-image - API Dashscope" value="dashscope/wan2.7-image" />
-                <el-option label="wan2.7-image-pro - API Dashscope" value="dashscope/wan2.7-image-pro" />
-                <el-option label="wan2.6-t2i - API Dashscope" value="dashscope/wan2.6-t2i" />
-                <el-option label="gpt-image-2 - API OpenAI" value="openai/gpt-image-2" />
-                <el-option label="doubao-seedream-5-0-260128 - API Seedream" value="seedream/doubao-seedream-5-0-260128" />
-                <el-option label="doubao-seedream-4-5-251128 - API Seedream" value="seedream/doubao-seedream-4-5-251128" />
-                <el-option label="doubao-seedream-4-0-250828 - API Seedream" value="seedream/doubao-seedream-4-0-250828" />
-              </el-select>
-            </el-form-item>
-          </div>
-        </div>
-
-        <!-- 3.2 口播视频合成服务 -->
-        <div class="sub-section">
-          <div class="sub-section-title">3.2 口播视频合成服务来源</div>
-          <el-form-item>
-            <el-radio-group v-model="form.video_service_mode">
-              <el-radio-button value="runninghub">☁️ RunningHub（云端）</el-radio-button>
-              <el-radio-button value="api">API 模型</el-radio-button>
-            </el-radio-group>
-          </el-form-item>
-
-          <!-- RunningHub 模式 -->
-          <div v-if="form.video_service_mode === 'runninghub'" class="soft-panel">
-            <el-form-item label="工作流">
-              <el-select v-model="form.workflow_config.second_workflow_path" filterable placeholder="选择 RunningHub 工作流" style="width:100%;">
-                <el-option
-                  v-for="wf in videoWorkflows"
-                  :key="wf.key"
-                  :label="wf.display_name"
-                  :value="wf.key"
-                />
-              </el-select>
-            </el-form-item>
-          </div>
-
-          <!-- API 模型模式 -->
-          <div v-if="form.video_service_mode === 'api'" class="soft-panel">
-            <el-form-item label="API 模型">
-              <el-select v-model="form.video_api_model" filterable placeholder="选择 API 视频模型" style="width:100%;">
-                <el-option label="wan2.7-r2v - API Dashscope" value="dashscope/wan2.7-r2v" />
-                <el-option label="happyhorse-1.0-r2v - API Dashscope" value="dashscope/happyhorse-1.0-r2v" />
-              </el-select>
-            </el-form-item>
-
-            <el-collapse v-model="videoApiParamsActiveNames" style="margin-top:12px;">
-              <el-collapse-item name="video-api-params">
-                <template #title>
-                  <span class="sub-section-title" style="font-size:13px;">API 视频模型参数</span>
-                </template>
-                <el-form-item label="已接入能力">
-                  <el-tag type="info">digital_human</el-tag>
-                  <el-tag type="info" style="margin-left:6px;">reference_to_video</el-tag>
-                  <el-tag type="info" style="margin-left:6px;">voice_reference</el-tag>
-                </el-form-item>
-                <el-form-item label="视频时长（秒）">
-                  <el-input-number v-model="form.video_api_params.duration" :min="5" :max="15" :step="1" style="width:100%;" />
-                </el-form-item>
-                <el-form-item label="分辨率">
-                  <el-select v-model="form.video_api_params.resolution" filterable placeholder="选择分辨率" style="width:100%;">
-                    <el-option label="720P（默认）" value="1280x720" />
-                    <el-option label="1080P" value="1920x1080" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="画幅比例">
-                  <el-select v-model="form.video_api_params.aspect_ratio" filterable placeholder="选择画幅比例" style="width:100%;">
-                    <el-option label="9:16（默认）" value="9:16" />
-                    <el-option label="16:9" value="16:9" />
-                    <el-option label="1:1" value="1:1" />
-                    <el-option label="4:3" value="4:3" />
-                    <el-option label="3:4" value="3:4" />
-                  </el-select>
-                </el-form-item>
-                <el-form-item label="负向提示词（可选）">
-                  <el-input v-model="form.video_api_params.negative_prompt" type="textarea" :rows="2" placeholder="输入不希望出现的内容" />
-                </el-form-item>
-                <el-form-item>
-                  <el-checkbox v-model="form.video_api_params.watermark">添加水印</el-checkbox>
-                </el-form-item>
-              </el-collapse-item>
-            </el-collapse>
-          </div>
-        </div>
-      </div>
-        </div>
-      </div>
       <!-- ====== 视频剪辑 ====== -->
       <div class="form-section-wrapper">
         <div class="form-section">
@@ -420,7 +300,6 @@ import { ElMessage } from 'element-plus'
 
 const props = defineProps<{
   form: DigitalForm
-  mediaWorkflows: WorkflowInfo[]
   ttsWorkflows: WorkflowInfo[]
   ttsVoices: TtsVoiceInfo[]
   bgmList: BgmInfo[]
@@ -430,28 +309,10 @@ const refAudioItems = computed<string[]>(() => {
   return props.form.ref_audio ? [props.form.ref_audio] : []
 })
 
-// 从 mediaWorkflows 中过滤出图片生成相关的工作流（来源为 runninghub）
-const imageWorkflows = computed<WorkflowInfo[]>(() => {
-  return props.mediaWorkflows.filter(wf => {
-    const key = (wf.key || wf.path || '').toLowerCase()
-    return wf.source === 'runninghub' && (key.includes('image') || key.includes('digital_image'))
-  })
-})
-
-// 从 mediaWorkflows 中过滤出口播视频合成相关的工作流（来源为 runninghub）
-const videoWorkflows = computed<WorkflowInfo[]>(() => {
-  return props.mediaWorkflows.filter(wf => {
-    const key = (wf.key || wf.path || '').toLowerCase()
-    return wf.source === 'runninghub' && (key.includes('combination') || key.includes('digital_combination') || key.includes('video'))
-  })
-})
-
 const emit = defineEmits<{
   (e: 'upload', file: File, category: string, target: string): void
   (e: 'select-history', category: string): void
 }>()
-
-const videoApiParamsActiveNames = ref<string[]>([])
 
 const previewActiveNames = ref<string[]>([])
 const asrLoading = ref(false)

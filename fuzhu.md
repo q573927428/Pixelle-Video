@@ -61,9 +61,11 @@ cd modern_ui; pnpm approve-builds esbuild; pnpm build
 
 字幕显示开始时间往后推迟0.1秒
 
-modern_ui\src\components\DigitalHumanForm.vue
-自定义口播文案下面
 
+
+modern_ui\src\components\DigitalHumanForm.vue
+选择生成模式板块
+自定义口播文案下面
 需要添加一个组件，组件：标题，话题这两个输入框，使用ai通过文案内容一键生成，话题最多生成1-5个，每个话题前面都加上# 左右添加空格，生成的标题不能超过30字
 
 
@@ -80,3 +82,7 @@ scripts\zealman-api-docs.html
 分发任务。
 连续一段时间无任务（例如 10 分钟）后自动 power_off。
 连续7天无任务的情情况下 自动 释放实例
+
+
+
+视频剪辑 板块应该在视频生成后添加。
