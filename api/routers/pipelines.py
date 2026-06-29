@@ -594,11 +594,27 @@ async def _run_digital_human_pipeline(pixelle_video: Any, request_body: DigitalH
     if remote_enabled and remote_base_url:
         logger.info(f"🌐 Using remote ComfyUI mode: {remote_base_url}")
         
+        # ===== [实例管理] 自动确保有就绪镜像机 =====
+        try:
+            from pixelle_video.services.instance_manager import get_global_monitor
+            monitor = get_global_monitor()
+            if monitor._running:
+                # 使用 AutoDL Token（从 comfyui 配置获取）
+                comfyui_cfg_all = config_manager.get_comfyui_config()
+                autodl_token = comfyui_cfg_all.get("runninghub_api_key", "")
+                ready_mirror_url = await monitor.ensure_ready_instance(token=autodl_token)
+                if ready_mirror_url:
+                    logger.info(f"✅ [实例管理] 就绪镜像机: {ready_mirror_url}")
+                else:
+                    logger.warning("⚠️ [实例管理] 无法获取就绪镜像机，使用默认面板地址")
+            else:
+                logger.info("⏹️ [实例管理] 自动扩缩容未启动，跳过")
+        except Exception as e:
+            logger.warning(f"⚠️ [实例管理] ensure_ready_instance 异常，继续使用默认面板: {e}")
+        
         # Get workflow IDs from config:
-        # compose_workflow_id = "digital_customize"  → 人物图+商品图 → 合成图（带货模式用）
-        # video_workflow_id = "digital_combination"  → 图片+音频 → 口播视频（所有模式都用）
-        compose_workflow_id = rc.get("customize_workflow_id", "digital_customize")  # 图片合成
-        video_workflow_id = rc.get("video_workflow_id", "digital_combination")      # 视频合成
+        compose_workflow_id = rc.get("customize_workflow_id", "digital_customize")
+        video_workflow_id = rc.get("video_workflow_id", "digital_combination")
         
         # Generate TTS locally first
         await _run_tts(pixelle_video, request_body, generated_text, audio_path)

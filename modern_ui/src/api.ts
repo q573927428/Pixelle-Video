@@ -353,3 +353,150 @@ export async function getPresetConfig(name: string): Promise<Record<string, any>
     headers: _getAuthHeaders(),
   })
 }
+
+// ====== Instance Management API (AutoDL 实例管理) ======
+
+export async function listInstances(token: string, pageIndex = 1, pageSize = 50) {
+  return request('/api/instances/list', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, page_index: pageIndex, page_size: pageSize }),
+  })
+}
+
+export async function getInstanceStatus(token: string, instanceUuid: string) {
+  return request('/api/instances/status', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, instance_uuid: instanceUuid }),
+  })
+}
+
+export async function getInstanceSnapshot(token: string, instanceUuid: string) {
+  return request(`/api/instances/snapshot?token=${encodeURIComponent(token)}&instance_uuid=${encodeURIComponent(instanceUuid)}`, {
+    headers: _getAuthHeaders(),
+  })
+}
+
+export async function powerOnInstance(token: string, instanceUuid: string) {
+  return request('/api/instances/power-on', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, instance_uuid: instanceUuid }),
+  })
+}
+
+export async function powerOffInstance(token: string, instanceUuid: string) {
+  return request('/api/instances/power-off', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, instance_uuid: instanceUuid }),
+  })
+}
+
+export async function releaseInstance(token: string, instanceUuid: string) {
+  return request('/api/instances/release', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, instance_uuid: instanceUuid }),
+  })
+}
+
+export async function createInstance(token: string, gpuSpecUuid: string, instanceName = '并发生成-镜像机', reqGpuAmount = 1) {
+  return request('/api/instances/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ token, gpu_spec_uuid: gpuSpecUuid, instance_name: instanceName, req_gpu_amount: reqGpuAmount }),
+  })
+}
+
+// ====== Mirror ComfyUI Control API ======
+
+export async function mirrorStartComfyui(mirrorUrl: string) {
+  return request('/api/instances/mirror/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ mirror_url: mirrorUrl }),
+  })
+}
+
+export async function mirrorStopComfyui(mirrorUrl: string) {
+  return request('/api/instances/mirror/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ mirror_url: mirrorUrl }),
+  })
+}
+
+export async function mirrorComfyStatus(mirrorUrl: string) {
+  return request(`/api/instances/mirror/comfy-status?mirror_url=${encodeURIComponent(mirrorUrl)}`, {
+    headers: _getAuthHeaders(),
+  })
+}
+
+export async function mirrorInterrupt(mirrorUrl: string) {
+  return request('/api/instances/mirror/interrupt', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ mirror_url: mirrorUrl }),
+  })
+}
+
+export async function mirrorFreeMemory(mirrorUrl: string) {
+  return request('/api/instances/mirror/free', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ mirror_url: mirrorUrl }),
+  })
+}
+
+export async function mirrorVersions(mirrorUrl: string) {
+  return request(`/api/instances/mirror/versions?mirror_url=${encodeURIComponent(mirrorUrl)}`, {
+    headers: _getAuthHeaders(),
+  })
+}
+
+export async function mirrorSwitchVersion(mirrorUrl: string, version: string) {
+  return request('/api/instances/mirror/switch-version', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ mirror_url: mirrorUrl, version }),
+  })
+}
+
+export async function mirrorProbe(mirrorUrl: string) {
+  return request(`/api/instances/mirror/probe?mirror_url=${encodeURIComponent(mirrorUrl)}`, {
+    headers: _getAuthHeaders(),
+  })
+}
+
+// ====== Auto-Scaling API (自动扩缩容) ======
+
+export async function startAutoScaling(idleShutdownMinutes = 10, idleReleaseDays = 7, token = '') {
+  return request('/api/instances/auto-scaling/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ..._getAuthHeaders() },
+    body: JSON.stringify({ idle_shutdown_minutes: idleShutdownMinutes, idle_release_days: idleReleaseDays, token }),
+  })
+}
+
+export async function stopAutoScaling() {
+  return request('/api/instances/auto-scaling/stop', {
+    method: 'POST',
+    headers: _getAuthHeaders(),
+  })
+}
+
+export async function getAutoScalingStatus() {
+  return request('/api/instances/auto-scaling/status', {
+    headers: _getAuthHeaders(),
+  })
+}
+
+export async function ensureReadyInstance(token = '') {
+  const params = token ? `?token=${encodeURIComponent(token)}` : ''
+  return request(`/api/instances/auto-scaling/ensure-ready${params}`, {
+    method: 'POST',
+    headers: _getAuthHeaders(),
+  })
+}

@@ -117,6 +117,7 @@ const navItems = computed(() => {
   const items = [...baseNavItems]
   if (auth.isAdmin.value) {
     items.push({ key: 'settings', icon: '⚙️', label: '系统配置' })
+    items.push({ key: 'instances', icon: '🖥️', label: '实例管理' })
     items.push({ key: 'admin', icon: '🔐', label: '用户管理' })
   }
   return items

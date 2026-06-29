@@ -49,11 +49,16 @@ const router = createRouter({
       name: 'admin',
       component: () => import('@/views/AdminView.vue'),
     },
+    {
+      path: '/instances',
+      name: 'instances',
+      component: () => import('@/views/InstanceManagementView.vue'),
+    },
   ],
 })
 
 /** 需要侧边栏布局的路由 (route name) */
-export const appRoutes = ['digital_human', 'tasks', 'history', 'account', 'settings', 'admin']
+export const appRoutes = ['digital_human', 'tasks', 'history', 'account', 'settings', 'admin', 'instances']
 
 router.beforeEach((to, _from) => {
   const auth = getAuth()
