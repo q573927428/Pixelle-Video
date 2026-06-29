@@ -56,7 +56,27 @@ cd modern_ui; pnpm approve-builds esbuild; pnpm build
 
 ## 待完成
 
-生成好的视频，添加可以分发到其他短视频平台的功能。
+生成好的视频，添加可以分发到其他短视频平台的功能，我看好像别人都是通过操作浏览器完成的。列如，显示4个平台（抖音，快手，小红书，视频号），假设点击抖音，则会弹出弹窗抖音发布视频的页面然后自动上传视频，自动填写标题，文案+话题，自动设置竖屏和横屏封面，自动发布。
 
 
 字幕显示开始时间往后推迟0.1秒
+
+modern_ui\src\components\DigitalHumanForm.vue
+自定义口播文案下面
+
+需要添加一个组件，组件：标题，话题这两个输入框，使用ai通过文案内容一键生成，话题最多生成1-5个，每个话题前面都加上# 左右添加空格，生成的标题不能超过30字
+
+
+
+modern_ui\src\views\SettingsView.vue
+scripts\zealman-api-docs.html
+仔细阅读文件内容
+实例管理 API
+用户提交任务。
+检查是否有空闲 GPU。
+没有则自动 power_on 第二台甚至第三台。
+等待实例状态变为 running。
+自动启动 ComfyUI/工作流服务（利用 start_command）。
+分发任务。
+连续一段时间无任务（例如 10 分钟）后自动 power_off。
+连续7天无任务的情情况下 自动 释放实例
