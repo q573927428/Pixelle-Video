@@ -84,27 +84,29 @@
             </template>
 
             <!-- 网感预览（开启字幕/标题/名片且不在运行/提交状态时显示） -->
-            <div v-else-if="(digitalForm.subtitle_enabled || digitalForm.title_overlay_config.enabled || digitalForm.business_card_config.enabled) && !running && !submitted" style="margin-bottom:12px;">
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                <span style="font-size:12px;color:var(--el-text-color-secondary);">🎬 实时字幕样式预览</span>
+            <div v-else-if="(digitalForm.subtitle_enabled || digitalForm.title_overlay_config.enabled || digitalForm.business_card_config.enabled) && !running && !submitted" class="preview-sticky-wrap">
+              <div class="preview-sticky-inner">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                  <span style="font-size:12px;color:var(--el-text-color-secondary);">🎬 实时字幕样式预览</span>
+                </div>
+                <canvas
+                  ref="previewCanvasRef"
+                  :width="canvasWidth"
+                  :height="canvasHeight"
+                  style="width:100%;height:auto;max-height:auto;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#000;"
+                />
+                <el-button
+                  v-if="digitalForm.subtitle_enabled && digitalForm.goods_text.trim()"
+                  type="info"
+                  size="small"
+                  @click="handleSubtitlePreview"
+                  :loading="subtitlePreviewLoading"
+                  style="width:100%;"
+                >
+                  {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 预览字幕效果' }}
+                </el-button>
+                <video v-if="subtitlePreviewUrl" :src="subtitlePreviewUrl" controls style="width:100%;height:auto;max-height:auto;object-fit:contain;background:#000;border-radius:8px;margin-top:8px;" />
               </div>
-              <canvas
-                ref="previewCanvasRef"
-                :width="canvasWidth"
-                :height="canvasHeight"
-                style="width:100%;height:auto;max-height:auto;object-fit:contain;border-radius:8px;border:1px solid rgba(255,255,255,0.12);background:#000;"
-              />
-              <el-button
-                v-if="digitalForm.subtitle_enabled && digitalForm.goods_text.trim()"
-                type="info"
-                size="small"
-                @click="handleSubtitlePreview"
-                :loading="subtitlePreviewLoading"
-                style="width:100%;"
-              >
-                {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 预览字幕效果' }}
-              </el-button>
-              <video v-if="subtitlePreviewUrl" :src="subtitlePreviewUrl" controls style="width:100%;height:auto;max-height:auto;object-fit:contain;background:#000;border-radius:8px;margin-top:8px;" />
             </div>
 
             <!-- 空预览占位 -->
@@ -1038,6 +1040,16 @@ function downloadVideo(url: string) {
 </script>
 
 <style scoped>
+.preview-sticky-wrap {
+  margin-bottom: 12px;
+}
+.page-generate {
+  position: sticky;
+  top: 20px;
+  align-self: start;
+  z-index: 10;
+}
+
 .cost-preview {
   padding: 12px;
   background: rgba(255,255,255,0.04);
