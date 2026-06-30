@@ -168,10 +168,9 @@ class DouyinPublisher(BasePublisher):
     async def _capture_qrcode(self) -> str:
         """捕获登录二维码截图
 
-        使用多种策略捕获二维码：
-        1. JS 遍历所有 img/canvas 查找 data:image 二维码（不依赖 class 名称）
-        2. CSS 选择器匹配常见二维码容器并截图
-        3. 页面可见区域截图作为兜底（自动压缩控制大小）
+        使用纯 JS 在浏览器中直接提取二维码图片 src 或截图。
+        不依赖 Playwright 的 is_visible() 检测（可能因渲染时序返回 False），
+        而是通过 JS 直接操作 DOM 查找。
 
         Returns:
             str: 二维码图片的 base64 data URL，未找到时返回 None
@@ -180,191 +179,170 @@ class DouyinPublisher(BasePublisher):
             return None
 
         try:
-            # 等待页面完全稳定
+            # 等待页面稳定
             await self.page.wait_for_timeout(3000)
 
             import base64
 
-            # 策略1: 通过 JS 全面扫描页面，查找任何数据量较大的 data:image 图片
-            logger.info("Strategy 1: Scanning all images via JS...")
+            # ---------- 策略 1: JS 直接提取 class 含 qrcode 的 img 的 src ----------
+            logger.info("Strategy 1: JS extract qrcode img src by class...")
             qr_src = await self.page.evaluate("""
                 () => {
-                    // 优先查找登录二维码: 查找所有 img 元素
+                    // 1. 查找所有 class 包含 qrcode 的 img
                     const allImgs = document.querySelectorAll('img');
-                    let bestMatch = null;
-                    let bestScore = 0;
-
                     for (const img of allImgs) {
-                        const src = img.src || '';
-                        const alt = (img.alt || '').toLowerCase();
-                        const id = (img.id || '').toLowerCase();
                         const cls = (img.className || '').toLowerCase();
-                        const rect = img.getBoundingClientRect();
-                        const area = rect.width * rect.height;
-
-                        // 计算匹配分数
-                        let score = 0;
-
-                        // 必须是在视口内可见的
-                        if (rect.width === 0 || rect.height === 0) continue;
-                        if (rect.top > window.innerHeight || rect.left > window.innerWidth) continue;
-
-                        // data:image 格式
-                        if (src.startsWith('data:image')) {
-                            score += 2;
-                        }
-
-                        // 尺寸评分: 二维码通常在 100-400px 之间
-                        if (area > 5000 && area < 200000) {
-                            score += 2;
-                        }
-
-                        // 关键词匹配
-                        const keywords = ['qrcode', '二维码', 'qrcode', 'login_qr', 'qr_code', 'qrcode_'];
-                        for (const kw of keywords) {
-                            if (src.includes(kw)) { score += 5; break; }
-                            if (alt.includes(kw)) { score += 5; break; }
-                            if (id.includes(kw)) { score += 5; break; }
-                            if (cls.includes(kw)) { score += 5; break; }
-                        }
-
-                        // 检查父元素
-                        let parent = img.parentElement;
-                        let depth = 0;
-                        while (parent && depth < 5) {
-                            const pCls = (parent.className || '').toLowerCase();
-                            for (const kw of keywords) {
-                                if (pCls.includes(kw)) { score += 3; break; }
-                            }
-                            parent = parent.parentElement;
-                            depth++;
-                        }
-
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestMatch = src;
-                        }
-                    }
-
-                    if (bestMatch && bestScore >= 2) {
-                        return bestMatch;
-                    }
-
-                    // 如果没有明确匹配的 img，查找任何可见的 data:image img
-                    for (const img of allImgs) {
                         const src = img.src || '';
-                        if (src.startsWith('data:image')) {
-                            const rect = img.getBoundingClientRect();
-                            if (rect.width > 50 && rect.height > 50 && rect.width < 500 && rect.height < 500) {
-                                // 正方形或接近正方形（二维码通常是）
-                                const ratio = Math.max(rect.width, rect.height) / Math.min(rect.width, rect.height);
-                                if (ratio < 1.3) {
-                                    return src;
-                                }
-                            }
+                        if (src.startsWith('data:image') && cls.includes('qrcode')) {
+                            return src;
                         }
                     }
-
-                    // 查找 canvas
-                    const canvases = document.querySelectorAll('canvas');
-                    for (const c of canvases) {
-                        const rect = c.getBoundingClientRect();
-                        if (rect.width > 50 && rect.height > 50) {
-                            const cls = (c.className || '').toLowerCase();
-                            const parentCls = (c.parentElement?.className || '').toLowerCase();
-                            for (const kw of ['qrcode', 'qrcode', '二维码']) {
-                                if (cls.includes(kw) || parentCls.includes(kw)) {
-                                    return c.toDataURL('image/jpeg', 0.8);
-                                }
-                            }
+                    // 2. 查找 qrcode div 内的 img
+                    const qrDivs = document.querySelectorAll('div[class*="qrcode"]');
+                    for (const div of qrDivs) {
+                        const img = div.querySelector('img');
+                        if (img && img.src && img.src.startsWith('data:image')) {
+                            return img.src;
                         }
                     }
-
                     return null;
                 }
             """)
 
             if qr_src:
-                logger.info(f"🎯 QR code captured via JS smart scan ({len(qr_src)} chars)")
+                logger.info(f"🟢 QR captured via class 'qrcode' img src ({len(qr_src)} chars)")
                 return qr_src
 
-            # 策略2: 直接截图所有可见的大容器区域，找出二维码
-            logger.info("Strategy 2: Screenshot login-related containers...")
-            container_selectors = [
-                '.login-container',
-                'div[class*="login"]',
-                'div[class*="qrcode"]',
-                'div[class*="qrcode"]',
-                '.login-guide',
-                'div[class*="login-box"]',
-                '.captcha_verify_container',
-                'div[class*="verify"]',
-                '.account-verify',
-                '.verify-container',
-            ]
+            # ---------- 策略 2: JS 截图含 qrcode class 的 div ----------
+            logger.info("Strategy 2: JS screenshot qrcode div...")
+            qr_div_info = await self.page.evaluate("""
+                () => {
+                    const qrDivs = document.querySelectorAll('div[class*="qrcode"]');
+                    for (const div of qrDivs) {
+                        const rect = div.getBoundingClientRect();
+                        if (rect.width > 100 && rect.height > 100 && rect.width < 500) {
+                            return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+                        }
+                    }
+                    return null;
+                }
+            """)
 
-            for selector in container_selectors:
+            if qr_div_info:
                 try:
-                    container = self.page.locator(selector).first
-                    if await container.is_visible(timeout=1000):
-                        box = await container.bounding_box()
-                        if box and box['width'] > 80 and box['height'] > 80 and box['width'] < 800:
-                            screenshot = await container.screenshot(type="jpeg", quality=80)
-                            b64 = base64.b64encode(screenshot).decode()
-                            data_url = f"data:image/jpeg;base64,{b64}"
-                            logger.info(f"🎯 QR captured via container '{selector}' ({len(data_url)} chars)")
-                            return data_url
+                    screenshot = await self.page.screenshot(
+                        type="jpeg", quality=85,
+                        clip={
+                            "x": qr_div_info["x"], "y": qr_div_info["y"],
+                            "width": qr_div_info["w"], "height": qr_div_info["h"],
+                        }
+                    )
+                    b64 = base64.b64encode(screenshot).decode()
+                    if len(b64) > 5000:  # 截图即使小一点也能接受
+                        data_url = f"data:image/jpeg;base64,{b64}"
+                        logger.info(f"🟢 QR captured via qrcode div screenshot ({len(data_url)} chars)")
+                        return data_url
                 except Exception:
-                    continue
+                    pass
 
-            # 策略3: 查找图片元素截图
-            logger.info("Strategy 3: Screenshot image elements...")
-            img_selectors = [
-                'img[class*="qrcode"]', 'img[class*="qrcode"]',
-                'img[alt*="qrcode"]', 'img[alt*="二维码"]',
-                'img[alt*="QR"]', '.qrcode-img',
-                '.qrcode-wrap img', '.login-qrcode img',
-            ]
-            for selector in img_selectors:
+            # ---------- 策略 3: JS 查找所有 data:image 图片，按数据体积排序取最大 ----------
+            logger.info("Strategy 3: JS find largest data:image by size...")
+            qr_src = await self.page.evaluate("""
+                () => {
+                    const allImgs = document.querySelectorAll('img');
+                    let best = null;
+                    let bestLen = 0;
+                    for (const img of allImgs) {
+                        const src = img.src || '';
+                        if (!src.startsWith('data:image')) continue;
+                        // 只取可见区域内的
+                        const rect = img.getBoundingClientRect();
+                        if (rect.width < 30 || rect.height < 30) continue;
+                        if (rect.top > window.innerHeight || rect.left > window.innerWidth) continue;
+                        if (src.length > bestLen) {
+                            bestLen = src.length;
+                            best = src;
+                        }
+                    }
+                    // 放宽条件，只要比 3000 chars 大就接受（二维码 min 约 5K）
+                    if (best && bestLen > 3000) return best;
+                    return null;
+                }
+            """)
+
+            if qr_src:
+                logger.info(f"🟢 QR captured via JS data size scan ({len(qr_src)} chars)")
+                return qr_src
+
+            # ---------- 策略 4: JS 查找含"扫码"/"扫一扫"文本的 div，裁剪截图 ----------
+            logger.info("Strategy 4: JS find div with '扫码' text...")
+            scan_div = await self.page.evaluate("""
+                () => {
+                    const allDivs = document.querySelectorAll('div');
+                    for (const div of allDivs) {
+                        const rect = div.getBoundingClientRect();
+                        if (rect.width < 200 || rect.height < 200) continue;
+                        if (rect.width > 600 || rect.height > 700) continue;
+                        if (rect.top > window.innerHeight || rect.left > window.innerWidth) continue;
+                        const text = (div.textContent || '').toLowerCase();
+                        if (text.includes('扫码') || text.includes('扫一扫')) {
+                            return { x: rect.x, y: rect.y, w: rect.width, h: rect.height };
+                        }
+                    }
+                    return null;
+                }
+            """)
+
+            if scan_div:
                 try:
-                    el = self.page.locator(selector).first
-                    if await el.is_visible(timeout=1000):
-                        box = await el.bounding_box()
-                        if box and box['width'] > 30 and box['height'] > 30:
-                            screenshot = await el.screenshot(type="jpeg", quality=80)
-                            b64 = base64.b64encode(screenshot).decode()
-                            data_url = f"data:image/jpeg;base64,{b64}"
-                            logger.info(f"🎯 QR captured via img '{selector}' ({len(data_url)} chars)")
-                            return data_url
+                    screenshot = await self.page.screenshot(
+                        type="jpeg", quality=85,
+                        clip={
+                            "x": scan_div["x"], "y": scan_div["y"],
+                            "width": scan_div["w"], "height": scan_div["h"],
+                        }
+                    )
+                    b64 = base64.b64encode(screenshot).decode()
+                    if len(b64) > 5000:
+                        data_url = f"data:image/jpeg;base64,{b64}"
+                        logger.info(f"🟢 QR captured via '扫码' div screenshot ({len(data_url)} chars)")
+                        return data_url
                 except Exception:
-                    continue
+                    pass
 
-            # 策略4: 兜底 - 裁剪中间区域截图（二维码通常在页面中央区域）
-            logger.info("Strategy 4: Center area screenshot...")
+            # ---------- 策略 5: 中心区域截图 ----------
+            logger.info("Strategy 5: Center area screenshot...")
             viewport = await self.page.viewport_size()
             if viewport:
                 vw, vh = viewport['width'], viewport['height']
-                # 裁剪页面中央区域（二维码通常在中央偏左区域）
                 clip_x = max(0, vw // 2 - 200)
                 clip_y = max(0, vh // 2 - 250)
-                clip_w = min(400, vw - clip_x)
-                clip_h = min(500, vh - clip_y)
-                center_screenshot = await self.page.screenshot(
-                    type="jpeg", quality=80,
-                    clip={"x": clip_x, "y": clip_y, "width": clip_w, "height": clip_h}
-                )
-                b64 = base64.b64encode(center_screenshot).decode()
-                data_url = f"data:image/jpeg;base64,{b64}"
-                logger.info(f"📸 Center area screenshot ({len(data_url)} chars)")
-                return data_url
+                clip_w = min(450, vw - clip_x)
+                clip_h = min(550, vh - clip_y)
+                try:
+                    center_screenshot = await self.page.screenshot(
+                        type="jpeg", quality=85,
+                        clip={"x": clip_x, "y": clip_y, "width": clip_w, "height": clip_h}
+                    )
+                    b64 = base64.b64encode(center_screenshot).decode()
+                    if len(b64) > 5000:
+                        data_url = f"data:image/jpeg;base64,{b64}"
+                        logger.info(f"🟢 Center area screenshot ({len(data_url)} chars)")
+                        return data_url
+                except Exception:
+                    pass
 
-            # 最终兜底: 全页面截图（压缩质量）
-            logger.info("Strategy 5: Full page screenshot (compressed)...")
-            full_screenshot = await self.page.screenshot(type="jpeg", quality=50)
-            b64 = base64.b64encode(full_screenshot).decode()
-            data_url = f"data:image/jpeg;base64,{b64}"
-            logger.info(f"📸 Full page screenshot ({len(data_url)} chars)")
-            return data_url
+            # ---------- 策略 6: 最终兜底 - 全页面截图 ----------
+            logger.info("Strategy 6: Full page screenshot...")
+            try:
+                full_screenshot = await self.page.screenshot(type="jpeg", quality=70)
+                b64 = base64.b64encode(full_screenshot).decode()
+                data_url = f"data:image/jpeg;base64,{b64}"
+                logger.info(f"📸 Full page screenshot ({len(data_url)} chars)")
+                return data_url
+            except Exception:
+                logger.warning("Full page screenshot failed")
+                return None
 
         except Exception as e:
             logger.warning(f"Capture QR code failed: {e}")

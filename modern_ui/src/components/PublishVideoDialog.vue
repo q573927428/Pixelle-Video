@@ -12,7 +12,6 @@
   >
     <!-- 发布进度模式 -->
     <div v-if="publishMode === 'progress'" class="progress-mode">
-      <!-- 进度标题 -->
       <div class="progress-header">
         <div class="progress-platform-icon">{{ currentPlatform?.icon }}</div>
         <div class="progress-title">
@@ -25,8 +24,6 @@
           />
         </div>
       </div>
-
-      <!-- 步骤列表 -->
       <div class="progress-steps">
         <div
           v-for="(step, idx) in publishSteps"
@@ -51,24 +48,6 @@
           </div>
         </div>
       </div>
-
-      <!-- 二维码扫码区域（登录步骤时显示） -->
-      <div v-if="showQRCode" class="qr-login-area">
-        <div class="qr-card">
-          <div class="qr-title">📱 请使用{{ platformLabel }}App扫码登录</div>
-          <div class="qr-image-wrap">
-            <img :src="qrImageData" class="qr-image" alt="扫码登录" />
-          </div>
-          <div class="qr-tip">{{ qrTip || '打开抖音App扫一扫登录' }}</div>
-          <div class="qr-actions">
-            <el-button size="small" @click="refreshQRCode" :disabled="qrRefreshing">
-              {{ qrRefreshing ? '刷新中...' : '🔄 二维码已失效？点击刷新' }}
-            </el-button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 发布结果 -->
       <div v-if="publishStatus === 'success'" class="publish-result success-result">
         <el-result icon="success" title="发布成功！" :sub-title="`视频已成功发布到${platformLabel}`">
           <template #extra>
@@ -87,17 +66,17 @@
       </div>
     </div>
 
-    <!-- 编辑模式 / 登录检测模式 -->
+    <!-- 编辑模式 -->
     <div v-else class="publish-layout">
-      <!-- 登录检测/扫码覆盖层（在编辑模式中显示） -->
-      <div v-if="loginCheckActive" class="login-overlay">
+      <!-- 独立登录覆盖层 -->
+      <div v-if="loginOverlayVisible" class="login-overlay">
         <div v-if="loginStatus === 'checking'" class="login-loading">
           <el-icon class="loading-icon" :size="32"><Loading /></el-icon>
-          <p>正在检测登录状态...</p>
+          <p>正在检测{{ loginPlatformLabel }}登录状态...</p>
         </div>
         <div v-else-if="loginStatus === 'need_qr'" class="login-qr-content">
           <div class="qr-card">
-            <div class="qr-title">📱 请使用{{ platformLabel }}App扫码登录</div>
+            <div class="qr-title">📱 请使用{{ loginPlatformLabel }}App扫码登录</div>
             <div class="qr-image-wrap">
               <img v-if="qrImageData" :src="qrImageData" class="qr-image" alt="扫码登录" />
               <div v-else class="qr-loading">
@@ -105,26 +84,34 @@
                 <p>正在获取二维码...</p>
               </div>
             </div>
-            <div class="qr-tip">{{ qrTip || `打开${platformLabel}App扫一扫登录` }}</div>
+            <div class="qr-tip">{{ qrTip || `打开${loginPlatformLabel}App扫一扫登录` }}</div>
             <div class="qr-actions">
               <el-button size="small" @click="refreshQRCode" :disabled="qrRefreshing">
                 {{ qrRefreshing ? '刷新中...' : '🔄 二维码已失效？点击刷新' }}
               </el-button>
+              <el-button size="small" @click="cancelLogin" style="margin-left:8px;">取消登录</el-button>
             </div>
           </div>
         </div>
+        <div v-else-if="loginStatus === 'success'" class="login-loading" style="color:#67c23a;">
+          <el-icon :size="32"><CircleCheck /></el-icon>
+          <p>✅ {{ loginPlatformLabel }}账号绑定成功！</p>
+        </div>
+        <div v-else-if="loginStatus === 'failed'" class="login-loading" style="color:#f56c6c;">
+          <el-icon :size="32"><CircleClose /></el-icon>
+          <p>❌ {{ loginPlatformLabel }}登录失败：{{ loginErrorMessage || '请稍后重试' }}</p>
+          <el-button type="primary" @click="retryLogin" style="margin-top:12px;">重新登录</el-button>
+        </div>
       </div>
-      <!-- 左侧：视频预览 -->
+
+      <!-- 左侧 -->
       <div class="publish-left">
         <div class="publish-section-title">🎬 视频预览</div>
         <div class="publish-video-wrap">
           <video
             v-if="videoUrl"
             :src="videoUrl"
-            controls
-            muted
-            playsinline
-            preload="metadata"
+            controls muted playsinline preload="metadata"
             class="publish-video"
           />
           <div v-else class="publish-video-empty">
@@ -132,8 +119,6 @@
             <div class="small muted">暂无视频</div>
           </div>
         </div>
-
-        <!-- 封面设置 -->
         <div class="cover-section">
           <div class="publish-section-title">🎨 封面设置</div>
           <div class="cover-row">
@@ -159,15 +144,16 @@
             </div>
           </div>
         </div>
-
-        <!-- 已绑定账号 -->
-        <div class="bound-accounts" v-if="boundAccounts.length > 0">
+        <div class="bound-accounts">
           <div class="publish-section-title">🔗 已绑定账号</div>
+          <div v-if="boundAccounts.length === 0" class="muted small" style="padding:8px 0;">
+            暂无已绑定的平台账号，请点击下方平台按钮进行绑定
+          </div>
           <div class="account-chips">
             <el-tag
               v-for="acc in boundAccounts"
               :key="acc.id"
-              :type="acc.status === 'active' ? 'success' : 'info'"
+              :type="getAccountTagType(acc)"
               size="small"
               closable
               @close="handleUnbindAccount(acc.id)"
@@ -178,44 +164,28 @@
         </div>
       </div>
 
-      <!-- 右侧：发布配置 -->
+      <!-- 右侧 -->
       <div class="publish-right">
         <div class="publish-section-title">📝 发布配置</div>
-
         <el-form label-position="top" class="publish-form">
           <el-form-item label="视频标题">
             <div class="title-input-row">
               <el-input v-model="publishTitle" placeholder="请输入视频标题" maxlength="100" show-word-limit />
               <el-button
-                type="primary"
-                size="small"
-                :loading="aiLoading"
-                :disabled="!publishText"
-                @click="handleAIGenerate"
-                class="ai-btn"
+                type="primary" size="small"
+                :loading="aiLoading" :disabled="!publishText"
+                @click="handleAIGenerate" class="ai-btn"
               >
                 <el-icon><MagicStick /></el-icon>
                 {{ aiLoading ? '生成中' : 'AI生成' }}
               </el-button>
             </div>
           </el-form-item>
-
           <el-form-item label="文案内容">
-            <el-input
-              v-model="publishText"
-              type="textarea"
-              :rows="8"
-              placeholder="请输入文案内容"
-              maxlength="1200"
-              show-word-limit
-            />
+            <el-input v-model="publishText" type="textarea" :rows="8" placeholder="请输入文案内容" maxlength="1200" show-word-limit />
           </el-form-item>
-
           <el-form-item label="话题标签">
-            <el-input
-              v-model="publishTopics"
-              placeholder="多个话题用逗号分隔，如：AI技术,数字人,短视频"
-            />
+            <el-input v-model="publishTopics" placeholder="多个话题用逗号分隔，如：AI技术,数字人,短视频" />
           </el-form-item>
 
           <!-- 选择发布平台 -->
@@ -223,17 +193,21 @@
             <div class="publish-section-title">📤 选择发布平台</div>
             <div class="publish-platform-buttons">
               <el-button
-                v-for="p in publishPlatforms"
-                :key="p.key"
+                v-for="p in publishPlatforms" :key="p.key"
                 :type="selectedPlatform === p.key ? p.type : 'default'"
-                size="large"
-                class="publish-platform-btn"
-                @click="selectedPlatform = p.key"
+                size="large" class="publish-platform-btn"
+                :class="{ 'is-bound': isPlatformBound(p.key), 'is-unbound': !isPlatformBound(p.key) }"
+                @click="handlePlatformClick(p.key)"
                 :plain="selectedPlatform !== p.key"
               >
                 <span style="font-size:20px;margin-right:4px;">{{ p.icon }}</span>
                 {{ p.label }}
+                <span v-if="isPlatformBound(p.key)" class="platform-badge bound-badge">✓</span>
+                <span v-else class="platform-badge unbound-badge">+</span>
               </el-button>
+            </div>
+            <div class="platform-hint muted small" style="margin-top:6px;text-align:center;">
+              已绑定平台点击选择，未绑定平台点击进行扫码登录绑定
             </div>
           </div>
         </el-form>
@@ -243,19 +217,12 @@
     <!-- 底部按钮 -->
     <template #footer>
       <div class="publish-footer">
-        <!-- 进度模式底部按钮 -->
         <template v-if="publishMode === 'progress'">
           <div class="publish-actions" style="width:100%;justify-content:center;">
-            <el-button v-if="publishStatus === 'success' || publishStatus === 'failed'" type="primary" @click="closeDialog">
-              关闭
-            </el-button>
-            <el-button v-else @click="cancelPublish" :disabled="publishStatus === 'success'">
-              取消发布
-            </el-button>
+            <el-button v-if="publishStatus === 'success' || publishStatus === 'failed'" type="primary" @click="closeDialog">关闭</el-button>
+            <el-button v-else @click="cancelPublish" :disabled="publishStatus === 'success'">取消发布</el-button>
           </div>
         </template>
-
-        <!-- 编辑模式底部按钮 -->
         <template v-else>
           <div class="publish-status" v-if="publishStatus">
             <el-tag :type="publishSuccess ? 'success' : 'danger'" effect="dark">
@@ -264,12 +231,7 @@
           </div>
           <div class="publish-actions">
             <el-button @click="$emit('update:visible', false)" :disabled="publishing">取消</el-button>
-            <el-button
-              type="primary"
-              @click="handlePublish"
-              :loading="publishing"
-              :disabled="!publishTitle || !publishText"
-            >
+            <el-button type="primary" @click="handlePublish" :loading="publishing" :disabled="!publishTitle || !publishText">
               {{ publishing ? '发布中...' : `🚀 发布到 ${platformLabel}` }}
             </el-button>
           </div>
@@ -283,7 +245,7 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VideoCamera, MagicStick, CircleCheck, CircleClose, Loading } from '@element-plus/icons-vue'
-import { generatePublishPrepare, startPublish, createPublishWS, listPublishAccounts, deletePublishAccount } from '../api'
+import { generatePublishPrepare, startPublish, createPublishWS, listPublishAccounts, deletePublishAccount, startPublishLogin } from '../api'
 import type { PublishStartRequest, AccountInfo } from '../api'
 
 const publishPlatforms = [
@@ -297,7 +259,7 @@ const props = defineProps<{
   visible: boolean
   platform: string
   videoUrl: string
-  videoPath?: string  // 服务端视频文件路径
+  videoPath?: string
   initialTitle: string
   initialText: string
   initialTopics: string
@@ -313,10 +275,7 @@ const currentPlatform = computed(() => publishPlatforms.find(p => p.key === sele
 
 const platformLabel = computed(() => {
   const map: Record<string, string> = {
-    douyin: '抖音',
-    kuaishou: '快手',
-    xiaohongshu: '小红书',
-    shipinhao: '视频号',
+    douyin: '抖音', kuaishou: '快手', xiaohongshu: '小红书', shipinhao: '视频号',
   }
   return map[selectedPlatform.value] || selectedPlatform.value
 })
@@ -324,8 +283,6 @@ const platformLabel = computed(() => {
 const publishTitle = ref('')
 const publishText = ref('')
 const publishTopics = ref('')
-
-// 封面 - 自动截取视频第一帧
 const frameSrc = ref<string>('')
 
 const aiLoading = ref(false)
@@ -333,7 +290,7 @@ const publishing = ref(false)
 const publishStatus = ref('')
 const publishSuccess = ref(false)
 
-// ====== 发布进度相关 ======
+// ====== 发布进度 ======
 const publishMode = ref<'edit' | 'progress'>('edit')
 const publishProgress = ref(0)
 const stepIndex = ref(0)
@@ -346,32 +303,184 @@ let ws: WebSocket | null = null
 
 const publishSteps = ref([
   { key: 'launching', label: '打开平台' },
-  { key: 'logging_in', label: '登录检测' },
   { key: 'uploading', label: '上传视频' },
   { key: 'filling', label: '填写信息' },
   { key: 'cover', label: '设置封面' },
   { key: 'publishing', label: '发布确认' },
 ])
 
-const stepOrder = ['launching', 'logging_in', 'uploading', 'filling', 'cover', 'publishing', 'complete']
+const stepOrder = ['launching', 'uploading', 'filling', 'cover', 'publishing', 'complete']
 
-// ====== 二维码登录相关 ======
-const showQRCode = ref(false)
+// ====== 独立登录（从发布流程提取） ======
+const loginOverlayVisible = ref(false)
+const loginPlatform = ref('')
+const loginPlatformLabel = computed(() => {
+  const map: Record<string, string> = {
+    douyin: '抖音', kuaishou: '快手', xiaohongshu: '小红书', shipinhao: '视频号',
+  }
+  return map[loginPlatform.value] || loginPlatform.value
+})
+const loginStatus = ref<'idle' | 'checking' | 'need_qr' | 'success' | 'failed'>('idle')
 const qrImageData = ref('')
 const qrTip = ref('')
 const qrRefreshing = ref(false)
+const loginErrorMessage = ref('')
+let loginSessionId = ''
+let loginWs: WebSocket | null = null
 
-// ====== 登录检测（编辑模式内覆盖层） ======
-const loginCheckActive = ref(false)  // 是否显示登录覆盖层
-const loginStatus = ref<'idle' | 'checking' | 'need_qr' | 'success' | 'failed'>('idle')
+// ====== 已绑定账号 ======
+const boundAccounts = ref<AccountInfo[]>([])
+
+const platformNameMap: Record<string, string> = {
+  douyin: '抖音',
+  kuaishou: '快手',
+  xiaohongshu: '小红书',
+  shipinhao: '视频号',
+}
+
+function isPlatformBound(platformKey: string): boolean {
+  const platformName = platformNameMap[platformKey] || platformKey
+  return boundAccounts.value.some(acc => acc.platform === platformName && acc.status === 'active')
+}
+
+function getAccountTagType(acc: AccountInfo): string {
+  if (acc.status === 'expired') return 'danger'
+  if (acc.status === 'revoked') return 'info'
+  return acc.platform === '抖音' ? 'danger'
+    : acc.platform === '快手' ? 'primary'
+    : acc.platform === '小红书' ? 'warning'
+    : 'success'
+}
+
+/** 平台按钮点击：已绑定->选择；未绑定->独立登录 */
+async function handlePlatformClick(platformKey: string) {
+  if (isPlatformBound(platformKey)) {
+    selectedPlatform.value = platformKey
+    return
+  }
+  await handlePlatformLogin(platformKey)
+}
+
+/** 独立登录流程 */
+async function handlePlatformLogin(platformKey: string) {
+  loginPlatform.value = platformKey
+  loginOverlayVisible.value = true
+  loginStatus.value = 'checking'
+  qrImageData.value = ''
+  qrTip.value = ''
+  loginErrorMessage.value = ''
+  loginSessionId = ''
+
+  try {
+    const res = await startPublishLogin({ platform: platformKey })
+    loginSessionId = res.session_id
+    connectLoginWS(res.session_id)
+    setTimeout(() => {
+      if (loginStatus.value === 'checking') loginStatus.value = 'need_qr'
+    }, 3000)
+  } catch (e: any) {
+    loginStatus.value = 'failed'
+    loginErrorMessage.value = e?.message || '登录请求失败'
+  }
+}
+
+function connectLoginWS(sid: string) {
+  disconnectLoginWS()
+  // 始终启动轮询（与 WS 并行），确保二维码数据一定能到达前端
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  const startPolling = () => {
+    pollTimer = setInterval(async () => {
+      if (loginStatus.value === 'success' || loginStatus.value === 'failed') {
+        if (pollTimer) clearInterval(pollTimer)
+        return
+      }
+      try {
+        const { getPublishStatus } = await import('../api')
+        const status = await getPublishStatus(sid)
+        // 优先处理二维码图片数据（即使 WS 未送达也能通过轮询获取）
+        if (status.pending_qrcode && !qrImageData.value) {
+          qrImageData.value = status.pending_qrcode
+          qrTip.value = status.message || `请使用${loginPlatformLabel.value}App扫码登录`
+          loginStatus.value = 'need_qr'
+        }
+        if (status.current_step === 'need_login' && loginStatus.value !== 'need_qr') {
+          loginStatus.value = 'need_qr'
+        }
+        if (status.status === 'failed') {
+          if (pollTimer) clearInterval(pollTimer)
+          loginStatus.value = 'failed'
+          loginErrorMessage.value = status.error || '登录失败'
+        } else if (status.status === 'success') {
+          if (pollTimer) clearInterval(pollTimer)
+          loginStatus.value = 'success'
+          await loadBoundAccounts()
+          selectedPlatform.value = loginPlatform.value
+          ElMessage.success(`✅ ${loginPlatformLabel.value}账号绑定成功！`)
+          setTimeout(() => { loginOverlayVisible.value = false }, 1500)
+        }
+      } catch {
+        if (pollTimer) clearInterval(pollTimer)
+      }
+    }, 2000)
+  }
+  startPolling()
+  // 尝试建立 WS（如果成功则能获得实时推送，失败也不影响轮询）
+  try {
+    loginWs = createPublishWS(sid)
+    loginWs.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data)
+        handleLoginWSMessage(msg)
+      } catch (e) { console.warn('Login WS parse error:', e) }
+    }
+    loginWs.onerror = () => { console.warn('Login WS error (non-critical, polling active)') }
+    loginWs.onclose = () => {
+      // WS 断开不影响主要逻辑，轮询会继续工作
+      console.warn('Login WS closed (polling continues)')
+    }
+  } catch (e) {
+    console.warn('Login WS connection failed (polling active):', e)
+  }
+}
+
+function handleLoginWSMessage(msg: any) {
+  if (msg.type === 'qrcode') {
+    qrImageData.value = msg.image || ''
+    qrTip.value = msg.message || `请使用${loginPlatformLabel.value}App扫码登录`
+    loginStatus.value = 'need_qr'
+  } else if (msg.type === 'qrcode_waiting') {
+    qrTip.value = msg.message || '等待扫码...'
+  } else if (msg.type === 'qrcode_expired') {
+    qrTip.value = msg.message || '二维码已过期'
+  } else if (msg.type === 'login_success') {
+    loginStatus.value = 'success'
+    qrImageData.value = ''
+    ElMessage.success(`✅ ${msg.message || loginPlatformLabel.value + '账号绑定成功！'}`)
+    loadBoundAccounts().then(() => { selectedPlatform.value = loginPlatform.value })
+    setTimeout(() => { loginOverlayVisible.value = false }, 1500)
+  } else if (msg.type === 'error') {
+    loginStatus.value = 'failed'
+    loginErrorMessage.value = msg.message || '登录失败'
+    ElMessage.error(msg.message || '登录失败')
+  } else if (msg.type === 'progress') {
+    if (msg.step === 'need_login') loginStatus.value = 'need_qr'
+  }
+}
+
+function disconnectLoginWS() {
+  if (loginWs) {
+    loginWs.onclose = null
+    loginWs.close()
+    loginWs = null
+  }
+}
 
 async function refreshQRCode() {
-  if (!sessionId.value || qrRefreshing.value) return
+  if (!loginSessionId || qrRefreshing.value) return
   qrRefreshing.value = true
   try {
-    // 发送刷新二维码请求到后端
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ action: 'refresh_qrcode', session_id: sessionId.value }))
+    if (loginWs && loginWs.readyState === WebSocket.OPEN) {
+      loginWs.send(JSON.stringify({ action: 'refresh_qrcode', session_id: loginSessionId }))
     }
     qrTip.value = '正在刷新二维码...'
   } catch {
@@ -381,10 +490,24 @@ async function refreshQRCode() {
   }
 }
 
-// ====== 已绑定账号 ======
-const boundAccounts = ref<AccountInfo[]>([])
+function cancelLogin() {
+  disconnectLoginWS()
+  loginOverlayVisible.value = false
+  loginStatus.value = 'idle'
+  if (loginSessionId && loginWs && loginWs.readyState === WebSocket.OPEN) {
+    try { loginWs.send('cancel') } catch {}
+  }
+}
 
-// 对话框关闭时清理
+function retryLogin() {
+  loginStatus.value = 'checking'
+  qrImageData.value = ''
+  qrTip.value = ''
+  loginErrorMessage.value = ''
+  handlePlatformLogin(loginPlatform.value)
+}
+
+// ====== 对话框生命周期 ======
 watch(() => props.visible, (val) => {
   if (val) {
     selectedPlatform.value = props.platform || 'douyin'
@@ -402,31 +525,32 @@ watch(() => props.visible, (val) => {
     errorMessage.value = ''
     platformUrl.value = ''
     stepMessage.value = ''
-    // 重置二维码状态
-    showQRCode.value = false
+    loginOverlayVisible.value = false
+    loginStatus.value = 'idle'
     qrImageData.value = ''
     qrTip.value = ''
     qrRefreshing.value = false
-
+    loginErrorMessage.value = ''
+    loginSessionId = ''
     nextTick(() => captureVideoFrame())
-    // 加载已绑定账号
     loadBoundAccounts()
   } else {
-    // 关闭对话框时断开WS
     disconnectWS()
+    disconnectLoginWS()
   }
 })
 
-onUnmounted(() => disconnectWS())
+onUnmounted(() => {
+  disconnectWS()
+  disconnectLoginWS()
+})
+
+const platformIconMap: Record<string, string> = {
+  抖音: '🎵', 快手: '📹', 小红书: '📕', '视频号': '💚',
+}
 
 function platformIcon(plat: string): string {
-  const map: Record<string, string> = {
-    douyin: '🎵',
-    kuaishou: '📹',
-    xiaohongshu: '📕',
-    shipinhao: '💚',
-  }
-  return map[plat] || '📱'
+  return platformIconMap[plat] || '📱'
 }
 
 async function loadBoundAccounts() {
@@ -444,9 +568,7 @@ async function handleUnbindAccount(accountId: number) {
     await deletePublishAccount(accountId)
     ElMessage.success('已解绑')
     boundAccounts.value = boundAccounts.value.filter(a => a.id !== accountId)
-  } catch {
-    // 取消操作
-  }
+  } catch {}
 }
 
 function handleClose(done: () => void) {
@@ -454,14 +576,20 @@ function handleClose(done: () => void) {
     ElMessageBox.confirm('发布正在进行中，确定要离开吗？', '提示', { type: 'warning' })
       .then(() => { disconnectWS(); done() })
       .catch(() => {})
+  } else if (loginOverlayVisible.value) {
+    ElMessageBox.confirm('登录流程正在进行中，确定要离开吗？', '提示', { type: 'warning' })
+      .then(() => { disconnectLoginWS(); done() })
+      .catch(() => {})
   } else {
     disconnectWS()
+    disconnectLoginWS()
     done()
   }
 }
 
 function closeDialog() {
   disconnectWS()
+  disconnectLoginWS()
   emit('update:visible', false)
 }
 
@@ -473,19 +601,15 @@ function disconnectWS() {
   }
 }
 
-/** 截取视频第一帧作为封面 */
 function captureVideoFrame() {
   if (!props.videoUrl) return
   const video = document.createElement('video')
-  if (props.videoUrl.startsWith('http')) {
-    video.crossOrigin = 'anonymous'
-  }
+  if (props.videoUrl.startsWith('http')) video.crossOrigin = 'anonymous'
   video.src = props.videoUrl
   video.muted = true
   video.playsInline = true
   video.preload = 'auto'
   video.currentTime = 0.01
-
   let done = false
   function capture() {
     if (done) return
@@ -510,19 +634,12 @@ function captureVideoFrame() {
 
 async function handleAIGenerate() {
   const text = publishText.value?.trim()
-  if (!text) {
-    ElMessage.warning('没有可用的文案，无法生成标题和话题')
-    return
-  }
+  if (!text) { ElMessage.warning('没有可用的文案，无法生成标题和话题'); return }
   aiLoading.value = true
   try {
     const res = await generatePublishPrepare(text)
-    if (res.title) {
-      publishTitle.value = res.title
-    }
-    if (res.topics && res.topics.length > 0) {
-      publishTopics.value = res.topics.join(' ')
-    }
+    if (res.title) publishTitle.value = res.title
+    if (res.topics && res.topics.length > 0) publishTopics.value = res.topics.join(' ')
     ElMessage.success('✅ 标题和话题已自动生成！')
   } catch (e: any) {
     ElMessage.error(`生成失败：${e?.message || '请检查LLM配置'}`)
@@ -531,57 +648,48 @@ async function handleAIGenerate() {
   }
 }
 
-/** 处理发布事件 - 对接后端 API */
+/** 发布事件 - 账号必须已绑定，不再包含登录检测 */
 async function handlePublish() {
   if (!publishTitle.value || !publishText.value) {
     ElMessage.warning('请填写标题和文案')
     return
   }
+  if (!isPlatformBound(selectedPlatform.value)) {
+    ElMessage.warning(`请先绑定${platformLabel.value}账号，再发布视频`)
+    return
+  }
+
   publishing.value = true
   publishStatus.value = ''
   publishSuccess.value = false
 
   try {
-    // 解析话题标签（逗号/空格分隔）
     const topicsStr = publishTopics.value.trim()
     const topics = topicsStr
       ? topicsStr.split(/[,，\s]+/).filter(t => t).map(t => t.startsWith('#') ? t : `#${t}`)
       : []
 
-    // 推导视频文件路径: 优先使用 props.videoPath, 其次从 videoUrl 截取
-    // Playwright 的 set_input_files() 只接受本地文件系统路径，不支持 HTTP URL
     let finalVideoPath = props.videoPath || ''
     if (!finalVideoPath && props.videoUrl) {
       const url = props.videoUrl
       const API_FILES_PREFIX = '/api/files/'
       if (url.startsWith(API_FILES_PREFIX)) {
-        // /api/files/temp/uploads/xxx/xxx.mp4 -> temp/uploads/xxx/xxx.mp4
         finalVideoPath = decodeURIComponent(url.slice(API_FILES_PREFIX.length))
       } else if (url.startsWith('http')) {
-        // http://localhost:8000/api/files/temp/uploads/xxx/xxx.mp4
-        // 提取路径部分，去掉 /api/files/ 前缀
         try {
           const parsed = new URL(url)
-          const pathname = parsed.pathname  // /api/files/temp/uploads/xxx/xxx.mp4
+          const pathname = parsed.pathname
           if (pathname.startsWith(API_FILES_PREFIX)) {
             finalVideoPath = decodeURIComponent(pathname.slice(API_FILES_PREFIX.length))
           } else {
             finalVideoPath = decodeURIComponent(pathname)
           }
         } catch {
-          // 如果 URL 解析失败，直接用原始路径（后端也有兜底解析）
           finalVideoPath = url
         }
       }
     }
 
-    // 1. 第一步：先检测登录（停留在编辑模式，显示登录覆盖层）
-    loginCheckActive.value = true
-    loginStatus.value = 'checking'
-    qrImageData.value = ''
-    qrTip.value = '正在检测登录状态...'
-
-    // 2. 启动发布任务（后端会在内部检测登录，如果未登录则生成二维码）
     const data: PublishStartRequest = {
       platform: selectedPlatform.value,
       video_path: finalVideoPath,
@@ -594,15 +702,15 @@ async function handlePublish() {
     const res = await startPublish(data)
     sessionId.value = res.session_id
 
-    // 3. 连接 WebSocket 接收实时状态
-    connectWS(res.session_id)
+    publishMode.value = 'progress'
+    publishProgress.value = 10
+    stepIndex.value = 0
+    progressMessage.value = '正在发布...'
 
-    // 4. 启动轮询作为兜底
+    connectWS(res.session_id)
     setTimeout(() => pollStatus(res.session_id), 3000)
 
   } catch (e: any) {
-    loginCheckActive.value = false
-    loginStatus.value = 'idle'
     publishStatus.value = e?.message || '发布启动失败'
     publishSuccess.value = false
     ElMessage.error(`发布启动失败：${e?.message || ''}`)
@@ -611,39 +719,17 @@ async function handlePublish() {
   }
 }
 
-/** 登录成功后切换到进度模式继续发布 */
-function proceedToPublishAfterLogin() {
-  loginCheckActive.value = false
-  loginStatus.value = 'idle'
-  publishMode.value = 'progress'
-  publishProgress.value = 10
-  stepIndex.value = 0
-  progressMessage.value = '登录成功，继续发布中...'
-}
-
 function connectWS(sid: string) {
   disconnectWS()
   try {
     ws = createPublishWS(sid)
-
     ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data)
-        handleWSMessage(msg)
-      } catch (e) {
-        console.warn('WS message parse error:', e)
-      }
+      try { handleWSMessage(JSON.parse(event.data)) }
+      catch (e) { console.warn('WS message parse error:', e) }
     }
-
-    ws.onerror = () => {
-      console.warn('Publish WS error')
-    }
-
+    ws.onerror = () => { console.warn('Publish WS error') }
     ws.onclose = () => {
-      // 如果发布还没完成，尝试轮询状态
-      if (publishStatus.value !== 'success' && publishStatus.value !== 'failed') {
-        pollStatus(sid)
-      }
+      if (publishStatus.value !== 'success' && publishStatus.value !== 'failed') pollStatus(sid)
     }
   } catch (e) {
     console.warn('WS connection failed, fallback to polling:', e)
@@ -653,28 +739,17 @@ function connectWS(sid: string) {
 
 function handleWSMessage(msg: any) {
   const stepMap: Record<string, number> = {
-    launching: 0,
-    logging_in: 1,
-    uploading: 2,
-    filling: 3,
-    cover: 4,
-    publishing: 5,
-    complete: 6,
+    launching: 0, uploading: 1, filling: 2, cover: 3, publishing: 4, complete: 5,
   }
 
   if (msg.type === 'progress') {
-    // 如果当前在登录检测模式，收到进度事件说明已跳过登录，切换到进度模式
-    if (loginCheckActive.value || publishMode.value !== 'progress') {
-      loginCheckActive.value = false
-      loginStatus.value = 'idle'
+    if (publishMode.value !== 'progress') {
       publishMode.value = 'progress'
     }
     publishProgress.value = msg.progress || 0
     progressMessage.value = msg.message || ''
     stepMessage.value = ''
-    if (msg.step && stepMap[msg.step] !== undefined) {
-      stepIndex.value = stepMap[msg.step]
-    }
+    if (msg.step && stepMap[msg.step] !== undefined) stepIndex.value = stepMap[msg.step]
   } else if (msg.type === 'complete') {
     publishProgress.value = 100
     stepIndex.value = stepOrder.length - 1
@@ -688,42 +763,6 @@ function handleWSMessage(msg: any) {
     errorMessage.value = msg.message || '发布失败'
     progressMessage.value = msg.message
     ElMessage.error(msg.message || '发布失败')
-  } else if (msg.type === 'qrcode') {
-    // 接收到二维码图片——在登录检测覆盖层显示
-    showQRCode.value = true
-    qrImageData.value = msg.image || ''
-    qrTip.value = msg.message || '请使用App扫码登录'
-    if (loginCheckActive.value) {
-      // 编辑模式覆盖层中显示二维码
-      loginStatus.value = 'need_qr'
-    } else {
-      // 进度模式中显示二维码（兼容旧逻辑）
-      progressMessage.value = msg.message || '请扫码登录'
-      stepIndex.value = 1
-      stepMessage.value = '等待扫码...'
-    }
-  } else if (msg.type === 'qrcode_waiting') {
-    // 更新等待提示
-    qrTip.value = msg.message || '等待扫码...'
-    stepMessage.value = msg.message
-  } else if (msg.type === 'qrcode_expired') {
-    // 二维码过期，提示刷新
-    qrTip.value = msg.message || '二维码已过期'
-    stepMessage.value = '二维码已过期，请刷新'
-  } else if (msg.type === 'need_login') {
-    // 需要扫码登录 (旧版兼容)
-    progressMessage.value = msg.message || '请扫码登录'
-    stepIndex.value = 1
-    stepMessage.value = '等待扫码...'
-  } else if (msg.type === 'login_success') {
-    showQRCode.value = false
-    qrImageData.value = ''
-    stepMessage.value = `已登录：${msg.account_name || ''}`
-    ElMessage.success(`✅ ${msg.message || '登录成功'}`)
-    if (loginCheckActive.value) {
-      // 在编辑模式覆盖层中登录成功，切换到进度模式继续发布
-      proceedToPublishAfterLogin()
-    }
   } else if (msg.type === 'cancelled') {
     publishStatus.value = 'failed'
     errorMessage.value = '用户取消了发布'
@@ -737,16 +776,9 @@ async function pollStatus(sid: string) {
     const interval = setInterval(async () => {
       try {
         const status = await getPublishStatus(sid)
-        
-        // 如果当前在登录检测模式，收到进度说明已跳过登录，切换到进度模式
-        if (loginCheckActive.value || publishMode.value !== 'progress') {
-          if (status.current_step && status.current_step !== 'launching') {
-            loginCheckActive.value = false
-            loginStatus.value = 'idle'
-            publishMode.value = 'progress'
-          }
+        if (publishMode.value !== 'progress' && status.current_step && status.current_step !== 'launching') {
+          publishMode.value = 'progress'
         }
-        
         if (status.status === 'success') {
           clearInterval(interval)
           publishProgress.value = 100
@@ -765,24 +797,19 @@ async function pollStatus(sid: string) {
           publishProgress.value = status.progress || 0
           progressMessage.value = status.message || ''
           const stepMap: Record<string, number> = {
-            launching: 0, logging_in: 1, uploading: 2,
-            filling: 3, cover: 4, publishing: 5, complete: 6,
+            launching: 0, uploading: 1, filling: 2, cover: 3, publishing: 4, complete: 5,
           }
           if (status.current_step && stepMap[status.current_step] !== undefined) {
             stepIndex.value = stepMap[status.current_step]
           }
         }
-      } catch {
-        clearInterval(interval)
-      }
+      } catch { clearInterval(interval) }
     }, 2000)
   } catch {}
 }
 
 function cancelPublish() {
-  if (ws && sessionId.value) {
-    ws.send('cancel')
-  }
+  if (ws && sessionId.value) ws.send('cancel')
   publishStatus.value = 'failed'
   errorMessage.value = '用户取消了发布'
   progressMessage.value = '发布已取消'
@@ -809,31 +836,16 @@ function retryPublish() {
   min-height: 400px;
   position: relative;
 }
-
-.publish-left,
-.publish-right {
+.publish-left, .publish-right {
   display: flex;
   flex-direction: column;
   min-height: 0;
 }
-
-.publish-left {
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
+.publish-left { overflow-y: auto; overflow-x: hidden; }
 @media (max-width: 768px) {
-  .publish-layout {
-    grid-template-columns: 1fr;
-  }
+  .publish-layout { grid-template-columns: 1fr; }
 }
-
-.publish-left,
-.publish-right {
-  min-width: 0;
-  min-height: 0;
-}
-
+.publish-left, .publish-right { min-width: 0; min-height: 0; }
 .publish-section-title {
   font-weight: 700;
   font-size: 14px;
@@ -841,7 +853,6 @@ function retryPublish() {
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line, rgba(255,255,255,0.1));
 }
-
 .publish-video-wrap {
   width: 100%;
   background: #000;
@@ -850,32 +861,23 @@ function retryPublish() {
   margin-bottom: 12px;
   flex-shrink: 0;
 }
-
 .publish-video {
   display: block;
   width: 100%;
   max-height: 30vh;
   object-fit: contain;
 }
-
 .publish-video-empty {
   padding: 60px 20px;
   text-align: center;
   color: var(--muted, #888);
 }
-
-.publish-platform-select {
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-
+.publish-platform-select { margin-top: 8px; flex-shrink: 0; }
 .publish-platform-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 8px;
 }
-
-/* 覆盖el-button默认样式 */
 .publish-platform-btn.el-button {
   box-sizing: border-box;
   width: 100%;
@@ -884,32 +886,52 @@ function retryPublish() {
   letter-spacing: 1px;
   border: 2px solid transparent;
   padding-inline: 0 !important;
+  position: relative;
 }
-
+.publish-platform-btn.is-bound { border-color: var(--el-color-success) !important; }
+.publish-platform-btn.is-unbound {
+  border-style: dashed;
+  border-color: rgba(255,255,255,0.2);
+  opacity: 0.85;
+}
+.publish-platform-btn.is-unbound:hover {
+  border-color: var(--el-color-primary);
+  opacity: 1;
+}
+.platform-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+.platform-badge.bound-badge { background: var(--el-color-success); }
+.platform-badge.unbound-badge { background: var(--el-color-primary); }
+.platform-hint { opacity: 0.7; }
 .publish-form {
   flex: 1;
   overflow-y: auto;
   padding-right: 4px;
   min-height: 0;
 }
-
 .cover-row {
   display: grid;
   grid-template-columns: 1fr 2fr;
   gap: 12px;
 }
-
-.cover-item {
-  display: grid;
-  gap: 6px;
-}
-
+.cover-item { display: grid; gap: 6px; }
 .cover-label {
   font-size: 12px;
   font-weight: 600;
   color: var(--text, #ccc);
 }
-
 .cover-upload-wrap {
   height: 200px;
   aspect-ratio: 3/4;
@@ -923,60 +945,42 @@ function retryPublish() {
   background: rgba(255,255,255,0.03);
   transition: border-color 0.2s;
 }
-.cover-upload-wrap:hover {
-  border-color: var(--el-color-primary);
-}
-
+.cover-upload-wrap:hover { border-color: var(--el-color-primary); }
 .cover-upload-wrap.landscape {
   height: 200px;
   aspect-ratio: 4/3;
 }
-
 .cover-preview {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-
 .cover-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
-
-.cover-section {
-  margin-top: 8px;
-  flex-shrink: 0;
-}
-
+.cover-section { margin-top: 8px; flex-shrink: 0; }
 .publish-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
-
 .publish-actions {
   display: flex;
   gap: 10px;
   margin-left: auto;
 }
-
-.publish-status {
-  flex: 1;
-  text-align: left;
-}
-
+.publish-status { flex: 1; text-align: left; }
 .title-input-row {
   display: flex;
   gap: 8px;
   align-items: flex-start;
   width: 100%;
 }
-.title-input-row .el-input {
-  flex: 1;
-}
+.title-input-row .el-input { flex: 1; }
 .ai-btn {
   flex-shrink: 0;
   min-width: 80px;
@@ -987,38 +991,16 @@ function retryPublish() {
   gap: 2px;
   font-weight: 700;
 }
-
-/* ====== 发布进度模式 ====== */
-.progress-mode {
-  padding: 20px 40px;
-  min-height: 400px;
-}
-
+.progress-mode { padding: 20px 40px; min-height: 400px; }
 .progress-header {
   display: flex;
   align-items: center;
   gap: 16px;
   margin-bottom: 24px;
 }
-
-.progress-platform-icon {
-  font-size: 48px;
-  line-height: 1;
-}
-
-.progress-title h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.progress-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 24px;
-}
-
+.progress-platform-icon { font-size: 48px; line-height: 1; }
+.progress-title h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.progress-steps { display: flex; flex-direction: column; gap: 4px; margin-bottom: 24px; }
 .progress-step {
   display: flex;
   align-items: flex-start;
@@ -1027,19 +1009,9 @@ function retryPublish() {
   border-radius: 8px;
   transition: all 0.3s;
 }
-
-.progress-step.is-active {
-  background: rgba(64,158,255,0.08);
-}
-
-.progress-step.is-error {
-  background: rgba(245,108,108,0.08);
-}
-
-.progress-step.is-completed {
-  opacity: 0.7;
-}
-
+.progress-step.is-active { background: rgba(64,158,255,0.08); }
+.progress-step.is-error { background: rgba(245,108,108,0.08); }
+.progress-step.is-completed { opacity: 0.7; }
 .step-icon {
   width: 28px;
   height: 28px;
@@ -1049,20 +1021,9 @@ function retryPublish() {
   flex-shrink: 0;
   font-size: 18px;
 }
-
-.step-icon .el-icon {
-  font-size: 20px;
-}
-
-.step-icon .loading-icon {
-  animation: rotating 1.5s linear infinite;
-  color: var(--el-color-primary);
-}
-
-.step-icon .error-icon {
-  color: var(--el-color-danger);
-}
-
+.step-icon .el-icon { font-size: 20px; }
+.step-icon .loading-icon { animation: rotating 1.5s linear infinite; color: var(--el-color-primary); }
+.step-icon .error-icon { color: var(--el-color-danger); }
 .step-number {
   width: 22px;
   height: 22px;
@@ -1074,141 +1035,58 @@ function retryPublish() {
   font-size: 12px;
   font-weight: 700;
 }
-
-.progress-step.is-completed .step-number {
-  background: var(--el-color-success);
-  color: #fff;
-}
-
-.step-content {
-  flex: 1;
-}
-
-.step-label {
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.step-desc {
-  font-size: 12px;
-  color: var(--muted, #888);
-  margin-top: 4px;
-}
-
-.publish-result {
-  margin-top: 8px;
-}
-
-.bound-accounts {
-  margin-top: 16px;
-}
-
-.account-chips {
+.progress-step.is-completed .step-number { background: var(--el-color-success); color: #fff; }
+.step-content { flex: 1; }
+.step-label { font-weight: 600; font-size: 14px; }
+.step-desc { font-size: 12px; color: var(--muted, #888); margin-top: 4px; }
+.publish-result { margin-top: 8px; }
+.bound-accounts { margin-top: 16px; }
+.account-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.login-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.75);
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  border-radius: 8px;
 }
-
-  /* ====== 编辑模式登录覆盖层 ====== */
-  .login-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.75);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    border-radius: 8px;
-  }
-
-  .login-loading {
-    text-align: center;
-    color: #fff;
-  }
-
-  .login-loading p {
-    margin-top: 12px;
-    font-size: 15px;
-  }
-
-  .login-qr-content {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .login-qr-content .qr-card {
-    background: var(--el-bg-color, #1a1a2e);
-  }
-
-  .qr-loading {
-    text-align: center;
-    color: #999;
-    padding: 40px 20px;
-  }
-
-  .qr-loading p {
-    margin-top: 8px;
-    font-size: 13px;
-  }
-
-  /* ====== 二维码扫码区域 ====== */
-  .qr-login-area {
-    display: flex;
-    justify-content: center;
-    margin: 16px 0 24px;
-  }
-
-  .qr-card {
-    width: 280px;
-    padding: 24px;
-    border-radius: 12px;
-    border: 1px solid var(--line, rgba(255,255,255,0.12));
-    background: rgba(255,255,255,0.03);
-    text-align: center;
-  }
-
-  .qr-title {
-    font-size: 15px;
-    font-weight: 600;
-    margin-bottom: 16px;
-  }
-
-  .qr-image-wrap {
-    width: 200px;
-    height: 200px;
-    margin: 0 auto 12px;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 8px;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    padding: 8px;
-  }
-
-  .qr-image {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-
-  .qr-tip {
-    font-size: 13px;
-    color: var(--muted, #888);
-    margin-bottom: 12px;
-  }
-
-  .qr-actions {
-    margin-top: 4px;
-  }
-
-  @keyframes rotating {
+.login-loading { text-align: center; color: #fff; }
+.login-loading p { margin-top: 12px; font-size: 15px; }
+.login-qr-content { display: flex; align-items: center; justify-content: center; }
+.login-qr-content .qr-card { background: var(--el-bg-color, #1a1a2e); }
+.qr-loading { text-align: center; color: #999; padding: 40px 20px; }
+.qr-loading p { margin-top: 8px; font-size: 13px; }
+.qr-card {
+  width: 280px;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid var(--line, rgba(255,255,255,0.12));
+  background: rgba(255,255,255,0.03);
+  text-align: center;
+}
+.qr-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+.qr-image-wrap {
+  width: 200px;
+  height: 200px;
+  margin: 0 auto 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  padding: 8px;
+}
+.qr-image { width: 100%; height: 100%; object-fit: contain; display: block; }
+.qr-tip { font-size: 13px; color: var(--muted, #888); margin-bottom: 12px; }
+.qr-actions { margin-top: 4px; }
+@keyframes rotating {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }

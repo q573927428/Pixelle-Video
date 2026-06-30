@@ -564,6 +564,7 @@ export interface PublishStatusResponse {
   message: string
   platform_url: string
   error: string
+  pending_qrcode?: string
 }
 
 export async function getPublishStatus(sessionId: string): Promise<PublishStatusResponse> {
@@ -585,6 +586,25 @@ export async function listPublishAccounts(): Promise<{ success: boolean; account
 
 export async function deletePublishAccount(accountId: number): Promise<{ success: boolean; message: string }> {
   return request(`/api/publish/account/${accountId}`, { method: 'DELETE' })
+}
+
+export interface PublishLoginRequest {
+  platform: string
+}
+
+export interface PublishLoginResponse {
+  success: boolean
+  session_id: string
+  status: string
+  message: string
+}
+
+export async function startPublishLogin(data: PublishLoginRequest): Promise<PublishLoginResponse> {
+  return request('/api/publish/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
 }
 
 export async function savePublishCookie(data: {

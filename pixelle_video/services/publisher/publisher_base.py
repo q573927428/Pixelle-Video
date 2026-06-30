@@ -144,10 +144,12 @@ class BasePublisher(ABC):
             logger.error("Browser context not available")
             return False
 
+        cookies_loaded = False
         try:
             # 1. 加载已保存的 Cookie
             cookies = await cookie_manager.load(self.session.user_id, self.PLATFORM_NAME)
             if cookies:
+                cookies_loaded = True
                 await self.context.add_cookies(cookies)
                 logger.info(f"✅ Cookies added for {self.PLATFORM_NAME}")
 
@@ -164,6 +166,10 @@ class BasePublisher(ABC):
                 return True
             else:
                 logger.info(f"🔑 User {self.session.user_id} needs login to {self.PLATFORM_NAME}")
+                # Cookie 已加载但登录失效 → 标记为过期
+                if cookies_loaded:
+                    await cookie_manager.mark_expired(self.session.user_id, self.PLATFORM_NAME)
+                    logger.info(f"⏳ Cookie marked expired for user {self.session.user_id} / {self.PLATFORM_NAME}")
                 return False
 
         except Exception as e:

@@ -58,6 +58,7 @@ class PublishStatusResponse(BaseModel):
     message: str = Field("", description="状态消息")
     platform_url: str = Field("", description="发布成功后的平台链接")
     error: str = Field("", description="错误信息")
+    pending_qrcode: Optional[str] = Field(None, description="缓存的二维码图片数据 (base64)")
 
 
 # ============================================================================
@@ -113,6 +114,23 @@ class AccountListResponse(BaseModel):
     """账号列表响应"""
     success: bool = True
     accounts: List[AccountInfo] = Field(default_factory=list, description="账号列表")
+
+
+# ============================================================================
+# Standalone Login (decoupled from publish flow)
+# ============================================================================
+
+class PublishLoginRequest(BaseModel):
+    """独立登录请求 - 仅用于扫码登录绑定账号，不触发发布流程"""
+    platform: str = Field(..., description="平台名称：douyin/kuaishou/xiaohongshu/shipinhao")
+
+
+class PublishLoginResponse(BaseModel):
+    """独立登录响应"""
+    success: bool = True
+    session_id: str = Field(..., description="登录会话 ID")
+    status: str = Field("pending", description="会话状态")
+    message: str = Field("登录会话已创建", description="状态消息")
 
 
 # ============================================================================

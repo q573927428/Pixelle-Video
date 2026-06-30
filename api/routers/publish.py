@@ -18,6 +18,8 @@ from api.schemas.publish import (
     AccountListResponse,
     AccountInfo,
     PublishCancelResponse,
+    PublishLoginRequest,
+    PublishLoginResponse,
 )
 from api.auth.dependencies import get_current_user, require_user
 from api.auth.schemas import UserInfo
@@ -34,6 +36,177 @@ SUPPORTED_PLATFORMS = {
     "xiaohongshu": "小红书",
     "shipinhao": "视频号",
 }
+
+
+@router.post("/login", response_model=PublishLoginResponse)
+async def start_login(
+    request: PublishLoginRequest,
+    user: UserInfo = Depends(require_user),
+):
+    """独立登录 - 仅用于扫码登录绑定平台账号，不触发发布流程
+
+    1. 创建登录会话
+    2. 后台启动浏览器 -> 访问平台创作者页面 -> 检测登录态
+    3. 若未登录则获取二维码推送到前端
+    4. 等待用户扫码完成 -> 保存 Cookie 绑定账号
+    5. WebSocket 实时推送登录进度
+    """
+    # 验证平台
+    if request.platform not in SUPPORTED_PLATFORMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的平台: {request.platform}。支持: {', '.join(SUPPORTED_PLATFORMS.keys())}",
+        )
+
+    # 创建登录会话（使用与发布相同的 session manager）
+    session_id = await session_manager.create(
+        user_id=user.id,
+        platform=request.platform,
+    )
+
+    # 后台执行独立登录流程
+    from pixelle_video.services.publisher.browser_pool import browser_pool
+    import asyncio
+
+    async def _run_login():
+        context = None
+        try:
+            # 确保浏览器池已启动
+            if not browser_pool.is_running:
+                await browser_pool.start()
+
+            # 获取浏览器上下文
+            context = await browser_pool.get_context()
+            if not context:
+                await session_manager.update_status(
+                    session_id,
+                    status="failed",
+                    error="无法获取浏览器实例",
+                    message="浏览器池资源不足",
+                )
+                return
+
+            # 创建发布器实例（仅用于登录流程）
+            publisher = await _create_publisher(request.platform, session_id, context)
+            if not publisher:
+                await session_manager.update_status(
+                    session_id,
+                    status="failed",
+                    error=f"不支持的平台: {request.platform}",
+                    message=f"发布器未实现: {request.platform}",
+                )
+                return
+
+            # 仅执行登录流程（不使用 publisher.execute 的完整发布流程）
+            # 1. 访问创作者页面检测登录态
+            await session_manager.update_status(
+                session_id,
+                status="running",
+                current_step="logging_in",
+                progress=10,
+                message=f"正在登录{SUPPORTED_PLATFORMS[request.platform]}...",
+            )
+
+            # 创建新页面
+            page = await context.new_page()
+            publisher.page = page
+
+            # 2. 先尝试加载已保存 Cookie
+            cookies = await cookie_manager.load(user.id, publisher.PLATFORM_NAME)
+            if cookies:
+                await context.add_cookies(cookies)
+                logger.info(f"✅ Cookies added for {publisher.PLATFORM_NAME}")
+
+            # 3. 访问创作者页面
+            await page.goto(publisher.CREATOR_URL, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_timeout(2000)
+
+            # 4. 检测登录态
+            logged_in = await publisher._is_logged_in()
+
+            if logged_in:
+                # 已登录，直接保存并返回成功
+                await publisher._save_login_cookies()
+                await session_manager.update_status(
+                    session_id,
+                    status="success",
+                    current_step="complete",
+                    progress=100,
+                    message=f"✅ {SUPPORTED_PLATFORMS[request.platform]}账号已登录",
+                )
+                await session_manager.broadcast(session_id, {
+                    "type": "login_success",
+                    "message": f"{SUPPORTED_PLATFORMS[request.platform]}账号已登录",
+                })
+                return
+
+            # 5. 未登录 -> 执行扫码登录流程
+            await session_manager.update_status(
+                session_id,
+                status="running",
+                current_step="need_login",
+                progress=20,
+                message=f"请使用{SUPPORTED_PLATFORMS[request.platform]}App扫码登录",
+            )
+            await session_manager.broadcast(session_id, {
+                "type": "qrcode_waiting",
+                "message": f"正在获取{SUPPORTED_PLATFORMS[request.platform]}登录二维码...",
+            })
+
+            # 调用发布器的 _need_login 方法处理扫码登录
+            login_success = await publisher._need_login()
+
+            if login_success:
+                await session_manager.update_status(
+                    session_id,
+                    status="success",
+                    current_step="complete",
+                    progress=100,
+                    message=f"✅ {SUPPORTED_PLATFORMS[request.platform]}账号绑定成功",
+                )
+            else:
+                await session_manager.update_status(
+                    session_id,
+                    status="failed",
+                    current_step="need_login",
+                    error="用户未完成扫码登录",
+                    message="登录超时或用户取消",
+                )
+                await session_manager.broadcast(session_id, {
+                    "type": "error",
+                    "message": "登录超时或已取消",
+                })
+
+        except Exception as e:
+            logger.error(f"Login task failed: {e}")
+            session = await session_manager.get(session_id)
+            if session and session.status not in ("failed", "success"):
+                await session_manager.update_status(
+                    session_id,
+                    status="failed",
+                    error=str(e),
+                    message=f"登录异常: {str(e)}",
+                )
+                await session_manager.broadcast(session_id, {
+                    "type": "error",
+                    "message": f"登录失败: {str(e)}",
+                })
+        finally:
+            # 释放浏览器上下文
+            try:
+                if context:
+                    await browser_pool.release_context(context)
+            except Exception:
+                pass
+
+    # 后台执行登录任务
+    asyncio.create_task(_run_login())
+
+    return PublishLoginResponse(
+        session_id=session_id,
+        status="pending",
+        message=f"正在准备{SUPPORTED_PLATFORMS[request.platform]}登录...",
+    )
 
 
 @router.post("/start", response_model=PublishStartResponse)
@@ -174,6 +347,7 @@ async def get_publish_status(
         message=session.message,
         platform_url=session.platform_url,
         error=session.error,
+        pending_qrcode=session.pending_qrcode,
     )
 
 

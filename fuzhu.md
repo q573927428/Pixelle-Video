@@ -86,3 +86,17 @@ cd modern_ui; pnpm approve-builds esbuild; pnpm build
 1339113而且现在技术很厉害，嘴型和表情都非常自然。你完全可以隐藏在幕后，用AI帮你去面对成千上万的观众。11392
 149241自媒体最痛苦的不是剪辑，而是每天不知道写什么文案。坐在电脑前一下午，一个字都憋不出来。142419
 19135告诉你们一个老运营都在用的方法。你在刷别的平台时，看到同赛道很好的爆款，把链接复制下来，丢进AI工具里1512953
+
+
+
+
+
+
+2026-07-01 02:41:17.887 | INFO     | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:47 - 🔑 Found login element 'div[class*="qrcode"]', not logged in
+2026-07-01 02:41:21.921 | INFO     | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:47 - 🔑 Found login element 'div[class*="qrcode"]', not logged in
+2026-07-01 02:41:23.928 | ERROR    | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:82 - Login check error: Page.wait_for_timeout: Target page, context or browser has been closed
+2026-07-01 02:41:25.943 | ERROR    | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:82 - Login check error: Page.wait_for_timeout: Target page, context or browser has been closed
+2026-07-01 02:41:27.960 | ERROR    | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:82 - Login check error: Page.wait_for_timeout: Target page, context or browser has been closed
+2026-07-01 02:41:29.979 | ERROR    | pixelle_video.services.publisher.douyin_publisher:_is_logged_in:82 - Login check error: Pa
+
+手动关闭了打开的浏览器  终端日志会一直显示这个，

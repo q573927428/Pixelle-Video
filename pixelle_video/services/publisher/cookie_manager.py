@@ -264,6 +264,29 @@ class CookieManager:
             logger.error(f"Failed to list accounts: {e}")
             return []
 
+    async def mark_expired(self, user_id: int, platform: str) -> bool:
+        """将账号标记为已过期（Cookie 失效）
+
+        Args:
+            user_id: 用户 ID
+            platform: 平台名称
+
+        Returns:
+            bool: 是否标记成功
+        """
+        try:
+            from api.auth.database import Database
+
+            await Database.execute(
+                "UPDATE platform_accounts SET status = 'expired', updated_at = NOW() WHERE user_id = %s AND platform = %s AND status != 'expired'",
+                (user_id, platform)
+            )
+            logger.info(f"⏳ Cookie marked as expired for user {user_id} / {platform}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to mark cookie as expired: {e}")
+            return False
+
     async def delete_account_by_id(self, account_id: int) -> bool:
         """根据 ID 删除账号记录（硬删除）
 
