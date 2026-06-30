@@ -68,23 +68,36 @@ class DigitalWorkflowConfig(BaseModel):
     api_video_params: dict[str, Any] = Field(default_factory=dict)
 
 
-class SubtitleRequestConfig(BaseModel):
-    """字幕配置（与前端 SubtitleConfig 接口对应）"""
+class TextOverlayConfig(BaseModel):
+    """文字叠加通用配置（标题/字幕共用，仅时间显示逻辑不同）"""
     enabled: bool = False
     font_size: int = 56
     font_color: str = "#FFFFFF"
     font_family: str = "NotoSansSC-Bold"
+    font_weight: int = 400
     position_x: int = 0
     position_y: int = -390
     max_width: int = 900
     letter_spacing: int = 3
-    background_color: str = "#000000"
-    background_opacity: float = 0
-    background_padding: str = "15 25"
-    background_radius: int = 20
     font_border_width: int = 1
     font_border_color: str = "#000000"
-    font_weight: int = 400
+    text_align: str = "center"
+    background_color: str = "#000000"
+    background_opacity: float = 0
+    background_padding: str = "12px 24px"
+    background_radius: int = 8
+
+
+class SubtitleRequestConfig(TextOverlayConfig):
+    """字幕配置（继承文字叠加通用配置）"""
+    pass
+
+
+class TitleOverlayRequestConfig(TextOverlayConfig):
+    """标题叠加配置（继承文字叠加通用配置，增加标题特有字段）"""
+    text: str = ""
+    display_mode: str = "full"
+    duration_seconds: int = 5
 
 
 class DigitalHumanRequest(BaseModel):
@@ -108,15 +121,11 @@ class DigitalHumanRequest(BaseModel):
     voxcpm_use_prompt_text: bool = False
     voxcpm_prompt_text: str = ""
 
-    # 字幕配置
+    # 字幕配置（继承 TextOverlayConfig 通用文字渲染参数）
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
 
     # 网感剪辑配置
-    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
-        "font_weight": 700, "position_x": 0, "position_y": -800,
-        "display_mode": "duration", "duration_seconds": 2,
-    })
+    title_overlay_config: TitleOverlayRequestConfig = Field(default_factory=TitleOverlayRequestConfig)
     business_card_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "title": "", "subtitle": "",
         "display_mode": "duration", "duration_seconds": 2,
@@ -363,7 +372,15 @@ def _burn_overlays_sync(
 
         # 1. 标题叠加
         try:
-            title_cfg = TitleOverlayConfig.from_dict(rb.title_overlay_config if hasattr(rb, 'title_overlay_config') else {})
+            title_cfg_dict = {}
+            if hasattr(rb, 'title_overlay_config') and rb.title_overlay_config:
+                if hasattr(rb.title_overlay_config, 'model_dump'):
+                    title_cfg_dict = rb.title_overlay_config.model_dump()
+                elif hasattr(rb.title_overlay_config, 'dict'):
+                    title_cfg_dict = rb.title_overlay_config.dict()
+                elif isinstance(rb.title_overlay_config, dict):
+                    title_cfg_dict = rb.title_overlay_config
+            title_cfg = TitleOverlayConfig.from_dict(title_cfg_dict)
             if title_cfg.enabled and title_cfg.text:
                 logger.info(f"[叠层] 标题叠加配置: enabled={title_cfg.enabled}, text={title_cfg.text}, "
                            f"display_mode={title_cfg.display_mode}, duration_seconds={title_cfg.duration_seconds}, "
@@ -889,11 +906,7 @@ class SubtitlePreviewRequest(BaseModel):
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
 
     # 标题叠加和个人名片配置（预览时也一并渲染）
-    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
-        "font_weight": 700, "position_x": 0, "position_y": -800,
-        "display_mode": "full", "duration_seconds": 5,
-    })
+    title_overlay_config: TitleOverlayRequestConfig = Field(default_factory=TitleOverlayRequestConfig)
     business_card_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "title": "", "subtitle": "",
         "display_mode": "full", "duration_seconds": 5,
@@ -916,11 +929,7 @@ class ApplyEffectsRequest(BaseModel):
     video_path: str = Field(..., description="原始视频路径")
     goods_text: str = Field("", description="口播文案")
     subtitle_config: SubtitleRequestConfig = Field(default_factory=SubtitleRequestConfig)
-    title_overlay_config: dict[str, Any] = Field(default_factory=lambda: {
-        "enabled": False, "text": "", "font_size": 56, "font_color": "#FFFFFF",
-        "font_weight": 700, "position_x": 0, "position_y": -800,
-        "display_mode": "duration", "duration_seconds": 2,
-    })
+    title_overlay_config: TitleOverlayRequestConfig = Field(default_factory=TitleOverlayRequestConfig)
     business_card_config: dict[str, Any] = Field(default_factory=lambda: {
         "enabled": False, "title": "", "subtitle": "",
         "display_mode": "duration", "duration_seconds": 2,
@@ -1076,7 +1085,15 @@ async def subtitle_preview(
 
         # 1. 标题叠加
         try:
-            title_cfg = TitleOverlayConfig.from_dict(request_body.title_overlay_config if hasattr(request_body, 'title_overlay_config') else {})
+            title_cfg_dict = {}
+            if hasattr(request_body, 'title_overlay_config') and request_body.title_overlay_config:
+                if hasattr(request_body.title_overlay_config, 'model_dump'):
+                    title_cfg_dict = request_body.title_overlay_config.model_dump()
+                elif hasattr(request_body.title_overlay_config, 'dict'):
+                    title_cfg_dict = request_body.title_overlay_config.dict()
+                elif isinstance(request_body.title_overlay_config, dict):
+                    title_cfg_dict = request_body.title_overlay_config
+            title_cfg = TitleOverlayConfig.from_dict(title_cfg_dict)
             if title_cfg.enabled and title_cfg.text:
                 title_dir = overlay_service.generate_title_overlay_frames(
                     config=title_cfg,

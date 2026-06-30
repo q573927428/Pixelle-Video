@@ -116,6 +116,10 @@ export interface TitleOverlayConfig {
   text_align: TitleTextAlign
   display_mode: DisplayMode
   duration_seconds: number
+  background_color: string
+  background_opacity: number
+  background_padding: string
+  background_radius: number
 }
 
 // ===== 个人名片配置接口 =====

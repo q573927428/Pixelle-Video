@@ -25,7 +25,7 @@ else:
 
 
 class TitleOverlayConfig:
-    """标题叠加配置"""
+    """标题叠加配置（文字渲染属性与 SubtitleConfigModel 一致，仅显示时间逻辑不同）"""
     def __init__(
         self,
         enabled: bool = False,
@@ -33,12 +33,18 @@ class TitleOverlayConfig:
         font_size: int = 56,
         font_color: str = "#FFFFFF",
         font_weight: int = 700,
+        font_family: str = "NotoSansSC-Bold",
         position_x: int = 0,
         position_y: int = -800,
         max_width: int = 900,
+        letter_spacing: int = 3,
         font_border_width: int = 2,
         font_border_color: str = "#000000",
         text_align: str = "center",
+        background_color: str = "#000000",
+        background_opacity: float = 0,
+        background_padding: str = "12px 24px",
+        background_radius: int = 8,
         display_mode: str = "full",
         duration_seconds: int = 5,
     ):
@@ -47,12 +53,18 @@ class TitleOverlayConfig:
         self.font_size = font_size
         self.font_color = font_color
         self.font_weight = font_weight
+        self.font_family = font_family
         self.position_x = position_x
         self.position_y = position_y
         self.max_width = max_width
+        self.letter_spacing = letter_spacing
         self.font_border_width = font_border_width
         self.font_border_color = font_border_color
         self.text_align = text_align
+        self.background_color = background_color
+        self.background_opacity = background_opacity
+        self.background_padding = background_padding
+        self.background_radius = background_radius
         self.display_mode = display_mode
         self.duration_seconds = duration_seconds
 
@@ -64,12 +76,18 @@ class TitleOverlayConfig:
             font_size=d.get("font_size", 56),
             font_color=d.get("font_color", "#FFFFFF"),
             font_weight=d.get("font_weight", 700),
+            font_family=d.get("font_family", "NotoSansSC-Bold"),
             position_x=d.get("position_x", 0),
             position_y=d.get("position_y", -800),
             max_width=d.get("max_width", 900),
+            letter_spacing=d.get("letter_spacing", 3),
             font_border_width=d.get("font_border_width", 1),
             font_border_color=d.get("font_border_color", "#000000"),
             text_align=d.get("text_align", "center"),
+            background_color=d.get("background_color", "#000000"),
+            background_opacity=d.get("background_opacity", 0),
+            background_padding=d.get("background_padding", "12px 24px"),
+            background_radius=d.get("background_radius", 8),
             display_mode=d.get("display_mode", "full"),
             duration_seconds=d.get("duration_seconds", 5),
         )
@@ -296,8 +314,8 @@ class OverlayService:
         # 边框宽度缩放
         border_width = max(0, int(config.font_border_width * scale))
 
-        # 标题字间距固定为 5px（与前端一致）
-        letter_spacing = 3
+        # 使用配置的字间距（与字幕保持一致）
+        letter_spacing = config.letter_spacing
 
         # 将文本分割为多行（支持多行 + 自动换行）
         max_width_px = int(config.max_width * scale)
@@ -320,10 +338,30 @@ class OverlayService:
         line_widths = [get_line_width(line) for line in lines]
         max_line_width = max(line_widths) if line_widths else 0
 
-        # 背景内边距
-        pad = int(10 * scale)
-        bg_width = max_line_width + pad * 2
-        bg_height = len(lines) * line_height + pad * 2
+        # 背景内边距（使用可配置参数，支持 "12px 24px" 格式）
+        bg_padding_str = config.background_padding or "12px 24px"
+        bg_pad_parts = bg_padding_str.replace('px', '').split(' ')
+        bg_pad_nums = []
+        for p in bg_pad_parts:
+            p = p.strip()
+            if p.isdigit():
+                bg_pad_nums.append(int(p))
+        if len(bg_pad_nums) == 1:
+            pad_t = pad_r = pad_b = pad_l = bg_pad_nums[0]
+        elif len(bg_pad_nums) == 2:
+            pad_t = pad_b = bg_pad_nums[0]
+            pad_r = pad_l = bg_pad_nums[1]
+        elif len(bg_pad_nums) >= 4:
+            pad_t, pad_r, pad_b, pad_l = bg_pad_nums[:4]
+        else:
+            pad_t = pad_r = pad_b = pad_l = 12
+        pad_t = int(pad_t * scale)
+        pad_r = int(pad_r * scale)
+        pad_b = int(pad_b * scale)
+        pad_l = int(pad_l * scale)
+
+        bg_width = max_line_width + pad_l + pad_r
+        bg_height = len(lines) * line_height + pad_t + pad_b
 
         # 位置
         offset_x = int(config.position_x * scaleX)
@@ -349,28 +387,32 @@ class OverlayService:
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # 绘制半透明背景
-        radius = min(int(8 * scale), bg_height // 2, bg_width // 2)
-        self._draw_rounded_rect(
-            draw,
-            (bg_x, bg_y, bg_x + bg_width, bg_y + bg_height),
-            radius,
-            (0, 0, 0, 128),  # 半透明黑色
-        )
+        # 绘制可配置背景（使用 background_color + background_opacity）
+        bg_alpha = max(0, min(255, int(config.background_opacity / 100 * 255)))
+        if bg_alpha > 0:
+            bg_fill = self._hex_to_rgba(config.background_color, bg_alpha)
+            bg_radius = int(config.background_radius * scale)
+            radius = min(bg_radius, bg_height // 2, bg_width // 2)
+            self._draw_rounded_rect(
+                draw,
+                (bg_x, bg_y, bg_x + bg_width, bg_y + bg_height),
+                radius,
+                bg_fill,
+            )
 
         # 逐行绘制文字（带边框，支持对齐方式）
-        text_align = getattr(config, 'text_align', 'center')
+        text_align = config.text_align
         y_correction = (ascent + descent - font_size) / 2
 
         for i, line in enumerate(lines):
             line_width = get_line_width(line)
             if text_align == 'left':
-                text_x = bg_x + pad + 0
+                text_x = bg_x + pad_l + 0
             elif text_align == 'right':
-                text_x = bg_x + bg_width - line_width - pad - 0
+                text_x = bg_x + bg_width - line_width - pad_r - 0
             else:
                 text_x = bg_x + (bg_width - line_width) // 2 + 0
-            text_y = bg_y + pad + line_height // 2 + i * line_height + y_correction - 5
+            text_y = bg_y + pad_t + line_height // 2 + i * line_height + y_correction - 5
 
             if border_color and border_width > 0:
                 # 带字间距和边框绘制

@@ -83,6 +83,19 @@
               <el-color-picker v-model="localConfig.font_border_color" show-alpha />
             </el-form-item>
             <el-divider style="margin:8px 0;" />
+            <el-form-item label="文字背景颜色">
+              <el-color-picker v-model="localConfig.background_color" />
+            </el-form-item>
+            <el-form-item label="背景透明度">
+              <el-slider v-model="localConfig.background_opacity" :min="0" :max="100" :step="5" show-input />
+            </el-form-item>
+            <el-form-item label="背景内边距">
+              <el-input v-model="localConfig.background_padding" placeholder="如: 12px 24px" style="width:200px;" />
+            </el-form-item>
+            <el-form-item label="背景圆角">
+              <el-slider v-model="localConfig.background_radius" :min="0" :max="50" :step="2" show-input />
+            </el-form-item>
+            <el-divider style="margin:8px 0;" />
             <el-form-item label="文字对齐">
               <el-radio-group v-model="localConfig.text_align">
                 <el-radio-button value="left">左对齐</el-radio-button>
