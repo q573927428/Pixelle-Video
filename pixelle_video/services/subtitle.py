@@ -546,7 +546,7 @@ class SubtitleService:
         # position_y: 0 = 底部(距底边100px), 负数 = 偏上, 正数 = 偏下
         base_x = video_width // 2
         offset_x = config.position_x
-        base_y = video_height - 50 + config.position_y  # 默认距底边 150px，与前端预览完全对齐
+        base_y = video_height - 20 + config.position_y  # 默认距底边 150px，与前端预览完全对齐
 
         # 计算带 letter_spacing 的文本宽度
         def get_text_width(txt: str) -> int:
@@ -600,7 +600,7 @@ class SubtitleService:
             # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
                 # 水平居中：x 坐标是文本中心
-                line_x = base_x + offset_x + 10
+                line_x = base_x + offset_x + 5
                 # 垂直居中：计算每行的中心位置
                 # 背景框的中心是 bg_y1 + bg_height / 2
                 # 多行文本时，第一行的中心位置是：

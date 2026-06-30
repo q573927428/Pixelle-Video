@@ -300,7 +300,7 @@ function renderOverlay() {
         const line = lines[i]
         const y = bgY + (padT + padB) / 2 + lineHeight / 2 + i * lineHeight + yCorrection + 2
         const lineWidth = getLineWidth(line)
-        const startX = bgX + (bgWidth - lineWidth) / 2
+        const startX = bgX + (bgWidth - lineWidth) / 2 + 10
         if (letterSpacing > 0 && line.length > 1) {
           let currentX = startX
           for (const char of line) {
@@ -335,7 +335,7 @@ function renderOverlay() {
       const metrics = c.measureText(titleText)
       const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8
       const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2
-      const y = centerY + (ascent - descent) / 2
+      const y = centerY + (ascent - descent) / 2 - 20
 
       const borderWidth = Math.max(1, Math.round(2 * scale))
       c.strokeStyle = '#000000'; c.lineWidth = borderWidth; c.lineJoin = 'round'; c.miterLimit = 2
@@ -482,7 +482,7 @@ async function handleSubtitlePreview() {
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
         title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
-        bgm_config: { enabled: false, selected_bgm: null, volume: 50, custom_bgm: null },
+        bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),
     })
     if (res.success && res.preview_video_url) { subtitlePreviewUrl.value = res.preview_video_url; ElMessage.success('预览视频生成成功') }
@@ -506,7 +506,7 @@ async function handleApplyEffects() {
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
         title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
-        bgm_config: { enabled: false, selected_bgm: null, volume: 50, custom_bgm: null },
+        bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),
     })
     if (res.success && res.video_url) { appliedVideoUrl.value = res.video_url; ElMessage.success('效果应用成功！') }
