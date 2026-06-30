@@ -27,13 +27,16 @@ from api.schemas.content import (
     ImagePromptGenerateResponse,
     TitleGenerateRequest,
     TitleGenerateResponse,
+    TopicsGenerateRequest,
+    TopicsGenerateResponse,
+    PublishPrepareRequest,
+    PublishPrepareResponse,
 )
 from pixelle_video.utils.content_generators import (
     generate_narrations_from_topic,
     generate_image_prompts,
     generate_title,
 )
-
 router = APIRouter(prefix="/content", tags=["Content Generation"])
 
 
@@ -142,5 +145,137 @@ async def generate_title_endpoint(
         
     except Exception as e:
         logger.error(f"Title generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/topics", response_model=TopicsGenerateResponse)
+async def generate_topics_endpoint(
+    request: TopicsGenerateRequest,
+    pixelle_video: PixelleVideoDep
+):
+    """
+    Generate hashtags/topics from text
+    
+    Uses LLM to create relevant hashtags for video publishing.
+    
+    - **text**: Source text
+    - **count**: Number of topics to generate
+    
+    Returns list of topic strings.
+    """
+    try:
+        logger.info(f"Generating {request.count} topics from text")
+        
+        llm = pixelle_video.llm
+        if not llm:
+            raise HTTPException(status_code=500, detail="LLM service not available")
+        
+        prompt = f"""根据以下文案，生成{request.count}个适合作为短视频话题标签的词语。
+要求：
+1. 每个话题2-5个字
+2. 不要带#号
+3. 与文案内容相关
+4. 每行一个话题
+
+文案：
+{request.text}
+
+请直接输出话题词语，每行一个："""
+        
+        result = await llm.chat([{"role": "user", "content": prompt}])
+        if isinstance(result, str):
+            result_text = result
+        elif isinstance(result, dict):
+            result_text = result.get("content", "") or result.get("text", "") or str(result)
+        else:
+            result_text = str(result)
+        
+        topics = [
+            t.strip().strip('#').strip()
+            for t in result_text.split('\n')
+            if t.strip() and not t.strip().startswith('```') and t.strip() not in ('', '，', '。')
+        ]
+        topics = topics[:request.count]
+        
+        if not topics:
+            topics = ['AI技术', '数字人', '短视频']
+        
+        return TopicsGenerateResponse(
+            topics=topics
+        )
+        
+    except Exception as e:
+        logger.error(f"Topics generation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/publish-prepare", response_model=PublishPrepareResponse)
+async def generate_publish_prepare(
+    request: PublishPrepareRequest,
+    pixelle_video: PixelleVideoDep
+):
+    """
+    One-click generate title + topics for publishing
+    
+    Uses LLM to create an engaging title and relevant hashtags.
+    
+    - **text**: Source text
+    
+    Returns generated title and topics list.
+    """
+    try:
+        logger.info("Generating publish prepare (title + topics)")
+        
+        llm = pixelle_video.llm
+        if not llm:
+            raise HTTPException(status_code=500, detail="LLM service not available")
+        
+        # 1. Generate title
+        title = await generate_title(
+            llm_service=pixelle_video.llm,
+            content=request.text,
+            strategy="llm"
+        )
+        
+        if not title:
+            title = "精彩视频"
+        
+        # 2. Generate topics
+        prompt = f"""根据以下文案，生成5个适合作为短视频话题标签的词语。
+要求：
+1. 每个话题2-5个字
+2. 不要带#号
+3. 与文案内容相关
+4. 每行一个话题
+
+文案：
+{request.text}
+
+请直接输出话题词语，每行一个："""
+        
+        result = await llm.chat([{"role": "user", "content": prompt}])
+        if isinstance(result, str):
+            result_text = result
+        elif isinstance(result, dict):
+            result_text = result.get("content", "") or result.get("text", "") or str(result)
+        else:
+            result_text = str(result)
+        
+        topics = [
+            t.strip().strip('#').strip()
+            for t in result_text.split('\n')
+            if t.strip() and not t.strip().startswith('```') and t.strip() not in ('', '，', '。')
+        ]
+        topics = topics[:5]
+        if not topics:
+            topics = ['AI技术', '数字人', '短视频']
+        
+        return PublishPrepareResponse(
+            title=title,
+            topics=topics
+        )
+        
+    except Exception as e:
+        logger.error(f"Publish prepare error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 

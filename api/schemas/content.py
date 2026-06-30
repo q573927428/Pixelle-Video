@@ -101,3 +101,52 @@ class TitleGenerateResponse(BaseModel):
     message: str = "Success"
     title: str = Field(..., description="Generated title")
 
+
+# ============================================================================
+# Topics Generation
+# ============================================================================
+
+class TopicsGenerateRequest(BaseModel):
+    """Topics generation request"""
+    text: str = Field(..., description="Source text")
+    count: int = Field(3, ge=1, le=10, description="Number of topics to generate")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "这是一段数字人口播文案...",
+                "count": 3
+            }
+        }
+
+
+class TopicsGenerateResponse(BaseModel):
+    """Topics generation response"""
+    success: bool = True
+    message: str = "Success"
+    topics: List[str] = Field(..., description="Generated topics/hashtags")
+
+
+# ============================================================================
+# Publish Prepare (一键生成标题+话题)
+# ============================================================================
+
+class PublishPrepareRequest(BaseModel):
+    """Publish prepare request - one-click generate title and topics"""
+    text: str = Field(..., description="Source text from the video")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "text": "这是一段数字人口播文案内容..."
+            }
+        }
+
+
+class PublishPrepareResponse(BaseModel):
+    """Publish prepare response"""
+    success: bool = True
+    message: str = "Success"
+    title: str = Field(..., description="AI generated title")
+    topics: List[str] = Field(..., description="AI generated hashtags/topics")
+

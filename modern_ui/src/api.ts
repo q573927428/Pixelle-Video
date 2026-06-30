@@ -501,3 +501,29 @@ export async function ensureReadyInstance(token = '') {
     headers: _getAuthHeaders(),
   })
 }
+
+// ====== Content Generation API (标题/话题生成) ======
+
+export async function generateTitle(text: string, style?: string): Promise<{ success: boolean; title: string }> {
+  return request('/api/content/title', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, style }),
+  })
+}
+
+export async function generateTopics(text: string, count = 5): Promise<{ success: boolean; topics: string[] }> {
+  return request('/api/content/topics', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, count }),
+  })
+}
+
+export async function generatePublishPrepare(text: string): Promise<{ success: boolean; title: string; topics: string[] }> {
+  return request('/api/content/publish-prepare', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+}

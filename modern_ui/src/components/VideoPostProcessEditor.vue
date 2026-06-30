@@ -58,43 +58,51 @@
           <div v-else class="vppe-preview-video-empty">
             <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>无视频源</div></div>
           </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <el-button type="info" size="small" @click="handleSubtitlePreview" :loading="subtitlePreviewLoading" style="width:100%;">
+              {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 生成预览视频' }}
+            </el-button>
+            <el-button type="primary" size="small" style="width:100%;" @click="handleApplyEffects" :loading="applyLoading" :disabled="!hasAnyEffectEnabled">
+              {{ applyLoading ? '应用处理中...' : '🚀 生成编辑后视频' }}
+            </el-button>
+          </div>
         </div>
-        <div class="vppe-preview-actions">
-          <el-button type="info" size="small" @click="handleSubtitlePreview" :loading="subtitlePreviewLoading" style="width:100%;">
-            {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 生成预览视频' }}
-          </el-button>
-        </div>
+        
       </div>
 
       <!-- 第三列 -->
       <div class="vppe-col vppe-col-result">
         <div class="vppe-result-header"><span class="vppe-result-title">🎞️ 预览结果</span></div>
-        <div v-if="subtitlePreviewUrl" class="vppe-result-video">
-          <div class="vppe-overlay-container">
-            <video :src="subtitlePreviewUrl" controls class="vppe-overlay-video" />
-          </div>
-        </div>
-        <div v-else class="vppe-result-empty">
-          <div><div style="font-size:38px;margin-bottom:10px;">📽️</div><div>点击「生成预览视频」查看效果</div></div>
-        </div>
         <div v-if="taskVideoUrl" class="vppe-apply-section">
-          <el-button type="primary" size="small" style="width:100%;" @click="handleApplyEffects" :loading="applyLoading" :disabled="!hasAnyEffectEnabled">
-            {{ applyLoading ? '应用处理中...' : '🚀 生成编辑后视频' }}
-          </el-button>
-          <div v-if="appliedVideoUrl" class="vppe-applied-video">
-            <el-divider />
-            <div class="vppe-result-badge" style="color:#22c55e;">✅ 编辑完成</div>
-            <div class="vppe-overlay-container" style="margin-top:6px;">
+          <div class="vppe-applied-video">
+            <div class="vppe-overlay-container" style="margin-top:6px;" v-if="appliedVideoUrl">
               <video :src="appliedVideoUrl" controls class="vppe-overlay-video" />
             </div>
-            <div style="display:flex;gap:8px;margin-top:8px;">
-              <el-button size="small" plain @click="handleCopyText">📋 复制文案</el-button>
+            <div class="vppe-overlay-container" style="margin-top:6px;" v-else-if="subtitlePreviewUrl">
+              <video :src="subtitlePreviewUrl" controls class="vppe-overlay-video" />
+            </div>
+            <div v-else class="vppe-preview-video-empty">
+              <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>暂未生成预览视频</div></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px;" v-if="subtitlePreviewUrl">
               <el-button size="small" type="primary" plain @click="handleDownload(appliedVideoUrl)">⬇️ 下载视频</el-button>
+              <el-button size="small" type="success" @click="openPublishDialog" :disabled="!appliedVideoUrl && !taskVideoUrl">📤 发布</el-button>
             </div>
           </div>
         </div>
       </div>
+
     </div>
+
+    <!-- 发布弹窗 -->
+    <PublishVideoDialog
+      v-model:visible="publishDialogVisible"
+      :platform="publishPlatform"
+      :video-url="appliedVideoUrl || taskVideoUrl || ''"
+      :initial-title="publishTitle"
+      :initial-text="publishTextForPublish"
+      :initial-topics="publishTopics"
+    />
   </div>
 </template>
 
@@ -107,6 +115,7 @@ import TitleOverlayConfigurator from './TitleOverlayConfigurator.vue'
 import BusinessCardConfigurator from './BusinessCardConfigurator.vue'
 import BgmConfigurator from './BgmConfigurator.vue'
 import PipMixConfigurator from './PipMixConfigurator.vue'
+import PublishVideoDialog from './PublishVideoDialog.vue'
 import type { SubtitleConfig, TitleOverlayConfig, BusinessCardConfig, BgmConfig, PipMixConfig } from '../types'
 
 const props = defineProps<{
@@ -117,6 +126,25 @@ const props = defineProps<{
 }>()
 
 const bgmList = ref<{ name: string; path: string; source: string }[]>([])
+
+// ===== 发布相关状态 =====
+const publishTitle = ref('')
+const publishTopics = ref('')
+const publishDialogVisible = ref(false)
+const publishPlatform = ref('douyin')
+
+const publishTextForPublish = computed(() => {
+  // 组合文案+话题
+  const text = props.taskText || ''
+  const topics = publishTopics.value
+  if (!topics) return text
+  const topicTags = topics.split(/[,，]/).map((t: string) => t.trim()).filter(Boolean).map((t: string) => `#${t}`).join(' ')
+  return text + '\n\n' + topicTags
+})
+
+function openPublishDialog() {
+  publishDialogVisible.value = true
+}
 
 async function loadBgmList() {
   try {
@@ -634,8 +662,9 @@ function handlePiPHistory(c: string) { ElMessage.info('历史记录功能请在�
 
 <style scoped>
 .vppe-root { width: 100%; }
-.vppe-layout { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; min-height: 400px; }
-@media (max-width: 1024px) { .vppe-layout { grid-template-columns: 1fr; } }
+.vppe-layout { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; min-height: 400px; }
+@media (max-width: 1400px) { .vppe-layout { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 800px) { .vppe-layout { grid-template-columns: 1fr; } }
 .vppe-col { min-width: 0; display: flex; flex-direction: column; }
 
 /* 第一列 */
@@ -690,4 +719,5 @@ function handlePiPHistory(c: string) { ElMessage.info('历史记录功能请在�
 .vppe-apply-section { padding: 0 12px 12px; }
 .vppe-apply-header { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
 .vppe-applied-video { margin-top: 4px; }
+
 </style>
