@@ -160,20 +160,6 @@
                 </el-button>
               </div>
             </el-form-item>
-            <!-- AI 一键生成标题和话题 -->
-            <div class="soft-panel" style="margin-top:12px;">
-              <el-form-item label="标题">
-                <el-input v-model="form.ai_title" maxlength="30" show-word-limit placeholder="AI 生成的标题，不超过 30 字" />
-              </el-form-item>
-              <el-form-item label="话题">
-                <el-input v-model="form.ai_topics" placeholder="例如：#护肤 #好物分享 （AI 生成，1-5 个）" />
-              </el-form-item>
-              <div v-if="form.goods_text.trim()" style="margin-bottom:8px;">
-                <el-button type="success" size="small" @click="handleGenerateTitleTopics" :loading="titleTopicsLoading" :disabled="!form.goods_text.trim() || rewriteLoading || mediaLoading">
-                  🤖 AI 一键生成标题和话题
-                </el-button>
-              </div>
-            </div>
           </div>
 
           <!-- 短视频导入弹窗 -->
@@ -339,8 +325,6 @@ async function handleRewrite() {
     if (res.content) {
       props.form.goods_text = res.content.trim().slice(0, 368)
       ElMessage.success('改写完成')
-      // 改写成功后自动生成标题和话题
-      await handleGenerateTitleTopics()
     } else {
       ElMessage.warning('改写失败，请重试')
     }
@@ -371,57 +355,6 @@ async function handlePasteFromClipboard() {
   })
 }
 
-// ---- AI 一键生成标题和话题 ----
-const titleTopicsLoading = ref(false)
-
-async function handleGenerateTitleTopics() {
-  const text = props.form.goods_text?.trim()
-  if (!text) {
-    ElMessage.warning('请先填写口播文案')
-    return
-  }
-  titleTopicsLoading.value = true
-  try {
-    const prompt = `你是一位短视频运营专家。请根据以下口播文案，生成对应的视频标题和话题标签。
-
-要求：
-1. **标题**：不超过30个字，简洁有力，吸引点击
-2. **话题**：生成1-5个话题标签，每个话题格式为"#话题"（#后面紧跟话题内容，右侧无空格），多个话题之间用空格隔开
-
-请严格按照以下格式返回（不要有多余解释）：
-标题：<生成的标题>
-话题：<生成的话题标签>
-
-口播文案：
-${text}`
-    const res: any = await request('/api/llm/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, temperature: 0.7, max_tokens: 512 }),
-    })
-    if (res.content) {
-      const content = res.content.trim()
-      // 解析标题
-      const titleMatch = content.match(/标题[：:]\s*(.+)/)
-      if (titleMatch) {
-        props.form.ai_title = titleMatch[1].trim().slice(0, 30)
-      }
-      // 解析话题
-      const topicMatch = content.match(/话题[：:]\s*(.+)/)
-      if (topicMatch) {
-        props.form.ai_topics = topicMatch[1].trim()
-      }
-      ElMessage.success('标题和话题生成成功')
-    } else {
-      ElMessage.warning('生成失败，请重试')
-    }
-  } catch (e: any) {
-    ElMessage.error(`生成失败：${e.message}`)
-  } finally {
-    titleTopicsLoading.value = false
-  }
-}
-
 // ---- 短视频导入口播文案 ----
 const mediaDialogVisible = ref(false)
 const mediaShareText = ref('')
@@ -443,8 +376,6 @@ async function handleMediaParse() {
       props.form.goods_text = res.text.slice(0, 368)
       mediaDialogVisible.value = false
       ElMessage.success('口播文案导入成功')
-      // 导入成功后自动生成标题和话题
-      await handleGenerateTitleTopics()
     } else {
       ElMessage.warning(res.message || '未能提取到有效口播文案')
     }

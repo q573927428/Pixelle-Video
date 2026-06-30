@@ -59,10 +59,10 @@
             <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>无视频源</div></div>
           </div>
           <div style="display:flex;gap:8px;margin-top:8px;">
-            <el-button type="info" size="small" @click="handleSubtitlePreview" :loading="subtitlePreviewLoading" style="width:100%;">
+            <el-button type="info" @click="handleSubtitlePreview" :loading="subtitlePreviewLoading" style="width:100%;">
               {{ subtitlePreviewLoading ? '生成字幕预览...' : '📺 生成预览视频' }}
             </el-button>
-            <el-button type="primary" size="small" style="width:100%;" @click="handleApplyEffects" :loading="applyLoading" :disabled="!hasAnyEffectEnabled">
+            <el-button type="primary" style="width:100%;" @click="handleApplyEffects" :loading="applyLoading" :disabled="!hasAnyEffectEnabled">
               {{ applyLoading ? '应用处理中...' : '🚀 生成编辑后视频' }}
             </el-button>
           </div>
@@ -85,8 +85,8 @@
               <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>暂未生成预览视频</div></div>
             </div>
             <div style="display:flex;gap:8px;margin-top:8px;" v-if="appliedVideoUrl">
-              <el-button size="small" type="primary" plain @click="handleDownload(appliedVideoUrl)">⬇️ 下载视频</el-button>
-              <el-button size="small" type="success" @click="openPublishDialog" :disabled="!appliedVideoUrl && !taskVideoUrl">📤 发布</el-button>
+              <el-button type="primary" plain @click="handleDownload(appliedVideoUrl)" style="width:100%;">⬇️ 下载视频</el-button>
+              <el-button type="success" @click="openPublishDialog" :disabled="!appliedVideoUrl && !taskVideoUrl" style="width:100%;">📤 发布</el-button>
             </div>
           </div>
         </div>
@@ -168,18 +168,18 @@ const config = reactive({
   subtitle_enabled: true,
   subtitle_config: {
     enabled: true,
-    font_size: 56,         font_color: '#FFFFFF',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
+    font_size: 56,         font_color: '#FFD700',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
     position_x: 0,         position_y: -390,       max_width: 900,                  letter_spacing: 3,
     background_color: '#000000',  background_opacity: 0,  background_padding: '12px 24px',  background_radius: 8,
-    font_border_width: 1,  font_border_color: '#000000',
+    font_border_width: 3,  font_border_color: '#000000',
   } as SubtitleConfig,
   title_overlay_config: {
-    enabled: true,         text: '这是一个标题样式预览演示',
-    font_size: 56,         font_color: '#FFFFFF',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
+    enabled: true,         text: '这是一个标题样式预览',
+    font_size: 76,         font_color: '#FFFFFF',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
     position_x: 0,         position_y: -1600,       max_width: 900,                  letter_spacing: 3,
     background_color: '#000000',  background_opacity: 0,  background_padding: '12px 24px',  background_radius: 8,
     font_border_width: 1,  font_border_color: '#000000',
-    text_align: 'center',  display_mode: 'full',   duration_seconds: 5,
+    text_align: 'center',  display_mode: 'full',   duration_seconds: 2,
   } as TitleOverlayConfig,
   business_card_config: { enabled: false, title: '创始人 & CEO', subtitle: '专注AI视频生成', display_mode: 'duration', duration_seconds: 2 } as BusinessCardConfig,
   bgm_config: { enabled: true, selected_bgm: null, volume: 15, custom_bgm: null } as BgmConfig,
@@ -665,12 +665,6 @@ async function handleApplyEffects() {
     else { ElMessage.warning(res.message || '效果应用失败') }
   } catch (e: any) { ElMessage.error(`处理失败：${e.message}`) }
   finally { applyLoading.value = false }
-}
-
-function handleCopyText() {
-  const text = props.taskText?.trim()
-  if (!text) { ElMessage.warning('没有可复制的文案'); return }
-  navigator.clipboard.writeText(text).then(() => ElMessage.success('文案已复制到剪贴板')).catch(() => ElMessage.error('复制失败'))
 }
 function handleDownload(url: string) {
   if (!url) { ElMessage.warning('没有可下载的视频'); return }

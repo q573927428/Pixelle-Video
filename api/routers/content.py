@@ -182,7 +182,7 @@ async def generate_topics_endpoint(
 
 请直接输出话题词语，每行一个："""
         
-        result = await llm.chat([{"role": "user", "content": prompt}])
+        result = await llm(prompt, temperature=0.7, max_tokens=1024)
         if isinstance(result, str):
             result_text = result
         elif isinstance(result, dict):
@@ -240,20 +240,20 @@ async def generate_publish_prepare(
         if not title:
             title = "精彩视频"
         
-        # 2. Generate topics
-        prompt = f"""根据以下文案，生成5个适合作为短视频话题标签的词语。
+        # 2. Generate topics (1-5 hashtags, format: "#话题 #话题" space-separated)
+        prompt = f"""根据以下文案，生成话题标签（1-5个）。
 要求：
-1. 每个话题2-5个字
-2. 不要带#号
+1. 每个话题格式为"#话题"（#后面紧跟话题内容，右侧无空格）
+2. 多个话题之间用空格隔开，只输出一行
 3. 与文案内容相关
-4. 每行一个话题
+4. 不要输出序号或其他内容
 
 文案：
 {request.text}
 
-请直接输出话题词语，每行一个："""
+请直接输出空格隔开的话题标签："""
         
-        result = await llm.chat([{"role": "user", "content": prompt}])
+        result = await llm(prompt, temperature=0.7, max_tokens=1024)
         if isinstance(result, str):
             result_text = result
         elif isinstance(result, dict):
@@ -261,14 +261,15 @@ async def generate_publish_prepare(
         else:
             result_text = str(result)
         
+        # Parse space-separated hashtags like "#话题1 #话题2 #话题3"
         topics = [
-            t.strip().strip('#').strip()
-            for t in result_text.split('\n')
-            if t.strip() and not t.strip().startswith('```') and t.strip() not in ('', '，', '。')
+            t.strip()
+            for t in result_text.replace('\n', ' ').split()
+            if t.strip().startswith('#') and len(t.strip()) > 1
         ]
         topics = topics[:5]
         if not topics:
-            topics = ['AI技术', '数字人', '短视频']
+            topics = ['#AI技术', '#数字人', '#短视频']
         
         return PublishPrepareResponse(
             title=title,
