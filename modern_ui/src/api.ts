@@ -527,3 +527,84 @@ export async function generatePublishPrepare(text: string): Promise<{ success: b
     body: JSON.stringify({ text }),
   })
 }
+
+// ====== Publishing API (短视频平台自动发布) ======
+
+export interface PublishStartRequest {
+  platform: string
+  video_path: string
+  title: string
+  text: string
+  topics: string[]
+  portrait_cover?: string
+  landscape_cover?: string
+}
+
+export interface PublishStartResponse {
+  success: boolean
+  session_id: string
+  status: string
+  message: string
+}
+
+export async function startPublish(data: PublishStartRequest): Promise<PublishStartResponse> {
+  return request('/api/publish/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+export interface PublishStatusResponse {
+  success: boolean
+  session_id: string
+  status: string
+  current_step: string
+  progress: number
+  message: string
+  platform_url: string
+  error: string
+}
+
+export async function getPublishStatus(sessionId: string): Promise<PublishStatusResponse> {
+  return request(`/api/publish/status/${encodeURIComponent(sessionId)}`)
+}
+
+export interface AccountInfo {
+  id: number
+  platform: string
+  account_name: string
+  status: string
+  last_used_at: string | null
+  expires_at: string | null
+}
+
+export async function listPublishAccounts(): Promise<{ success: boolean; accounts: AccountInfo[] }> {
+  return request('/api/publish/accounts')
+}
+
+export async function deletePublishAccount(accountId: number): Promise<{ success: boolean; message: string }> {
+  return request(`/api/publish/account/${accountId}`, { method: 'DELETE' })
+}
+
+export async function savePublishCookie(data: {
+  platform: string
+  cookies: any[]
+  account_name: string
+  expires_at?: string
+}): Promise<{ success: boolean; message: string }> {
+  return request('/api/publish/cookie', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+}
+
+/**
+ * 创建 WebSocket 连接以接收发布实时状态
+ */
+export function createPublishWS(sessionId: string): WebSocket {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/api/publish/ws/${encodeURIComponent(sessionId)}`
+  return new WebSocket(wsUrl)
+}

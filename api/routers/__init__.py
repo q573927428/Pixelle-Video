@@ -29,9 +29,11 @@ from api.routers.pipelines import router as pipelines_router
 from api.routers.audio import router as audio_router
 from api.routers.media_extract import router as media_extract_router
 from api.routers.instances import router as instances_router
+from api.routers.publish import router as publish_router
 
 __all__ = [
     "instances_router",
+    "publish_router",
     "config_router",
     "health_router",
     "llm_router",

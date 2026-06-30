@@ -68,6 +68,7 @@ from api.routers import (
     audio_router,
     media_extract_router,
     instances_router,
+    publish_router,
 )
 from api.auth.router import router as auth_router
 from api.auth.sms_router import router as sms_router
@@ -114,12 +115,19 @@ async def lifespan(app: FastAPI):
         logger.warning(f"⚠️ MySQL database connection failed: {e}")
         logger.warning("Auth features will be unavailable until database is configured")
     
+    # Start session manager for publish tasks
+    from pixelle_video.services.publisher.session_manager import session_manager
+    session_manager.start()
+    logger.info("✅ SessionManager started for publish tasks")
+    
     logger.info("✅ Pixelle-Video API started successfully\n")
     
     yield
     
     # Shutdown
     logger.info("🛑 Shutting down Pixelle-Video API...")
+    # Stop session manager
+    await session_manager.stop()
     await task_manager.stop()
     await shutdown_pixelle_video()
     await Database.close()
@@ -194,6 +202,7 @@ app.include_router(pipelines_router, prefix=api_config.api_prefix)
 app.include_router(audio_router, prefix=api_config.api_prefix)
 app.include_router(media_extract_router, prefix=api_config.api_prefix)
 app.include_router(instances_router, prefix=api_config.api_prefix)
+app.include_router(publish_router, prefix=api_config.api_prefix)
 
 # Auth router (with /api prefix)
 app.include_router(auth_router, prefix=api_config.api_prefix)

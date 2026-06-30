@@ -1,1 +1,1 @@
-# api/utils package
+# API utilities package

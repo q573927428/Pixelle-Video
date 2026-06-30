@@ -142,6 +142,23 @@ CREATE TABLE IF NOT EXISTS `generation_log` (
     INDEX `idx_task_id` (`task_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 短视频平台账号绑定表
+CREATE TABLE IF NOT EXISTS `platform_accounts` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` INT NOT NULL,
+    `platform` VARCHAR(20) NOT NULL COMMENT 'douyin|kuaishou|xiaohongshu|shipinhao',
+    `account_name` VARCHAR(100) DEFAULT NULL COMMENT '平台显示的用户名',
+    `cookies_encrypted` TEXT COMMENT 'AES-GCM 加密后的 Cookie JSON',
+    `status` VARCHAR(20) DEFAULT 'active' COMMENT 'active|expired|revoked',
+    `last_used_at` DATETIME DEFAULT NULL,
+    `expires_at` DATETIME DEFAULT NULL COMMENT 'Cookie 过期时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_user_platform` (`user_id`, `platform`),
+    FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
+    INDEX `idx_user_platform` (`user_id`, `platform`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 会员套餐订单表（VIP/SVIP购买记录）
 CREATE TABLE IF NOT EXISTS `membership_orders` (
     `id` INT AUTO_INCREMENT PRIMARY KEY,
