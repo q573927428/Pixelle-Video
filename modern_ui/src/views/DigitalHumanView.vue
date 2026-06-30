@@ -54,7 +54,8 @@
             <div style="margin-top:20px;padding:12px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);font-size:13px;line-height:1.8;">
               <div style="color:var(--el-text-color-secondary);">💡 提交生成视频后：</div>
               <ul style="margin:4px 0 0;padding-left:18px;color:var(--el-text-color-regular);">
-                <li>可以关闭此页面，任务将在后台继续处理</li>
+                <li>可以继续填写文案继续提交新的任务</li>
+                <li>也可以关闭此页面，任务将在后台继续处理</li>
                 <li>在「任务中心」可查看处理进度</li>
                 <li>在「历史记录」中可查看和下载生成的视频</li>
                 <li>在「历史记录」中还可以编辑发布一生成成功的视频</li>
