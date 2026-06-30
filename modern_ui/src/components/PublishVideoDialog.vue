@@ -5,7 +5,7 @@
     :title="publishMode === 'progress' ? `📤 正在发布到 ${platformLabel}` : `📤 发布到 ${platformLabel}`"
     :close-on-click-modal="false"
     top="8vh"
-    width="60%"
+    width="52%"
     class="publish-dialog"
     destroy-on-close
     :before-close="handleClose"
@@ -208,7 +208,7 @@
                 closable
                 @close="handleUnbindAccount(acc.id)"
               >
-                {{ platformIcon(acc.platform) }} {{ acc.account_name || acc.platform }}
+                {{ formatAccountDisplay(acc) }}
               </el-tag>
             </div>
           </div>
@@ -272,7 +272,7 @@ const emit = defineEmits<{
   'publish-success': [sessionId: string]
 }>()
 
-const selectedPlatform = ref('douyin')
+const selectedPlatform = ref('')
 const currentPlatform = computed(() => publishPlatforms.find(p => p.key === selectedPlatform.value))
 
 const platformLabel = computed(() => {
@@ -512,7 +512,7 @@ function retryLogin() {
 // ====== 对话框生命周期 ======
 watch(() => props.visible, (val) => {
   if (val) {
-    selectedPlatform.value = props.platform || 'douyin'
+    selectedPlatform.value = props.platform || ''
     publishTitle.value = props.initialTitle
     publishText.value = props.initialText
     publishTopics.value = props.initialTopics
@@ -553,6 +553,17 @@ const platformIconMap: Record<string, string> = {
 
 function platformIcon(plat: string): string {
   return platformIconMap[plat] || '📱'
+}
+
+/** 格式化账号显示文本：平台图标 + 昵称（@用户名） */
+function formatAccountDisplay(acc: AccountInfo): string {
+  const icon = platformIcon(acc.platform)
+  const name = acc.account_name?.trim()
+  // 如果 account_name 为空或就是"XX用户"这样的占位符，显示"平台名"
+  if (!name || /用户$/.test(name) || name === acc.platform || name.length <= 1) {
+    return `${icon} ${acc.platform}`
+  }
+  return `${icon} ${name}`
 }
 
 async function loadBoundAccounts() {

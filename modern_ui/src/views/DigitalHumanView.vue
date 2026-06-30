@@ -24,6 +24,9 @@
             <h3 class="card-title">🚀 提交生成</h3>
           </div>
           <div class="card-body">
+            <el-button type="primary" size="large" style="width:100%;height:48px;font-weight:900;margin-bottom:20px;" :disabled="!canSubmit" @click="generate">
+              提交生成 - 🤖 数字人
+            </el-button>
             <!-- ZS币费用预览 -->
             <div v-if="estimatedSeconds > 0" class="cost-preview">
               <div class="cost-row">
@@ -46,13 +49,16 @@
                 </span>
               </div>
             </div>
-            <el-button type="primary" size="large" style="width:100%;height:48px;font-weight:900;" :disabled="!canSubmit" @click="generate">
-              提交生成 - 🤖 数字人
-            </el-button>
-            <div v-if="submitMessage" style="margin-top:12px;padding:8px 12px;border-radius:8px;" :style="{ background: submitSuccess ? 'rgba(64,158,255,0.08)' : 'rgba(245,108,108,0.08)', border: submitSuccess ? '1px solid rgba(64,158,255,0.2)' : '1px solid rgba(245,108,108,0.2)' }">
-              <span style="font-size:13px;" :style="{ color: submitSuccess ? 'var(--el-color-primary)' : '#f56c6c' }">
-                {{ submitSuccess ? '✅ 任务已提交！可在「历史记录」中查看和编辑。' : '❌ ' + submitMessage }}
-              </span>
+
+            <!-- 提交成功后显示提示信息 -->
+            <div style="margin-top:20px;padding:12px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);font-size:13px;line-height:1.8;">
+              <div style="color:var(--el-text-color-secondary);">💡 提交生成视频后：</div>
+              <ul style="margin:4px 0 0;padding-left:18px;color:var(--el-text-color-regular);">
+                <li>可以关闭此页面，任务将在后台继续处理</li>
+                <li>在「任务中心」可查看处理进度</li>
+                <li>在「历史记录」中可查看和下载生成的视频</li>
+                <li>在「历史记录」中还可以编辑发布一生成成功的视频</li>
+              </ul>
             </div>
           </div>
         </div>

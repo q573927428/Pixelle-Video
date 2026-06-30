@@ -469,17 +469,8 @@ class DouyinPublisher(BasePublisher):
         try:
             cookies = await self.context.cookies()
             if cookies:
-                # 尝试获取账户名称
-                account_name = None
-                try:
-                    name_el = self.page.locator(
-                        '.user-name, [class*="nickname"], [class*="user-name"], '
-                        '.creator-header .name, .avatar-container .name'
-                    ).first
-                    if await name_el.is_visible(timeout=3000):
-                        account_name = await name_el.text_content()
-                except Exception:
-                    pass
+                # 尝试获取账户名称（通过多种方式强化提取）
+                account_name = await self._extract_account_name()
 
                 await cookie_manager.save(
                     user_id=self.session.user_id,
@@ -487,9 +478,119 @@ class DouyinPublisher(BasePublisher):
                     cookies=cookies,
                     account_name=account_name or f"{self.PLATFORM_NAME}用户",
                 )
-                logger.info(f"✅ Cookies saved for {self.PLATFORM_NAME}")
+                logger.info(f"✅ Cookies saved for {self.PLATFORM_NAME}, account_name={account_name}")
         except Exception as e:
             logger.warning(f"Save cookies failed: {e}")
+
+    async def _extract_account_name(self) -> str | None:
+        """从页面中提取真实账户昵称
+
+        使用多种策略依次尝试：
+        1. DOM 选择器提取（头像附近的用户名、用户信息区域）
+        2. JS eval 从 document.title / meta / cookie 中提取
+        3. 从 session cookie 中解析 nickname 等信息
+
+        Returns:
+            str | None: 提取到的账户昵称
+        """
+        if not self.page:
+            return None
+
+        try:
+            # ---- 策略 1: DOM 选择器提取 ----
+            for selector in [
+                # 创作者头像旁边或右上角用户昵称
+                '.user-name',
+                '.creator-header .user-name',
+                '.creator-header .name',
+                '.avatar-container .name',
+                '.avatar-container [class*="nickname"]',
+                '[class*="user-info"] [class*="name"]',
+                '[class*="user-info"] [class*="nickname"]',
+                '[class*="header"] [class*="name"]',
+                '[class*="header"] [class*="nickname"]',
+                # 头像下方的昵称
+                '.user-avatar + span',
+                '.avatar-wrap + span',
+                '[class*="avatar"] + [class*="name"]',
+                # 通用
+                '[class*="nickname"]',
+                '[class*="user-name"]',
+            ]:
+                try:
+                    el = self.page.locator(selector).first
+                    if await el.is_visible(timeout=1000):
+                        text = (await el.text_content() or '').strip()
+                        if text and len(text) > 0 and len(text) < 50:
+                            logger.info(f"✅ Account name found via selector '{selector}': {text}")
+                            return text
+                except Exception:
+                    continue
+
+            # ---- 策略 2: JS eval 深入提取 ----
+            js_name = await self.page.evaluate("""
+                () => {
+                    function tryGet(sel) {
+                        const el = document.querySelector(sel);
+                        return el ? (el.textContent || '').trim() : null;
+                    }
+
+                    // 尝试常见选择器（JS 方式可以拿到隐藏元素）
+                    const selectors = [
+                        '.user-name',
+                        '.creator-header .user-name',
+                        '.avatar-container [class*="nickname"]',
+                        '[class*="user-info"] [class*="name"]',
+                        '[class*="user-info"] [class*="nickname"]',
+                        '[class*="nickname"]',
+                        '[class*="user-name"]',
+                        // 有时昵称在 img alt 属性中
+                        'img[class*="avatar"]',
+                    ];
+                    for (const s of selectors) {
+                        const v = tryGet(s);
+                        if (v && v.length > 0 && v.length < 50) return v;
+                    }
+
+                    // 从 img alt 中提取
+                    const avatars = document.querySelectorAll('img[class*="avatar"], img[class*="user"]');
+                    for (const img of avatars) {
+                        if (img.alt && img.alt.length > 0 && img.alt.length < 50 && !img.alt.includes('avatar')) {
+                            return img.alt;
+                        }
+                    }
+
+                    // 从 document.title 中提取（某些页面标题包含昵称）
+                    const title = document.title || '';
+                    const titleMatch = title.match(/([\\u4e00-\\u9fa5\\w]+)\\s*的(?:创作|主页|抖音)/);
+                    if (titleMatch) return titleMatch[1].trim();
+
+                    return null;
+                }
+            """)
+            if js_name:
+                logger.info(f"✅ Account name found via JS: {js_name}")
+                return js_name
+
+            # ---- 策略 3: 从 cookie 中提取 ----
+            # 抖音 Cookie sessionid 有时携带用户名信息
+            try:
+                for c in await self.context.cookies():
+                    # 某些 session cookie 的 value 包含 nickname
+                    if c.get('name') in ('sessionid', 'sid', 'uid', 'userid') and c.get('value'):
+                        val = c['value']
+                        # 尝试 decode
+                        import urllib.parse
+                        decoded = urllib.parse.unquote(val)
+                        if len(decoded) < 50 and not decoded.startswith('_'):
+                            return decoded
+            except Exception:
+                pass
+
+        except Exception as e:
+            logger.warning(f"Account name extraction failed: {e}")
+
+        return None
 
     async def _upload_video(self, video_path: str):
         """上传视频到抖音

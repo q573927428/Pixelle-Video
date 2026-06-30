@@ -150,7 +150,7 @@
         <!-- 口播模式 -->
           <div v-if="form.mode === 'customize'" class="soft-panel">
             <el-form-item label="自定义口播文案">
-              <el-input v-model="form.goods_text" type="textarea" :rows="6" maxlength="368" show-word-limit placeholder="填写固定口播文案内容" />
+              <el-input v-model="form.goods_text" type="textarea" :rows="16" maxlength="368" show-word-limit placeholder="填写固定口播文案内容" />
               <div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end;">
                 <el-button v-if="form.goods_text.trim()" type="warning" size="small" @click="handleRewrite" :loading="rewriteLoading">
                   ✨ 一键改写
