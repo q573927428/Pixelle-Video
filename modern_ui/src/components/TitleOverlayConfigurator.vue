@@ -72,8 +72,14 @@
             <el-form-item label="文字颜色">
               <el-color-picker v-model="localConfig.font_color" show-alpha />
             </el-form-item>
+            <el-form-item label="文字间距">
+              <el-slider v-model="localConfig.letter_spacing" :min="0" :max="50" :step="1" show-input />
+            </el-form-item>
             <el-form-item label="文字粗细">
               <el-slider v-model="localConfig.font_weight" :min="100" :max="900" :step="100" show-input />
+            </el-form-item>
+            <el-form-item label="文字字体">
+              <el-input v-model="localConfig.font_family" placeholder="如: NotoSansSC-Bold" style="width:260px;" />
             </el-form-item>
             <el-divider style="margin:8px 0;" />
             <el-form-item label="文字边框粗细">
@@ -87,7 +93,7 @@
               <el-color-picker v-model="localConfig.background_color" />
             </el-form-item>
             <el-form-item label="背景透明度">
-              <el-slider v-model="localConfig.background_opacity" :min="0" :max="100" :step="5" show-input />
+              <el-slider v-model="localConfig.background_opacity" :min="0" :max="1.0" :step="0.05" show-input />
             </el-form-item>
             <el-form-item label="背景内边距">
               <el-input v-model="localConfig.background_padding" placeholder="如: 12px 24px" style="width:200px;" />
@@ -171,43 +177,43 @@ interface PresetStyle {
 const presetStyles: PresetStyle[] = [
   {
     name: '经典白字',
-    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#000000' },
-    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 1 },
+    config: { font_color: '#FFFFFF', font_border_color: '#000000', font_border_width: 2, background_opacity: 0 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 2 },
   },
   {
-    name: '金色醒目',
-    config: { font_color: '#FFD700', font_size: 68, font_weight: 900, font_border_width: 3, font_border_color: '#000000' },
-    preview: { fontColor: '#FFD700', borderColor: '#000000', borderWidth: 1 },
+    name: '黑底白字',
+    config: { font_color: '#FFFFFF', background_color: '#000000', background_opacity: 0.8, font_border_width: 1 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0 },
   },
   {
-    name: '蓝色科技',
-    config: { font_color: '#00BFFF', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#003366' },
-    preview: { fontColor: '#00BFFF', borderColor: '#003366', borderWidth: 1 },
+    name: '黄字黑边',
+    config: { font_color: '#FFD700', font_border_color: '#000000', font_border_width: 3, background_opacity: 0 },
+    preview: { fontColor: '#FFD700', borderColor: '#000000', borderWidth: 3 },
   },
   {
-    name: '粉红温馨',
-    config: { font_color: '#FF69B4', font_size: 68, font_weight: 600, font_border_width: 2, font_border_color: '#8B004B' },
-    preview: { fontColor: '#FF69B4', borderColor: '#8B004B', borderWidth: 1 },
+    name: '柔和阴影',
+    config: { font_color: '#FFFFFF', background_color: '#1a1a2e', background_opacity: 0.7, font_border_width: 1 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0 },
   },
   {
-    name: '青绿典雅',
-    config: { font_color: '#00E5A0', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#004D33' },
-    preview: { fontColor: '#00E5A0', borderColor: '#004D33', borderWidth: 1 },
-  },
-  {
-    name: '橙色热情',
-    config: { font_color: '#FF8C00', font_size: 68, font_weight: 800, font_border_width: 2, font_border_color: '#5C3300' },
-    preview: { fontColor: '#FF8C00', borderColor: '#5C3300', borderWidth: 1 },
+    name: '蓝底白字',
+    config: { font_color: '#FFFFFF', background_color: '#1890ff', background_opacity: 0.9, font_border_width: 1 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 0 },
   },
   {
     name: '霓虹光效',
-    config: { font_color: '#00FFCC', font_size: 72, font_weight: 900, font_border_width: 2, font_border_color: '#00FFCC' },
+    config: { font_color: '#00FFCC', font_border_color: '#00FFCC', font_border_width: 1, background_color: '#000000', background_opacity: 0.6 },
     preview: { fontColor: '#00FFCC', borderColor: '#00FFCC', borderWidth: 1 },
   },
   {
-    name: '纯净白字',
-    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700, font_border_width: 0 },
-    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 1 },
+    name: '简约灰调',
+    config: { font_color: '#CCCCCC', font_border_width: 1, background_opacity: 0 },
+    preview: { fontColor: '#CCCCCC', borderColor: '#000000', borderWidth: 0 },
+  },
+  {
+    name: '电影字幕',
+    config: { font_color: '#FFFFFF', background_color: '#000000', background_opacity: 0.75, font_border_color: '#333333', font_border_width: 1 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#333333', borderWidth: 1 },
   },
 ]
 

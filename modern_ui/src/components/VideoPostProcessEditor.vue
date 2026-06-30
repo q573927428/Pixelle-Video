@@ -166,8 +166,21 @@ const activeTab = ref('subtitle')
 
 const config = reactive({
   subtitle_enabled: true,
-  subtitle_config: { enabled: true, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' } as SubtitleConfig,
-  title_overlay_config: { enabled: true, text: '爆款视频标题预览效果', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2, background_color: '#000000', background_opacity: 0, background_padding: '12px 24px', background_radius: 8 } as TitleOverlayConfig,
+  subtitle_config: {
+    enabled: true,
+    font_size: 56,         font_color: '#FFFFFF',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
+    position_x: 0,         position_y: -390,       max_width: 900,                  letter_spacing: 3,
+    background_color: '#000000',  background_opacity: 0,  background_padding: '12px 24px',  background_radius: 8,
+    font_border_width: 1,  font_border_color: '#000000',
+  } as SubtitleConfig,
+  title_overlay_config: {
+    enabled: true,         text: '这是一个标题样式预览演示',
+    font_size: 56,         font_color: '#FFFFFF',  font_family: 'NotoSansSC-Bold',  font_weight: 400,
+    position_x: 0,         position_y: -1600,       max_width: 900,                  letter_spacing: 3,
+    background_color: '#000000',  background_opacity: 0,  background_padding: '12px 24px',  background_radius: 8,
+    font_border_width: 1,  font_border_color: '#000000',
+    text_align: 'center',  display_mode: 'full',   duration_seconds: 5,
+  } as TitleOverlayConfig,
   business_card_config: { enabled: false, title: '创始人 & CEO', subtitle: '专注AI视频生成', display_mode: 'duration', duration_seconds: 2 } as BusinessCardConfig,
   bgm_config: { enabled: true, selected_bgm: null, volume: 15, custom_bgm: null } as BgmConfig,
   pip_mix_config: { enabled: false, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 } as PipMixConfig,
@@ -252,7 +265,7 @@ function renderOverlay() {
       const offsetY = Math.round(cfg.position_y * scaleY)
       const radius = Math.round(cfg.background_radius * scale)
 
-      const padParts = (cfg.background_padding || '10 20').split(' ').map(Number)
+      const padParts = (cfg.background_padding || '10 20').replace(/px/g, '').split(' ').filter(s => s.trim()).map(Number)
       let padT = 10, padR = 20, padB = 10, padL = 20
       if (padParts.length === 1) { padT = padR = padB = padL = padParts[0] }
       else if (padParts.length === 2) { padT = padB = padParts[0]; padR = padL = padParts[1] }
@@ -362,7 +375,7 @@ function renderOverlay() {
 
       // 计算每行宽度
       const maxWidth = Math.round((titleCfg.max_width || 900) * scale)
-      const letterSpacing = 5 // 标题也增加一点字间距
+      const letterSpacing = Math.round((titleCfg.letter_spacing || 3) * scale)
 
       function getLineWidth(txt: string): number {
         if (!txt) return 0
@@ -400,9 +413,9 @@ function renderOverlay() {
       // 计算整体文本宽度
       const maxLineWidth = Math.max(...allLines.map((l: string) => getLineWidth(l)))
 
-      // 计算背景区域（使用可配置的背景）
+      // 计算背景区域（使用可配置的背景，opacity 统一为 0-1 float）
       const bgColor = titleCfg.background_color || '#000000'
-      const bgOpacity = Math.max(0, Math.min(1, titleCfg.background_opacity / 100))
+      const bgOpacity = Math.max(0, Math.min(1, titleCfg.background_opacity))
       const bgPaddingStr = titleCfg.background_padding || '12px 24px'
       const bgPadParts = bgPaddingStr.replace(/px/g, '').split(' ').map(Number)
       let padT2 = 12, padR2 = 24, padB2 = 12, padL2 = 24
@@ -619,7 +632,7 @@ async function handleSubtitlePreview() {
         text, audio_duration: Math.max(text.length / 4, 3), video_width: 1080, video_height: 1920,
         video_path: props.taskVideoPath || '',
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
-        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds, background_color: config.title_overlay_config.background_color, background_opacity: config.title_overlay_config.background_opacity, background_padding: config.title_overlay_config.background_padding, background_radius: config.title_overlay_config.background_radius },
+        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_family: config.title_overlay_config.font_family, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, letter_spacing: config.title_overlay_config.letter_spacing, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds, background_color: config.title_overlay_config.background_color, background_opacity: config.title_overlay_config.background_opacity, background_padding: config.title_overlay_config.background_padding, background_radius: config.title_overlay_config.background_radius },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
         bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),
@@ -643,7 +656,7 @@ async function handleApplyEffects() {
       body: JSON.stringify({
         video_path: props.taskVideoPath || props.taskVideoUrl, goods_text: props.taskText,
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
-        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds, background_color: config.title_overlay_config.background_color, background_opacity: config.title_overlay_config.background_opacity, background_padding: config.title_overlay_config.background_padding, background_radius: config.title_overlay_config.background_radius },
+        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_family: config.title_overlay_config.font_family, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, letter_spacing: config.title_overlay_config.letter_spacing, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds, background_color: config.title_overlay_config.background_color, background_opacity: config.title_overlay_config.background_opacity, background_padding: config.title_overlay_config.background_padding, background_radius: config.title_overlay_config.background_radius },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
         bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),

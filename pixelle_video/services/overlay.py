@@ -387,8 +387,8 @@ class OverlayService:
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # 绘制可配置背景（使用 background_color + background_opacity）
-        bg_alpha = max(0, min(255, int(config.background_opacity / 100 * 255)))
+        # 绘制可配置背景（使用 background_color + background_opacity, 0-1 float 统一与 SubtitleConfigModel 一致）
+        bg_alpha = max(0, min(255, int(config.background_opacity * 255)))
         if bg_alpha > 0:
             bg_fill = self._hex_to_rgba(config.background_color, bg_alpha)
             bg_radius = int(config.background_radius * scale)

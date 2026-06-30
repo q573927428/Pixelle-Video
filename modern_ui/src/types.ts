@@ -78,8 +78,8 @@ export interface VideoApiParams {
   watermark: boolean
 }
 
-// ===== 字幕配置接口 =====
-export interface SubtitleConfig {
+// ===== 文字叠加配置基础字段（字幕和标题共用，前后端完全一致） =====
+export interface TextOverlayBase {
   enabled: boolean
   font_size: number
   font_color: string
@@ -89,37 +89,33 @@ export interface SubtitleConfig {
   position_y: number
   max_width: number
   letter_spacing: number
+  font_border_width: number
+  font_border_color: string
   background_color: string
+  /** 背景透明度 0.0-1.0（前后端统一使用浮点） */
   background_opacity: number
   background_padding: string
   background_radius: number
-  font_border_width: number
-  font_border_color: string
 }
 
-// ===== 标题配置接口 =====
+// ===== 字幕配置接口（继承文字叠加基础，无额外字段） =====
+export interface SubtitleConfig extends TextOverlayBase {
+}
+
+// ===== 标题配置接口（继承文字叠加基础 + 标题特有字段） =====
 export type DisplayMode = 'full' | 'duration'
 
 export type TitleTextAlign = 'left' | 'center' | 'right'
 
-export interface TitleOverlayConfig {
-  enabled: boolean
+export interface TitleOverlayConfig extends TextOverlayBase {
+  /** 标题文字内容（支持多行，用 \n 分隔） */
   text: string
-  font_size: number
-  font_color: string
-  font_weight: number
-  position_x: number
-  position_y: number
-  max_width: number
-  font_border_width: number
-  font_border_color: string
+  /** 文字对齐方式 */
   text_align: TitleTextAlign
+  /** 显示模式：full=全视频时长, duration=指定秒数 */
   display_mode: DisplayMode
+  /** 当 display_mode='duration' 时显示秒数 */
   duration_seconds: number
-  background_color: string
-  background_opacity: number
-  background_padding: string
-  background_radius: number
 }
 
 // ===== 个人名片配置接口 =====

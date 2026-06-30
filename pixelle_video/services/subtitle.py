@@ -38,18 +38,18 @@ class SubtitleConfigModel:
     def __init__(
         self,
         enabled: bool = False,
-        font_size: int = 48,
+        font_size: int = 56,
         font_color: str = "#FFFFFF",
-        font_family: str = "PingFang SC",
+        font_family: str = "NotoSansSC-Bold",
         position_x: int = 0,
         position_y: int = 0,
         max_width: int = 900,
-        letter_spacing: int = 0,
+        letter_spacing: int = 3,
         background_color: str = "#000000",
-        background_opacity: float = 0.6,
-        background_padding: str = "10 20",
+        background_opacity: float = 0,
+        background_padding: str = "12px 24px",
         background_radius: int = 8,
-        font_border_width: int = 0,
+        font_border_width: int = 1,
         font_border_color: str = "#000000",
         font_weight: int = 400,
     ):
@@ -285,7 +285,8 @@ class SubtitleService:
         "10 20" -> (10, 20, 10, 20)
         "10 20 30 40" -> (10, 20, 30, 40)
         """
-        parts = padding_str.strip().split()
+        # 去除 px 后缀（与 overlay.py 保持一致）
+        parts = padding_str.replace('px', '').strip().split()
         if len(parts) == 1:
             v = int(parts[0])
             return (v, v, v, v)
@@ -295,7 +296,7 @@ class SubtitleService:
         elif len(parts) == 4:
             return (int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3]))
         else:
-            return (10, 20, 10, 20)  # 默认
+            return (12, 24, 12, 24)  # 默认，与 TextOverlayConfig 一致
 
     def _split_text_into_lines(
         self, text: str, font: ImageFont.FreeTypeFont, max_width: int, letter_spacing: int = 0

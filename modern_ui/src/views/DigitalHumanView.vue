@@ -134,9 +134,9 @@ const digitalForm = ref<DigitalForm>({
   video_service_mode: 'runninghub', video_api_model: '',
   video_api_params: { duration: 10, resolution: '1280x720', aspect_ratio: '9:16', negative_prompt: '', watermark: false },
   subtitle_enabled: false,
-  subtitle_config: { enabled: false, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' },
+  subtitle_config: { enabled: false, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '12px 24px', background_radius: 8, font_border_width: 1, font_border_color: '#000000' },
   internet_clip_enabled: true,
-  title_overlay_config: { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2 },
+  title_overlay_config: { enabled: false, text: '', font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, font_border_width: 1, font_border_color: '#000000', background_color: '#000000', background_opacity: 0, background_padding: '12px 24px', background_radius: 8, text_align: 'center', display_mode: 'full', duration_seconds: 5 },
   business_card_config: { enabled: false, title: '', subtitle: '', display_mode: 'duration', duration_seconds: 2 },
   bgm_config: { enabled: false, selected_bgm: null, volume: 15, custom_bgm: null },
   pip_mix_config: { enabled: false, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 },
@@ -216,10 +216,10 @@ function buildPayload(): Record<string, any> {
   if (digitalForm.value.video_service_mode === 'api' && digitalForm.value.video_api_model) {
     payload.workflow_config.api_video_workflow = digitalForm.value.video_api_model
   }
-  payload.subtitle_config = { enabled: false, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' }
-  payload.title_overlay_config = { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2 }
-  payload.business_card_config = { enabled: false, title: '', subtitle: '', display_mode: 'duration', duration_seconds: 2 }
-  payload.bgm_config = { enabled: false, selected_bgm: null, volume: 50, custom_bgm: null }
+  payload.subtitle_config = digitalForm.value.subtitle_config.enabled ? { ...digitalForm.value.subtitle_config } : { enabled: false }
+  payload.title_overlay_config = digitalForm.value.title_overlay_config.enabled ? { ...digitalForm.value.title_overlay_config } : { enabled: false, text: '' }
+  payload.business_card_config = digitalForm.value.business_card_config.enabled ? { ...digitalForm.value.business_card_config } : { enabled: false }
+  payload.bgm_config = digitalForm.value.bgm_config.enabled ? { ...digitalForm.value.bgm_config } : { enabled: false }
   return payload
 }
 
