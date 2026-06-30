@@ -4,7 +4,7 @@
     @update:model-value="$emit('update:visible', $event)"
     :title="`📤 发布到 ${platformLabel}`"
     :close-on-click-modal="false"
-    top="3vh"
+    top="8vh"
     width="60%"
     class="publish-dialog"
     destroy-on-close
@@ -74,7 +74,7 @@
                 class="ai-btn"
               >
                 <el-icon><MagicStick /></el-icon>
-                {{ aiLoading ? '生成中' : 'AI' }}
+                {{ aiLoading ? '生成中' : 'AI生成' }}
               </el-button>
             </div>
           </el-form-item>
@@ -268,7 +268,7 @@ async function handleAIGenerate() {
       publishTitle.value = res.title
     }
     if (res.topics && res.topics.length > 0) {
-      publishTopics.value = res.topics.join(', ')
+      publishTopics.value = res.topics.join(' ')
     }
     ElMessage.success('✅ 标题和话题已自动生成！')
   } catch (e: any) {

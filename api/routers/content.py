@@ -173,14 +173,14 @@ async def generate_topics_endpoint(
         prompt = f"""根据以下文案，生成{request.count}个适合作为短视频话题标签的词语。
 要求：
 1. 每个话题2-5个字
-2. 不要带#号
+2. 格式为"#话题"（#后面紧跟话题内容，右侧无空格）
 3. 与文案内容相关
 4. 每行一个话题
 
 文案：
 {request.text}
 
-请直接输出话题词语，每行一个："""
+请直接输出话题标签，每行一个："""
         
         result = await llm(prompt, temperature=0.7, max_tokens=1024)
         if isinstance(result, str):
@@ -190,15 +190,20 @@ async def generate_topics_endpoint(
         else:
             result_text = str(result)
         
-        topics = [
-            t.strip().strip('#').strip()
-            for t in result_text.split('\n')
-            if t.strip() and not t.strip().startswith('```') and t.strip() not in ('', '，', '。')
-        ]
+        # 按行分割，每行再按逗号/空格分割，展平处理
+        raw_topics = []
+        for line in result_text.split('\n'):
+            # 替换逗号为空格再分割
+            for part in line.replace('，', ' ').replace(',', ' ').split():
+                part = part.strip()
+                if part and not part.startswith('```') and part not in ('', '，', '。'):
+                    raw_topics.append(part)
+        # 确保每个话题以#开头
+        topics = [t if t.startswith('#') else f'#{t}' for t in raw_topics]
         topics = topics[:request.count]
         
         if not topics:
-            topics = ['AI技术', '数字人', '短视频']
+            topics = ['#AI技术', '#数字人', '#短视频']
         
         return TopicsGenerateResponse(
             topics=topics
@@ -261,10 +266,11 @@ async def generate_publish_prepare(
         else:
             result_text = str(result)
         
-        # Parse space-separated hashtags like "#话题1 #话题2 #话题3"
+        # Parse hashtags - replace commas with spaces, then split by whitespace
+        clean_text = result_text.replace('\n', ' ').replace('，', ' ').replace(',', ' ')
         topics = [
             t.strip()
-            for t in result_text.replace('\n', ' ').split()
+            for t in clean_text.split()
             if t.strip().startswith('#') and len(t.strip()) > 1
         ]
         topics = topics[:5]

@@ -185,7 +185,7 @@
     </el-dialog>
 
     <!-- 视频后处理编辑弹窗 -->
-    <el-dialog v-model="editVideoDialogVisible" title="🎬 视频后处理编辑" :close-on-click-modal="false" top="3vh" width="65%" class="video-edit-dialog" destroy-on-close>
+    <el-dialog v-model="editVideoDialogVisible" title="🎬 视频后处理编辑" :close-on-click-modal="false" top="6vh" width="65%" class="video-edit-dialog" destroy-on-close>
       <VideoPostProcessEditor
         v-if="editTaskData"
         :task-video-url="editTaskVideoUrl"
