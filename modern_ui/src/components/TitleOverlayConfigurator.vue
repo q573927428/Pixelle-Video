@@ -123,32 +123,32 @@ interface PresetStyle {
 const presetStyles: PresetStyle[] = [
   {
     name: '经典白字',
-    config: { font_color: '#FFFFFF', font_size: 56, font_weight: 700 },
+    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700 },
     previewColor: '#FFFFFF',
   },
   {
     name: '金色醒目',
-    config: { font_color: '#FFD700', font_size: 60, font_weight: 900 },
+    config: { font_color: '#FFD700', font_size: 68, font_weight: 900 },
     previewColor: '#FFD700',
   },
   {
     name: '蓝色科技',
-    config: { font_color: '#00BFFF', font_size: 56, font_weight: 700 },
+    config: { font_color: '#00BFFF', font_size: 68, font_weight: 700 },
     previewColor: '#00BFFF',
   },
   {
     name: '粉红温馨',
-    config: { font_color: '#FF69B4', font_size: 54, font_weight: 600 },
+    config: { font_color: '#FF69B4', font_size: 68, font_weight: 600 },
     previewColor: '#FF69B4',
   },
   {
     name: '青绿典雅',
-    config: { font_color: '#00E5A0', font_size: 56, font_weight: 700 },
+    config: { font_color: '#00E5A0', font_size: 68, font_weight: 700 },
     previewColor: '#00E5A0',
   },
   {
     name: '橙色热情',
-    config: { font_color: '#FF8C00', font_size: 58, font_weight: 800 },
+    config: { font_color: '#FF8C00', font_size: 68, font_weight: 800 },
     previewColor: '#FF8C00',
   },
 ]

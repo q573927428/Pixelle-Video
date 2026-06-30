@@ -101,7 +101,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { request } from '../api'
+import { request, loadResources } from '../api'
 import SubtitleConfigurator from './SubtitleConfigurator.vue'
 import TitleOverlayConfigurator from './TitleOverlayConfigurator.vue'
 import BusinessCardConfigurator from './BusinessCardConfigurator.vue'
@@ -118,12 +118,21 @@ const props = defineProps<{
 
 const bgmList = ref<{ name: string; path: string; source: string }[]>([])
 
+async function loadBgmList() {
+  try {
+    const res = await loadResources()
+    bgmList.value = res.bgmFiles
+  } catch (_) {
+    bgmList.value = []
+  }
+}
+
 const configTabs = [
-  { key: 'subtitle', label: '📝 字幕配置' },
-  { key: 'title', label: '📌 标题叠加' },
-  { key: 'card', label: '👤 个人名片' },
+  { key: 'subtitle', label: '📝 字幕' },
+  { key: 'title', label: '📌 标题' },
+  // { key: 'card', label: '👤 个人名片' },
   { key: 'bgm', label: '🎵 背景音乐' },
-  { key: 'pip', label: '🖼️ 画中画' },
+  // { key: 'pip', label: '🖼️ 画中画' },
 ]
 const activeTab = ref('subtitle')
 
@@ -131,9 +140,9 @@ const config = reactive({
   subtitle_enabled: true,
   subtitle_config: { enabled: true, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' } as SubtitleConfig,
   title_overlay_config: { enabled: true, text: '爆款视频标题预览效果', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, display_mode: 'duration', duration_seconds: 2 } as TitleOverlayConfig,
-  business_card_config: { enabled: true, title: '创始人 & CEO', subtitle: '专注AI视频生成', display_mode: 'duration', duration_seconds: 2 } as BusinessCardConfig,
+  business_card_config: { enabled: false, title: '创始人 & CEO', subtitle: '专注AI视频生成', display_mode: 'duration', duration_seconds: 2 } as BusinessCardConfig,
   bgm_config: { enabled: true, selected_bgm: null, volume: 15, custom_bgm: null } as BgmConfig,
-  pip_mix_config: { enabled: true, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 } as PipMixConfig,
+  pip_mix_config: { enabled: false, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 } as PipMixConfig,
 })
 
 const hasAnyEffectEnabled = computed(() =>
@@ -439,6 +448,7 @@ function stopOverlayLoop() {
 }
 
 onMounted(() => {
+  loadBgmList()
   const video = previewVideoRef.value
   if (video) {
     video.addEventListener('play', startOverlayLoop)

@@ -59,24 +59,26 @@
             <span v-if="task.duration" class="duration-badge">{{ task.duration.toFixed(1) }}s</span>
           </div>
           <div class="history-item-info">
-            <div v-if="task.status === 'completed'" class="history-item-edit-btn" @click.stop="openVideoEditor(task)">
-              <el-tag size="small" type="warning" effect="plain" style="cursor:pointer;">🎬 编辑</el-tag>
-            </div>
             <div class="history-item-title-row">
-                <el-tag :type="task.status === 'completed' ? 'success' : 'danger'" effect="dark" size="small">
-                  {{ task.status === 'completed' ? '已完成' : '失败' }}
-                </el-tag>
-                <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
-                <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
-                  <el-icon><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></el-icon>
-                  {{ task.phone || task.username }}
-                </span>
-              </div>
-              <div class="history-item-meta">
-                <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
-                <span v-if="task.deducted_zs > 0" class="zs-badge" title="实际扣除ZS币">
-                  <img src="/zsicon60.png" class="zs-icon-img" /> -{{ task.deducted_zs }}
-                </span>
+              <el-button
+                size="small"
+                type="warning"
+                class="action-btn"
+                @click.stop="openVideoEditor(task)"
+              >
+              <el-icon><Edit /></el-icon>编辑视频
+              </el-button>
+              <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
+              <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
+                <el-icon><User /></el-icon>
+                {{ task.phone || task.username }}
+              </span>
+            </div>
+            <div class="history-item-meta">
+              <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
+              <span v-if="task.deducted_zs > 0" class="zs-badge" title="实际扣除ZS币">
+                ZS -{{ task.deducted_zs }}
+              </span>
               <span class="meta-actions">
                 <el-tooltip content="复制文案" placement="top" :show-after="300">
                   <el-button
@@ -86,7 +88,7 @@
                     class="action-btn"
                     @click.stop="handleCopyPrompt(task)"
                   >
-                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></el-icon>
+                    <el-icon><CopyDocument /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="下载视频" placement="top" :show-after="300">
@@ -97,7 +99,7 @@
                     class="action-btn"
                     @click.stop="handleDownload(task)"
                   >
-                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></el-icon>
+                    <el-icon><Download /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="删除此记录" placement="top" :show-after="300">
@@ -108,7 +110,7 @@
                     class="action-btn"
                     @click.stop="handleDelete(task)"
                   >
-                    <el-icon><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></el-icon>
+                    <el-icon><Delete /></el-icon>
                   </el-button>
                 </el-tooltip>
               </span>
@@ -132,7 +134,7 @@
     <!-- 详情对话框 -->
     <el-dialog v-model="detailVisible" title="任务详情" :close-on-click-modal="false" top="5vh" class="detail-dialog">
       <div v-if="detailLoading" style="text-align:center;padding:30px;">
-        <el-icon class="is-loading" style="font-size:24px;"><svg viewBox="0 0 1024 1024"><path fill="currentColor" d="M512 64a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V96a32 32 0 0 1 32-32z"/><path fill="currentColor" d="M512 736a32 32 0 0 1 32 32v192a32 32 0 0 1-64 0V768a32 32 0 0 1 32-32z"/></svg></el-icon>
+        <el-icon class="is-loading" style="font-size:24px;"><Loading /></el-icon>
         <div class="small muted" style="margin-top:12px;">加载中...</div>
       </div>
       <template v-else-if="detailData">
@@ -198,6 +200,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { loadTaskHistory, deleteTaskHistory, getTaskHistoryDetail } from '../api'
 import { ElMessageBox } from 'element-plus'
+import { Edit, User, CopyDocument, Download, Delete } from '@element-plus/icons-vue'
 import { useAuth } from '../composables/useAuth'
 import VideoPostProcessEditor from '../components/VideoPostProcessEditor.vue'
 
@@ -576,12 +579,6 @@ async function handleDelete(task: any) {
   border-radius: 6px;
   backdrop-filter: blur(4px);
   letter-spacing: 0.3px;
-}
-.history-item-edit-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
 }
 .history-item-info {
   flex: 1;

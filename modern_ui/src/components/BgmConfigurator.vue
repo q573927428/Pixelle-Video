@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="form-section-body" v-if="enabled">
-        <el-form-item label="选择背景音乐">
+        <el-form-item>
           <el-select v-model="localConfig.selected_bgm" filterable placeholder="选择已有背景音乐" clearable style="width:100%;">
             <el-option
               v-for="bgm in bgmList"
@@ -27,10 +27,10 @@
             </el-option>
           </el-select>
           <div v-if="localConfig.selected_bgm" class="bgm-audio-player">
-            <audio ref="audioRef" :src="filePreviewUrl(localConfig.selected_bgm)" controls class="bgm-audio" />
+            <audio ref="audioRef" :src="filePreviewUrl(localConfig.selected_bgm)" controls class="bgm-audio" @loadedmetadata="onAudioLoaded" />
           </div>
         </el-form-item>
-        <el-form-item label="自定义上传BGM">
+        <el-form-item>
           <div class="upload-field-container">
             <UploadBox category="custom_bgm" accept="audio/*,.mp3,.wav,.flac,.aac" @upload="(f, c) => $emit('upload', f, c, 'custom_bgm')" @select-history="(c) => $emit('select-history', c)" />
             <FilePreview v-if="localConfig.custom_bgm" :items="[localConfig.custom_bgm]" @remove="localConfig.custom_bgm = null" />
@@ -77,25 +77,32 @@ const emit = defineEmits<{
   (e: 'select-history', category: string): void
 }>()
 
-const localConfig = reactive<BgmConfig>({ ...props.config })
+const defaultConfig: BgmConfig = { enabled: false, selected_bgm: null, volume: 15, custom_bgm: null }
+const localConfig = reactive<BgmConfig>({ ...defaultConfig, ...props.config })
 
 const audioRef = ref<HTMLAudioElement | null>(null)
 
+function syncVolume() {
+  if (audioRef.value) {
+    audioRef.value.volume = localConfig.volume / 100
+  }
+}
+
+function onAudioLoaded() {
+  syncVolume()
+}
+
 watch(
   () => localConfig.volume,
-  (val) => {
-    if (audioRef.value) {
-      audioRef.value.volume = val / 100
-    }
+  () => {
+    syncVolume()
   }
 )
 
 watch(
   () => localConfig.selected_bgm,
   () => {
-    if (audioRef.value) {
-      audioRef.value.volume = localConfig.volume / 100
-    }
+    // DOM 会在下一个 tick 渲染出 <audio>，等 loadedmetadata 事件再设置音量
   }
 )
 
