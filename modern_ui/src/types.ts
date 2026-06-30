@@ -100,6 +100,8 @@ export interface SubtitleConfig {
 // ===== 标题配置接口 =====
 export type DisplayMode = 'full' | 'duration'
 
+export type TitleTextAlign = 'left' | 'center' | 'right'
+
 export interface TitleOverlayConfig {
   enabled: boolean
   text: string
@@ -108,6 +110,10 @@ export interface TitleOverlayConfig {
   font_weight: number
   position_x: number
   position_y: number
+  max_width: number
+  font_border_width: number
+  font_border_color: string
+  text_align: TitleTextAlign
   display_mode: DisplayMode
   duration_seconds: number
 }

@@ -139,7 +139,7 @@ const activeTab = ref('subtitle')
 const config = reactive({
   subtitle_enabled: true,
   subtitle_config: { enabled: true, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' } as SubtitleConfig,
-  title_overlay_config: { enabled: true, text: '爆款视频标题预览效果', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, display_mode: 'duration', duration_seconds: 2 } as TitleOverlayConfig,
+  title_overlay_config: { enabled: true, text: '爆款视频标题预览效果', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2 } as TitleOverlayConfig,
   business_card_config: { enabled: false, title: '创始人 & CEO', subtitle: '专注AI视频生成', display_mode: 'duration', duration_seconds: 2 } as BusinessCardConfig,
   bgm_config: { enabled: true, selected_bgm: null, volume: 15, custom_bgm: null } as BgmConfig,
   pip_mix_config: { enabled: false, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 } as PipMixConfig,
@@ -327,21 +327,122 @@ function renderOverlay() {
 
       c.font = `${titleCfg.font_weight || 700} ${fontSize}px "PingFang SC", "Microsoft YaHei", sans-serif`
       c.textBaseline = 'middle'
-      c.textAlign = 'center'
+      c.textAlign = 'left'
+
+      const titles = titleText.split('\n').filter((t: string) => t.trim())
+      if (titles.length === 0) return
+
+      // 计算每行宽度
+      const maxWidth = Math.round((titleCfg.max_width || 900) * scale)
+      const letterSpacing = 5 // 标题也增加一点字间距
+
+      function getLineWidth(txt: string): number {
+        if (!txt) return 0
+        if (letterSpacing > 0 && txt.length > 1) {
+          return c.measureText(txt).width + letterSpacing * (txt.length - 1)
+        }
+        return c.measureText(txt).width
+      }
+
+      // 对每行做宽度截断
+      const allLines: string[] = []
+      for (const line of titles) {
+        let currentLine = ''
+        for (const char of line) {
+          const test = currentLine + char
+          if (getLineWidth(test) > maxWidth && currentLine) {
+            allLines.push(currentLine)
+            currentLine = char
+          } else {
+            currentLine = test
+          }
+        }
+        if (currentLine) allLines.push(currentLine)
+      }
+
+      const metrics = c.measureText('中')
+      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8
+      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2
+      const lineHeight = ascent + descent
+      const textHeight = allLines.length * lineHeight
 
       const centerX = cw / 2 + offsetX
       const centerY = offsetY < 0 ? ch + offsetY : offsetY
 
-      const metrics = c.measureText(titleText)
-      const ascent = metrics.actualBoundingBoxAscent || fontSize * 0.8
-      const descent = metrics.actualBoundingBoxDescent || fontSize * 0.2
-      const y = centerY + (ascent - descent) / 2 - 20
+      // 计算整体文本宽度
+      const maxLineWidth = Math.max(...allLines.map((l: string) => getLineWidth(l)))
 
-      const borderWidth = Math.max(1, Math.round(2 * scale))
-      c.strokeStyle = '#000000'; c.lineWidth = borderWidth; c.lineJoin = 'round'; c.miterLimit = 2
-      c.strokeText(titleText, centerX, y)
+      // 计算背景区域（自动计算背景尺寸，半透明黑色背景提升可读性）
+      const pad = Math.round(15 * scale)
+      const bgWidth = maxLineWidth + pad * 2
+      const bgHeight = textHeight + pad * 2
+      const bgX = centerX - bgWidth / 2
+      const bgY = centerY - bgHeight / 2
+
+      // 绘制半透明背景
+      c.fillStyle = 'rgba(0,0,0,0.5)'
+      const br = Math.min(Math.round(8 * scale), bgHeight / 2, bgWidth / 2)
+      if (br > 0) {
+        c.beginPath()
+        c.moveTo(bgX + br, bgY)
+        c.lineTo(bgX + bgWidth - br, bgY)
+        c.quadraticCurveTo(bgX + bgWidth, bgY, bgX + bgWidth, bgY + br)
+        c.lineTo(bgX + bgWidth, bgY + bgHeight - br)
+        c.quadraticCurveTo(bgX + bgWidth, bgY + bgHeight, bgX + bgWidth - br, bgY + bgHeight)
+        c.lineTo(bgX + br, bgY + bgHeight)
+        c.quadraticCurveTo(bgX, bgY + bgHeight, bgX, bgY + bgHeight - br)
+        c.lineTo(bgX, bgY + br)
+        c.quadraticCurveTo(bgX, bgY, bgX + br, bgY)
+        c.closePath()
+        c.fill()
+      } else {
+        c.fillRect(bgX, bgY, bgWidth, bgHeight)
+      }
+
+      // 逐行绘制文字（支持对齐方式）
+      const textAlign = titleCfg.text_align || 'center'
+      const borderWidth = Math.round((titleCfg.font_border_width || 2) * scale)
+      const borderColor = titleCfg.font_border_color || '#000000'
       c.fillStyle = titleCfg.font_color || '#FFFFFF'
-      c.fillText(titleText, centerX, y)
+      const yCorrection = (ascent + descent - fontSize) / 2
+
+      for (let i = 0; i < allLines.length; i++) {
+        const line = allLines[i]
+        const lineWidth = getLineWidth(line)
+        let lineX: number
+        if (textAlign === 'left') {
+          lineX = bgX + pad + 5
+        } else if (textAlign === 'right') {
+          lineX = bgX + bgWidth - lineWidth - pad - 5
+        } else {
+          lineX = bgX + (bgWidth - lineWidth) / 2 + 5
+        }
+        const lineY = bgY + pad + lineHeight / 2 + i * lineHeight + yCorrection
+
+        if (letterSpacing > 0 && line.length > 1) {
+          let currentX = lineX
+          for (const char of line) {
+            if (borderWidth > 0) {
+              c.strokeStyle = borderColor
+              c.lineWidth = borderWidth
+              c.lineJoin = 'round'
+              c.miterLimit = 2
+              c.strokeText(char, currentX, lineY)
+            }
+            c.fillText(char, currentX, lineY)
+            currentX += c.measureText(char).width + letterSpacing
+          }
+        } else {
+          if (borderWidth > 0) {
+            c.strokeStyle = borderColor
+            c.lineWidth = borderWidth
+            c.lineJoin = 'round'
+            c.miterLimit = 2
+            c.strokeText(line, lineX, lineY)
+          }
+          c.fillText(line, lineX, lineY)
+        }
+      }
     }
   }
 
@@ -480,7 +581,7 @@ async function handleSubtitlePreview() {
         text, audio_duration: Math.max(text.length / 4, 3), video_width: 1080, video_height: 1920,
         video_path: props.taskVideoPath || '',
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
-        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
+        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
         bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),
@@ -504,7 +605,7 @@ async function handleApplyEffects() {
       body: JSON.stringify({
         video_path: props.taskVideoPath || props.taskVideoUrl, goods_text: props.taskText,
         subtitle_config: { enabled: config.subtitle_enabled, font_size: config.subtitle_config.font_size, font_color: config.subtitle_config.font_color, font_family: config.subtitle_config.font_family, font_weight: config.subtitle_config.font_weight, position_x: config.subtitle_config.position_x, position_y: config.subtitle_config.position_y, max_width: config.subtitle_config.max_width, letter_spacing: config.subtitle_config.letter_spacing, background_color: config.subtitle_config.background_color, background_opacity: config.subtitle_config.background_opacity, background_padding: config.subtitle_config.background_padding, background_radius: config.subtitle_config.background_radius, font_border_width: config.subtitle_config.font_border_width, font_border_color: config.subtitle_config.font_border_color },
-        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
+        title_overlay_config: { enabled: config.title_overlay_config.enabled, text: config.title_overlay_config.text, font_size: config.title_overlay_config.font_size, font_color: config.title_overlay_config.font_color, font_weight: config.title_overlay_config.font_weight, position_x: config.title_overlay_config.position_x, position_y: config.title_overlay_config.position_y, max_width: config.title_overlay_config.max_width, font_border_width: config.title_overlay_config.font_border_width, font_border_color: config.title_overlay_config.font_border_color, text_align: config.title_overlay_config.text_align, display_mode: config.title_overlay_config.display_mode, duration_seconds: config.title_overlay_config.duration_seconds },
         business_card_config: { enabled: config.business_card_config.enabled, title: config.business_card_config.title, subtitle: config.business_card_config.subtitle, display_mode: config.business_card_config.display_mode, duration_seconds: config.business_card_config.duration_seconds },
         bgm_config: { enabled: config.bgm_config.enabled, selected_bgm: config.bgm_config.selected_bgm, volume: config.bgm_config.volume, custom_bgm: config.bgm_config.custom_bgm },
       }),

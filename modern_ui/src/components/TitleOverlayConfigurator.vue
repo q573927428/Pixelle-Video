@@ -13,7 +13,14 @@
       </div>
       <div class="form-section-body" v-if="enabled">
         <el-form-item label="标题文字">
-          <el-input v-model="localConfig.text" placeholder="请输入标题文字" :maxlength="50" show-word-limit />
+          <el-input
+            v-model="localConfig.text"
+            type="textarea"
+            :rows="3"
+            placeholder="输入标题文字，每行一行（支持多行）"
+            :maxlength="200"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="显示时长">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -36,13 +43,16 @@
               v-for="preset in presetStyles"
               :key="preset.name"
               @click="applyPreset(preset)"
-              style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--el-border-color-light);cursor:pointer;transition:all 0.2s;"
+              style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:6px;border:1px solid var(--el-border-color-light);cursor:pointer;transition:all 0.2s;position:relative;background:#1a1a2e;"
               @mouseenter="(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-color-primary)'; (e.currentTarget as HTMLElement).style.background = 'var(--el-fill-color-light)'; }"
-              @mouseleave="(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-border-color-light)'; (e.currentTarget as HTMLElement).style.background = 'transparent'; }"
+              @mouseleave="(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--el-border-color-light)'; (e.currentTarget as HTMLElement).style.background = '#1a1a2e'; }"
             >
-              <div style="flex-shrink:0;width:48px;height:28px;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#1a1a2e;">
-                <span style="font-size:11px;font-weight:bold;line-height:1;"
-                  :style="{ color: preset.previewColor }"
+              <div style="flex-shrink:0;width:48px;height:28px;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:11px;font-weight:bold;line-height:1;z-index:1;"
+                  :style="{
+                    color: preset.preview.fontColor,
+                    textShadow: preset.preview.borderWidth > 0 ? `0 0 1px ${preset.preview.borderColor}, 0 0 1px ${preset.preview.borderColor}` : 'none',
+                  }"
                 >T</span>
               </div>
               <span style="font-size:12px;font-weight:500;white-space:nowrap;">{{ preset.name }}</span>
@@ -64,6 +74,25 @@
             </el-form-item>
             <el-form-item label="文字粗细">
               <el-slider v-model="localConfig.font_weight" :min="100" :max="900" :step="100" show-input />
+            </el-form-item>
+            <el-divider style="margin:8px 0;" />
+            <el-form-item label="文字边框粗细">
+              <el-slider v-model="localConfig.font_border_width" :min="0" :max="10" :step="1" show-input />
+            </el-form-item>
+            <el-form-item label="文字边框颜色">
+              <el-color-picker v-model="localConfig.font_border_color" show-alpha />
+            </el-form-item>
+            <el-divider style="margin:8px 0;" />
+            <el-form-item label="文字对齐">
+              <el-radio-group v-model="localConfig.text_align">
+                <el-radio-button value="left">左对齐</el-radio-button>
+                <el-radio-button value="center">居中</el-radio-button>
+                <el-radio-button value="right">右对齐</el-radio-button>
+              </el-radio-group>
+            </el-form-item>
+            <el-divider style="margin:8px 0;" />
+            <el-form-item label="最大宽度">
+              <el-slider v-model="localConfig.max_width" :min="200" :max="1980" :step="20" show-input />
             </el-form-item>
             <el-form-item label="位置 X">
               <el-slider v-model="localConfig.position_x" :min="-500" :max="500" :step="10" show-input />
@@ -114,42 +143,58 @@ watch(
 
 const advancedOpen = ref<string[]>([])
 
+interface PresetPreview {
+  fontColor: string
+  borderColor: string
+  borderWidth: number
+}
+
 interface PresetStyle {
   name: string
   config: Partial<TitleOverlayConfig>
-  previewColor: string
+  preview: PresetPreview
 }
 
 const presetStyles: PresetStyle[] = [
   {
     name: '经典白字',
-    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700 },
-    previewColor: '#FFFFFF',
+    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#000000' },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 1 },
   },
   {
     name: '金色醒目',
-    config: { font_color: '#FFD700', font_size: 68, font_weight: 900 },
-    previewColor: '#FFD700',
+    config: { font_color: '#FFD700', font_size: 68, font_weight: 900, font_border_width: 3, font_border_color: '#000000' },
+    preview: { fontColor: '#FFD700', borderColor: '#000000', borderWidth: 1 },
   },
   {
     name: '蓝色科技',
-    config: { font_color: '#00BFFF', font_size: 68, font_weight: 700 },
-    previewColor: '#00BFFF',
+    config: { font_color: '#00BFFF', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#003366' },
+    preview: { fontColor: '#00BFFF', borderColor: '#003366', borderWidth: 1 },
   },
   {
     name: '粉红温馨',
-    config: { font_color: '#FF69B4', font_size: 68, font_weight: 600 },
-    previewColor: '#FF69B4',
+    config: { font_color: '#FF69B4', font_size: 68, font_weight: 600, font_border_width: 2, font_border_color: '#8B004B' },
+    preview: { fontColor: '#FF69B4', borderColor: '#8B004B', borderWidth: 1 },
   },
   {
     name: '青绿典雅',
-    config: { font_color: '#00E5A0', font_size: 68, font_weight: 700 },
-    previewColor: '#00E5A0',
+    config: { font_color: '#00E5A0', font_size: 68, font_weight: 700, font_border_width: 2, font_border_color: '#004D33' },
+    preview: { fontColor: '#00E5A0', borderColor: '#004D33', borderWidth: 1 },
   },
   {
     name: '橙色热情',
-    config: { font_color: '#FF8C00', font_size: 68, font_weight: 800 },
-    previewColor: '#FF8C00',
+    config: { font_color: '#FF8C00', font_size: 68, font_weight: 800, font_border_width: 2, font_border_color: '#5C3300' },
+    preview: { fontColor: '#FF8C00', borderColor: '#5C3300', borderWidth: 1 },
+  },
+  {
+    name: '霓虹光效',
+    config: { font_color: '#00FFCC', font_size: 72, font_weight: 900, font_border_width: 2, font_border_color: '#00FFCC' },
+    preview: { fontColor: '#00FFCC', borderColor: '#00FFCC', borderWidth: 1 },
+  },
+  {
+    name: '纯净白字',
+    config: { font_color: '#FFFFFF', font_size: 68, font_weight: 700, font_border_width: 0 },
+    preview: { fontColor: '#FFFFFF', borderColor: '#000000', borderWidth: 1 },
   },
 ]
 

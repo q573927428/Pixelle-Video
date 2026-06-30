@@ -136,7 +136,7 @@ const digitalForm = ref<DigitalForm>({
   subtitle_enabled: false,
   subtitle_config: { enabled: false, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' },
   internet_clip_enabled: true,
-  title_overlay_config: { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, display_mode: 'duration', duration_seconds: 2 },
+  title_overlay_config: { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2 },
   business_card_config: { enabled: false, title: '', subtitle: '', display_mode: 'duration', duration_seconds: 2 },
   bgm_config: { enabled: false, selected_bgm: null, volume: 15, custom_bgm: null },
   pip_mix_config: { enabled: false, overlay_video: null, overlay_image: null, position_x: 0, position_y: 0, width: 320, height: 568, opacity: 1.0 },
@@ -217,7 +217,7 @@ function buildPayload(): Record<string, any> {
     payload.workflow_config.api_video_workflow = digitalForm.value.video_api_model
   }
   payload.subtitle_config = { enabled: false, font_size: 56, font_color: '#FFFFFF', font_family: 'NotoSansSC-Bold', font_weight: 400, position_x: 0, position_y: -390, max_width: 900, letter_spacing: 3, background_color: '#000000', background_opacity: 0, background_padding: '15 25', background_radius: 20, font_border_width: 1, font_border_color: '#000000' }
-  payload.title_overlay_config = { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, display_mode: 'duration', duration_seconds: 2 }
+  payload.title_overlay_config = { enabled: false, text: '', font_size: 76, font_color: '#FF69B4', font_weight: 700, position_x: 0, position_y: -1600, max_width: 900, font_border_width: 2, font_border_color: '#000000', text_align: 'center', display_mode: 'duration', duration_seconds: 2 }
   payload.business_card_config = { enabled: false, title: '', subtitle: '', display_mode: 'duration', duration_seconds: 2 }
   payload.bgm_config = { enabled: false, selected_bgm: null, volume: 50, custom_bgm: null }
   return payload

@@ -11,14 +11,17 @@ import json
 import math
 import os
 import uuid
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, List, Tuple
 
 from loguru import logger
 
-try:
+if TYPE_CHECKING:
     from PIL import Image, ImageDraw, ImageFont
-except ImportError:
-    Image = ImageDraw = ImageFont = None  # type: ignore
+else:
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        Image = ImageDraw = ImageFont = None  # type: ignore
 
 
 class TitleOverlayConfig:
@@ -32,6 +35,10 @@ class TitleOverlayConfig:
         font_weight: int = 700,
         position_x: int = 0,
         position_y: int = -800,
+        max_width: int = 900,
+        font_border_width: int = 2,
+        font_border_color: str = "#000000",
+        text_align: str = "center",
         display_mode: str = "full",
         duration_seconds: int = 5,
     ):
@@ -42,6 +49,10 @@ class TitleOverlayConfig:
         self.font_weight = font_weight
         self.position_x = position_x
         self.position_y = position_y
+        self.max_width = max_width
+        self.font_border_width = font_border_width
+        self.font_border_color = font_border_color
+        self.text_align = text_align
         self.display_mode = display_mode
         self.duration_seconds = duration_seconds
 
@@ -55,6 +66,10 @@ class TitleOverlayConfig:
             font_weight=d.get("font_weight", 700),
             position_x=d.get("position_x", 0),
             position_y=d.get("position_y", -800),
+            max_width=d.get("max_width", 900),
+            font_border_width=d.get("font_border_width", 1),
+            font_border_color=d.get("font_border_color", "#000000"),
+            text_align=d.get("text_align", "center"),
             display_mode=d.get("display_mode", "full"),
             duration_seconds=d.get("duration_seconds", 5),
         )
@@ -157,11 +172,62 @@ class OverlayService:
             pass
         raise FileNotFoundError("No Chinese font found for OverlayService")
 
-    def _hex_to_rgba(self, hex_color: str) -> tuple[int, int, int, int]:
+    def _hex_to_rgba(self, hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
         h = hex_color.lstrip("#")
         if len(h) >= 6:
-            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), 255)
-        return (255, 255, 255, 255)
+            return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16), alpha)
+        return (255, 255, 255, alpha)
+
+    def _draw_rounded_rect(
+        self,
+        draw: Any,
+        xy: tuple[int, int, int, int],
+        radius: int,
+        fill: tuple[int, int, int, int],
+    ):
+        """绘制圆角矩形"""
+        x1, y1, x2, y2 = xy
+        diameter = radius * 2
+        draw.rectangle((x1 + radius, y1, x2 - radius, y2), fill=fill)
+        draw.rectangle((x1, y1 + radius, x2, y2 - radius), fill=fill)
+        draw.ellipse((x1, y1, x1 + diameter, y1 + diameter), fill=fill)
+        draw.ellipse((x2 - diameter, y1, x2, y1 + diameter), fill=fill)
+        draw.ellipse((x1, y2 - diameter, x1 + diameter, y2), fill=fill)
+        draw.ellipse((x2 - diameter, y2 - diameter, x2, y2), fill=fill)
+
+    def _split_text_into_lines(
+        self, text: str, font: Any, max_width: int
+    ) -> List[str]:
+        """
+        将文本按最大宽度分割成多行
+        - 优先按换行符分割
+        - 超出宽度则强制截断
+        """
+        # 先按换行符分割
+        raw_lines = text.split('\n')
+        result_lines: List[str] = []
+        for line in raw_lines:
+            if not line.strip():
+                if line == '':
+                    continue
+                result_lines.append(line)
+                continue
+            # 如果单行宽度不超过 max_width，直接添加
+            if font.getlength(line) <= max_width:
+                result_lines.append(line)
+            else:
+                # 按字符拆分
+                current_line = ""
+                for char in line:
+                    test_line = current_line + char
+                    if font.getlength(test_line) > max_width and current_line:
+                        result_lines.append(current_line)
+                        current_line = char
+                    else:
+                        current_line = test_line
+                if current_line:
+                    result_lines.append(current_line)
+        return result_lines
 
     def generate_title_overlay_frames(
         self,
@@ -174,6 +240,7 @@ class OverlayService:
     ) -> Optional[str]:
         """
         生成标题叠加帧图像（PNG 序列）
+        支持：多行文字（\\n 分割）、文字边框（粗细+颜色）、最大宽度自动换行
         返回帧目录路径，或 None（配置禁用/文字为空）
         """
         if not config.enabled or not config.text:
@@ -189,28 +256,43 @@ class OverlayService:
             font = ImageFont.load_default()
 
         fg_color = self._hex_to_rgba(config.font_color)
+        border_color = self._hex_to_rgba(config.font_border_color) if config.font_border_width > 0 else None
+        border_width = max(0, config.font_border_width)
 
-        # 计算文字位置（基于 1080x1920 设计缩放）
+        # 计算缩放比例
         scale = video_width / 1080
+
+        # 将文本分割为行（支持多行 + 自动换行）
+        max_width_px = int(config.max_width * scale)
+        lines = self._split_text_into_lines(config.text, font, max_width_px)
+
+        if not lines:
+            return None
+
+        # 获取字体 metrics
+        ascent, descent = font.getmetrics()
+        line_height = ascent + descent
+
+        # 计算最大行宽
+        line_widths = [int(font.getlength(line)) for line in lines]
+        max_line_width = max(line_widths) if line_widths else 0
+
+        # 背景内边距
+        pad = int(15 * scale)
+        bg_width = max_line_width + pad * 2
+        bg_height = len(lines) * line_height + pad * 2
+
+        # 位置
         offset_x = int(config.position_x * scale)
         offset_y = int(config.position_y * scale)
         center_x = video_width // 2 + offset_x
         center_y = video_height + offset_y if offset_y < 0 else offset_y
 
-        # 计算文字尺寸
-        bbox = font.getbbox(config.text)
-        text_width = bbox[2] - bbox[0]
-        text_height = bbox[3] - bbox[1]
-        pad = int(20 * scale)
-        bg_width = text_width + pad * 2
-        bg_height = text_height + pad * 2
-
-        # 背景左上角
+        # 背景区域
         bg_x = center_x - bg_width // 2
         bg_y = center_y - bg_height // 2
 
         # 显示时长
-        # 关键修复：确保 video_duration > 0，避免全视频模式时长计算为0导致不显示
         effective_duration = max(video_duration, 0.1)
         if config.display_mode == "duration":
             display_frames = int(config.duration_seconds * fps)
@@ -218,33 +300,53 @@ class OverlayService:
         else:
             display_frames = int(effective_duration * fps)
             logger.info(f"[Overlay - 标题] display_mode=full, video_duration={effective_duration:.2f}s")
-        display_frames = max(display_frames, 1)  # 至少1帧，防止显示为0
+        display_frames = max(display_frames, 1)
 
-        # 生成单帧图像（所有帧相同）
+        # 生成单帧图像
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
 
-        # 描边（黑色边框提升可读性，与前端 Canvas 预览一致）
-        border_width = max(1, int(2 * scale))
-        stroke_color = (0, 0, 0, 255)
+        # 绘制半透明背景
+        radius = min(int(8 * scale), bg_height // 2, bg_width // 2)
+        self._draw_rounded_rect(
+            draw,
+            (bg_x, bg_y, bg_x + bg_width, bg_y + bg_height),
+            radius,
+            (0, 0, 0, 128),  # 半透明黑色
+        )
 
-        # 文字位置（居中）
-        text_x = center_x
-        text_y = center_y
+        # 逐行绘制文字（带边框，支持对齐方式）
+        text_align = getattr(config, 'text_align', 'center')
+        y_correction = (ascent + descent - config.font_size) / 2
+        for i, line in enumerate(lines):
+            line_width = int(font.getlength(line))
+            if text_align == 'left':
+                text_x = bg_x + pad
+            elif text_align == 'right':
+                text_x = bg_x + bg_width - line_width - pad
+            else:
+                text_x = bg_x + (bg_width - line_width) // 2
+            text_y = bg_y + pad + line_height // 2 + i * line_height + y_correction
 
-        # 使用 anchor='mm' 居中，带描边无背景
-        draw.text((text_x, text_y), config.text, fill=fg_color, font=font,
-                  anchor='mm', stroke_width=border_width, stroke_fill=stroke_color)
+            if border_color and border_width > 0:
+                draw.text(
+                    (text_x, text_y), line, fill=fg_color, font=font,
+                    anchor='lm', stroke_width=border_width, stroke_fill=border_color,
+                )
+            else:
+                draw.text(
+                    (text_x, text_y), line, fill=fg_color, font=font,
+                    anchor='lm',
+                )
 
-        # 保存单帧（静态叠加层只需一帧，避免 FFmpeg 处理大量冗余 PNG 输入卡死）
+        # 保存单帧
         frame_filename = f"title_{uuid.uuid4().hex[:8]}_000000.png"
         frame_path = os.path.join(frames_dir, frame_filename)
         img.save(frame_path, "PNG")
 
-        # 显示时长（秒）
         display_seconds = display_frames / fps
 
-        # 保存元数据（单帧覆盖整个显示时段）
+        # 保存元数据
         metadata = {
             "video_width": video_width,
             "video_height": video_height,
@@ -308,7 +410,6 @@ class OverlayService:
             sub_font = ImageFont.load_default()
 
         # 显示时长
-        # 关键修复：确保 video_duration > 0，避免全视频模式时长计算为0导致不显示
         effective_duration = max(video_duration, 0.1)
         if config.display_mode == "duration":
             display_frames = int(config.duration_seconds * fps)
@@ -316,7 +417,7 @@ class OverlayService:
         else:
             display_frames = int(effective_duration * fps)
             logger.info(f"[Overlay - 名片] display_mode=full, video_duration={effective_duration:.2f}s")
-        display_frames = max(display_frames, 1)  # 至少1帧，防止显示为0
+        display_frames = max(display_frames, 1)
 
         # 生成帧
         img = Image.new("RGBA", (video_width, video_height), (0, 0, 0, 0))
@@ -364,15 +465,14 @@ class OverlayService:
             draw.text((text_x, sub_y), config.subtitle, fill=(204, 204, 204, 255),
                       font=sub_font, anchor='lm')
 
-        # 保存单帧（静态名片只需一帧，避免 FFmpeg 处理大量冗余 PNG 输入卡死）
+        # 保存单帧
         frame_filename = f"card_{uuid.uuid4().hex[:8]}_000000.png"
         frame_path = os.path.join(frames_dir, frame_filename)
         img.save(frame_path, "PNG")
 
-        # 显示时长（秒）
         display_seconds = display_frames / fps
 
-        # 保存元数据（单帧覆盖整个显示时段）
+        # 保存元数据
         metadata = {
             "video_width": video_width,
             "video_height": video_height,
