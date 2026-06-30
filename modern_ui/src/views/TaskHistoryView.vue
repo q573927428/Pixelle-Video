@@ -60,25 +60,17 @@
           </div>
           <div class="history-item-info">
             <div class="history-item-title-row">
-              <el-button
-                size="small"
-                type="warning"
-                class="action-btn"
-                @click.stop="openVideoEditor(task)"
-              >
-              <el-icon><Edit /></el-icon>编辑视频
-              </el-button>
               <div class="history-item-title">{{ task.title || '未命名任务' }}</div>
               <span v-if="isAdmin && (task.username || task.phone)" class="user-badge">
                 <el-icon><User /></el-icon>
                 {{ task.phone || task.username }}
               </span>
-            </div>
-            <div class="history-item-meta">
-              <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
               <span v-if="task.deducted_zs > 0" class="zs-badge" title="实际扣除ZS币">
                 ZS -{{ task.deducted_zs }}
               </span>
+            </div>
+            <div class="history-item-meta">
+              <span class="small muted stats-label">{{ formatTime(task.created_at) }}</span>
               <span class="meta-actions">
                 <el-tooltip content="复制文案" placement="top" :show-after="300">
                   <el-button
@@ -111,6 +103,16 @@
                     @click.stop="handleDelete(task)"
                   >
                     <el-icon><Delete /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="复制文案" placement="top" :show-after="300">
+                  <el-button
+                    size="small"
+                    type="warning"
+                    class="action-btn"
+                    @click.stop="openVideoEditor(task)"
+                  >
+                  <el-icon><Edit /></el-icon>编辑视频
                   </el-button>
                 </el-tooltip>
               </span>
