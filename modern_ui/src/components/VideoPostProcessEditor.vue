@@ -84,7 +84,7 @@
             <div v-else class="vppe-preview-video-empty">
               <div><div style="font-size:38px;margin-bottom:10px;">🎞️</div><div>暂未生成预览视频</div></div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:8px;" v-if="subtitlePreviewUrl">
+            <div style="display:flex;gap:8px;margin-top:8px;" v-if="appliedVideoUrl">
               <el-button size="small" type="primary" plain @click="handleDownload(appliedVideoUrl)">⬇️ 下载视频</el-button>
               <el-button size="small" type="success" @click="openPublishDialog" :disabled="!appliedVideoUrl && !taskVideoUrl">📤 发布</el-button>
             </div>
