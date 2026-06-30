@@ -19,7 +19,7 @@
           <el-progress
             :percentage="Math.round(publishProgress)"
             :status="publishStatus === 'success' ? 'success' : publishStatus === 'failed' ? 'exception' : undefined"
-            :stroke-width="8"
+            :stroke-width="6"
             style="max-width:400px;margin-top:8px;"
           />
         </div>
@@ -144,24 +144,6 @@
             </div>
           </div>
         </div>
-        <div class="bound-accounts">
-          <div class="publish-section-title">🔗 已绑定账号</div>
-          <div v-if="boundAccounts.length === 0" class="muted small" style="padding:8px 0;">
-            暂无已绑定的平台账号，请点击下方平台按钮进行绑定
-          </div>
-          <div class="account-chips">
-            <el-tag
-              v-for="acc in boundAccounts"
-              :key="acc.id"
-              :type="getAccountTagType(acc)"
-              size="small"
-              closable
-              @close="handleUnbindAccount(acc.id)"
-            >
-              {{ platformIcon(acc.platform) }} {{ acc.account_name || acc.platform }}
-            </el-tag>
-          </div>
-        </div>
       </div>
 
       <!-- 右侧 -->
@@ -182,7 +164,7 @@
             </div>
           </el-form-item>
           <el-form-item label="文案内容">
-            <el-input v-model="publishText" type="textarea" :rows="8" placeholder="请输入文案内容" maxlength="1200" show-word-limit />
+            <el-input v-model="publishText" type="textarea" :rows="5" placeholder="请输入文案内容" maxlength="1200" show-word-limit />
           </el-form-item>
           <el-form-item label="话题标签">
             <el-input v-model="publishTopics" placeholder="多个话题用逗号分隔，如：AI技术,数字人,短视频" />
@@ -208,6 +190,26 @@
             </div>
             <div class="platform-hint muted small" style="margin-top:6px;text-align:center;">
               已绑定平台点击选择，未绑定平台点击进行扫码登录绑定
+            </div>
+          </div>
+
+          <!-- 已绑定账号 -->
+          <div class="bound-accounts">
+            <div class="publish-section-title">🔗 已绑定账号</div>
+            <div v-if="boundAccounts.length === 0" class="muted small" style="padding:8px 0;">
+              暂无已绑定的平台账号，请点击下方平台按钮进行绑定
+            </div>
+            <div class="account-chips">
+              <el-tag
+                v-for="acc in boundAccounts"
+                :key="acc.id"
+                :type="getAccountTagType(acc)"
+                size="small"
+                closable
+                @close="handleUnbindAccount(acc.id)"
+              >
+                {{ platformIcon(acc.platform) }} {{ acc.account_name || acc.platform }}
+              </el-tag>
             </div>
           </div>
         </el-form>

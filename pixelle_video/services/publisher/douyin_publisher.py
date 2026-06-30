@@ -18,6 +18,22 @@ class DouyinPublisher(BasePublisher):
     CREATOR_URL = "https://creator.douyin.com/creator-micro/content/upload"
     UPLOAD_URL = "https://creator.douyin.com/creator-micro/content/upload"
 
+    async def _is_page_closed(self) -> bool:
+        """检测页面/浏览器是否已被关闭
+
+        Returns:
+            bool: 是否已关闭
+        """
+        if not self.page:
+            return True
+        try:
+            # 尝试最轻量的操作检测页面是否存活
+            self.page.url
+            return False
+        except Exception:
+            logger.info("🔌 Page/browser has been closed")
+            return True
+
     async def _is_logged_in(self) -> bool:
         """检测抖音是否已登录
 
@@ -29,6 +45,11 @@ class DouyinPublisher(BasePublisher):
         """
         if not self.page:
             return False
+
+        # 快速检测页面是否已关闭
+        if await self._is_page_closed():
+            return False
+
         try:
             # 等待页面稳定
             await self.page.wait_for_timeout(2000)
@@ -79,7 +100,13 @@ class DouyinPublisher(BasePublisher):
             return False
 
         except Exception as e:
-            logger.error(f"Login check error: {e}")
+            # 判断是否是页面已关闭导致的异常
+            err_str = str(e).lower()
+            if any(kw in err_str for kw in ["closed", "has been closed", "target page"]):
+                logger.info("🔌 Page/browser was closed during login check, stopping")
+                self.page = None  # 标记页面已无效
+            else:
+                logger.error(f"Login check error: {e}")
             return False
 
     async def _need_login(self) -> bool:
@@ -176,6 +203,10 @@ class DouyinPublisher(BasePublisher):
             str: 二维码图片的 base64 data URL，未找到时返回 None
         """
         if not self.page:
+            return None
+
+        # 快速检测页面是否已关闭
+        if await self._is_page_closed():
             return None
 
         try:
@@ -366,6 +397,17 @@ class DouyinPublisher(BasePublisher):
         waited = 0
 
         while waited < timeout:
+            # 快速检测页面是否已关闭，关闭则立即退出
+            if await self._is_page_closed():
+                logger.info("🔌 Page was closed by user during login wait, stopping wait loop")
+                await session_manager.broadcast(self.session.session_id, {
+                    "type": "error",
+                    "message": "登录已取消 - 页面已关闭",
+                    "can_retry": True,
+                })
+                await self._step("need_login", 10, "登录已取消 - 页面已关闭")
+                return False
+
             logged_in = await self._is_logged_in()
             if logged_in:
                 return True
@@ -384,6 +426,11 @@ class DouyinPublisher(BasePublisher):
 
             # 每 15 秒检查一次二维码是否过期，重新捕获
             if waited % 30 == 0 and waited < timeout - 30:
+                # 再次检测页面是否存活，防止在过期检测时浏览器已关闭
+                if await self._is_page_closed():
+                    logger.info("🔌 Page was closed during QR refresh, stopping")
+                    return False
+
                 # 检查二维码是否仍然可见
                 try:
                     qr_visible = False
