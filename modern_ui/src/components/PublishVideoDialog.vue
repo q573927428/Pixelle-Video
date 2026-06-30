@@ -5,7 +5,7 @@
     :title="`📤 发布到 ${platformLabel}`"
     :close-on-click-modal="false"
     top="3vh"
-    width="70%"
+    width="60%"
     class="publish-dialog"
     destroy-on-close
   >
@@ -29,22 +29,30 @@
           </div>
         </div>
 
-        <!-- 平台选择 -->
-        <div class="publish-platform-select">
-          <div class="publish-section-title">📤 选择发布平台</div>
-          <div class="publish-platform-buttons">
-            <el-button
-              v-for="p in publishPlatforms"
-              :key="p.key"
-              :type="selectedPlatform === p.key ? p.type : 'default'"
-              size="large"
-              class="publish-platform-btn"
-              @click="selectedPlatform = p.key"
-              :plain="selectedPlatform !== p.key"
-            >
-              <span style="font-size:20px;margin-right:4px;">{{ p.icon }}</span>
-              {{ p.label }}
-            </el-button>
+        <!-- 封面设置 -->
+        <div class="cover-section">
+          <div class="publish-section-title">🎨 封面设置</div>
+          <div class="cover-row">
+            <div class="cover-item">
+              <div class="cover-label">竖屏封面 (3:4)</div>
+              <div class="cover-upload-wrap">
+                <img v-if="frameSrc" :src="frameSrc" class="cover-preview" />
+                <div v-else class="cover-placeholder">
+                  <el-icon style="font-size:28px;color:#999;"><VideoCamera /></el-icon>
+                  <span class="small muted">自动截取第一帧</span>
+                </div>
+              </div>
+            </div>
+            <div class="cover-item">
+              <div class="cover-label">横屏封面 (4:3)</div>
+              <div class="cover-upload-wrap landscape">
+                <img v-if="frameSrc" :src="frameSrc" class="cover-preview" />
+                <div v-else class="cover-placeholder">
+                  <el-icon style="font-size:28px;color:#999;"><VideoCamera /></el-icon>
+                  <span class="small muted">自动截取第一帧</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -64,7 +72,6 @@
                 :disabled="!publishText"
                 @click="handleAIGenerate"
                 class="ai-btn"
-                plain
               >
                 <el-icon><MagicStick /></el-icon>
                 {{ aiLoading ? '生成中' : 'AI' }}
@@ -76,9 +83,9 @@
             <el-input
               v-model="publishText"
               type="textarea"
-              :rows="4"
+              :rows="8"
               placeholder="请输入文案内容"
-              maxlength="2000"
+              maxlength="1200"
               show-word-limit
             />
           </el-form-item>
@@ -88,45 +95,24 @@
               v-model="publishTopics"
               placeholder="多个话题用逗号分隔，如：AI技术,数字人,短视频"
             />
-            <div class="form-tip">多个话题用逗号分隔，将自动添加 # 前缀</div>
           </el-form-item>
 
-          <el-divider content-position="left" style="margin:8px 0;">🎨 封面设置</el-divider>
-
-          <div class="cover-row">
-            <div class="cover-item">
-              <div class="cover-label">竖屏封面 (9:16)</div>
-              <div class="cover-upload-wrap" @click="triggerCoverUpload('portrait')">
-                <img v-if="portraitCoverPreview" :src="portraitCoverPreview" class="cover-preview" />
-                <div v-else class="cover-placeholder">
-                  <el-icon style="font-size:28px;color:#999;"><Plus /></el-icon>
-                  <span class="small muted">点击上传</span>
-                </div>
-              </div>
-              <input
-                ref="portraitCoverInputRef"
-                type="file"
-                accept="image/*"
-                style="display:none"
-                @change="onCoverChange($event, 'portrait')"
-              />
-            </div>
-            <div class="cover-item">
-              <div class="cover-label">横屏封面 (16:9)</div>
-              <div class="cover-upload-wrap" @click="triggerCoverUpload('landscape')">
-                <img v-if="landscapeCoverPreview" :src="landscapeCoverPreview" class="cover-preview" />
-                <div v-else class="cover-placeholder">
-                  <el-icon style="font-size:28px;color:#999;"><Plus /></el-icon>
-                  <span class="small muted">点击上传</span>
-                </div>
-              </div>
-              <input
-                ref="landscapeCoverInputRef"
-                type="file"
-                accept="image/*"
-                style="display:none"
-                @change="onCoverChange($event, 'landscape')"
-              />
+          <!-- 选择发布平台 -->
+          <div class="publish-platform-select">
+            <div class="publish-section-title">📤 选择发布平台</div>
+            <div class="publish-platform-buttons">
+              <el-button
+                v-for="p in publishPlatforms"
+                :key="p.key"
+                :type="selectedPlatform === p.key ? p.type : 'default'"
+                size="large"
+                class="publish-platform-btn"
+                @click="selectedPlatform = p.key"
+                :plain="selectedPlatform !== p.key"
+              >
+                <span style="font-size:20px;margin-right:4px;">{{ p.icon }}</span>
+                {{ p.label }}
+              </el-button>
             </div>
           </div>
         </el-form>
@@ -158,9 +144,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, MagicStick } from '@element-plus/icons-vue'
+import { VideoCamera, MagicStick } from '@element-plus/icons-vue'
 import { generatePublishPrepare } from '../api'
 
 const publishPlatforms = [
@@ -186,8 +172,6 @@ const emit = defineEmits<{
     title: string
     text: string
     topics: string
-    portraitCover: File | null
-    landscapeCover: File | null
   }]
 }>()
 
@@ -207,13 +191,8 @@ const publishTitle = ref('')
 const publishText = ref('')
 const publishTopics = ref('')
 
-// 封面
-const portraitCoverInputRef = ref<HTMLInputElement | null>(null)
-const landscapeCoverInputRef = ref<HTMLInputElement | null>(null)
-const portraitCoverFile = ref<File | null>(null)
-const landscapeCoverFile = ref<File | null>(null)
-const portraitCoverPreview = ref<string>('')
-const landscapeCoverPreview = ref<string>('')
+// 封面 - 自动截取视频第一帧
+const frameSrc = ref<string>('')
 
 const aiLoading = ref(false)
 const publishing = ref(false)
@@ -227,42 +206,53 @@ watch(() => props.visible, (val) => {
     publishTitle.value = props.initialTitle
     publishText.value = props.initialText
     publishTopics.value = props.initialTopics
-    portraitCoverFile.value = null
-    landscapeCoverFile.value = null
-    portraitCoverPreview.value = ''
-    landscapeCoverPreview.value = ''
+    frameSrc.value = ''
     publishing.value = false
     publishStatus.value = ''
     publishSuccess.value = false
+
+    // 自动截取视频第一帧作为封面
+    nextTick(() => captureVideoFrame())
   }
 })
 
-function triggerCoverUpload(type: 'portrait' | 'landscape') {
-  if (type === 'portrait') {
-    portraitCoverInputRef.value?.click()
-  } else {
-    landscapeCoverInputRef.value?.click()
-  }
-}
+/** 截取视频第一帧作为封面 */
+function captureVideoFrame() {
+  if (!props.videoUrl) return
 
-function onCoverChange(e: Event, type: 'portrait' | 'landscape') {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    if (type === 'portrait') {
-      portraitCoverFile.value = file
-      portraitCoverPreview.value = reader.result as string
-    } else {
-      landscapeCoverFile.value = file
-      landscapeCoverPreview.value = reader.result as string
-    }
+  const video = document.createElement('video')
+  // blob URL / 本地文件不要设置 crossOrigin，否则会加载失败
+  if (props.videoUrl.startsWith('http')) {
+    video.crossOrigin = 'anonymous'
   }
-  reader.readAsDataURL(file)
-  // 重置input以允许重新选择同一文件
-  input.value = ''
+  video.src = props.videoUrl
+  video.muted = true
+  video.playsInline = true
+  video.preload = 'auto'
+  // 微调到 0.01s 避免黑帧
+  video.currentTime = 0.01
+
+  let done = false
+  function capture() {
+    if (done) return
+    done = true
+    if (video.readyState < 2) return
+    const w = video.videoWidth
+    const h = video.videoHeight
+    if (!w || !h) return
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0, w, h)
+    frameSrc.value = canvas.toDataURL('image/jpeg', 0.9)
+    video.remove()
+    canvas.remove()
+  }
+
+  video.oncanplay = capture
+  video.onseeked = capture
 }
 
 async function handleAIGenerate() {
@@ -303,8 +293,6 @@ async function handlePublish() {
       title: publishTitle.value,
       text: publishText.value,
       topics: publishTopics.value,
-      portraitCover: portraitCoverFile.value,
-      landscapeCover: landscapeCoverFile.value,
     })
     publishSuccess.value = true
     publishStatus.value = `🎉 视频已成功发布到${platformLabel.value}！`
@@ -323,6 +311,20 @@ async function handlePublish() {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 16px;
+  height: calc(80vh - 140px);
+  min-height: 400px;
+}
+
+.publish-left,
+.publish-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.publish-left {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 @media (max-width: 768px) {
@@ -334,6 +336,7 @@ async function handlePublish() {
 .publish-left,
 .publish-right {
   min-width: 0;
+  min-height: 0;
 }
 
 .publish-section-title {
@@ -350,12 +353,13 @@ async function handlePublish() {
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .publish-video {
   display: block;
   width: 100%;
-  max-height: 35vh;
+  max-height: 30vh;
   object-fit: contain;
 }
 
@@ -367,6 +371,7 @@ async function handlePublish() {
 
 .publish-platform-select {
   margin-top: 8px;
+  flex-shrink: 0;
 }
 
 .publish-platform-buttons {
@@ -375,33 +380,40 @@ async function handlePublish() {
   gap: 8px;
 }
 
-.publish-platform-btn {
-  width: 100% !important;
+.publish-platform-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+/* 覆盖el-button默认样式 */
+.publish-platform-btn.el-button {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0 !important; /* 清除ElementPlus自带的margin */
   font-weight: 700;
   letter-spacing: 1px;
+
+  /* 强制统一边框占位：不管是实心还是描边按钮，边框都占固定空间 */
+  border: 2px solid transparent;
+  padding-inline: 0 !important; /* 干掉el‑button默认左右内边距 */
 }
 
 .publish-form {
-  max-height: 50vh;
+  flex: 1;
   overflow-y: auto;
   padding-right: 4px;
-}
-
-.form-tip {
-  font-size: 12px;
-  color: var(--muted, #999);
-  margin-top: 4px;
+  min-height: 0;
 }
 
 .cover-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 2fr;
   gap: 12px;
 }
 
 .cover-item {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 6px;
 }
 
@@ -412,8 +424,8 @@ async function handlePublish() {
 }
 
 .cover-upload-wrap {
-  width: 100%;
-  aspect-ratio: 9/16;
+  height: 200px;
+  aspect-ratio: 3/4;
   border: 2px dashed rgba(255,255,255,0.15);
   border-radius: 8px;
   overflow: hidden;
@@ -429,7 +441,8 @@ async function handlePublish() {
 }
 
 .cover-upload-wrap.landscape {
-  aspect-ratio: 16/9;
+  height: 200px;
+  aspect-ratio: 4/3;
 }
 
 .cover-preview {
@@ -443,6 +456,11 @@ async function handlePublish() {
   flex-direction: column;
   align-items: center;
   gap: 6px;
+}
+
+.cover-section {
+  margin-top: 8px;
+  flex-shrink: 0;
 }
 
 .publish-footer {
@@ -474,7 +492,7 @@ async function handlePublish() {
 }
 .ai-btn {
   flex-shrink: 0;
-  min-width: 56px;
+  min-width: 80px;
   height: 32px;
   display: flex;
   align-items: center;
