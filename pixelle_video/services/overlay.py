@@ -172,6 +172,30 @@ class OverlayService:
             pass
         raise FileNotFoundError("No Chinese font found for OverlayService")
 
+    def _find_bold_font(self, regular_font_path: str) -> Optional[str]:
+        """查找支持中文的 Bold 字体，优先查找原字体的 Bold 版本"""
+        if not regular_font_path:
+            return None
+        if '-Regular' in regular_font_path:
+            bold_guess = regular_font_path.replace('-Regular', '-Bold')
+            if os.path.exists(bold_guess):
+                return bold_guess
+        if 'Regular' in regular_font_path:
+            bold_guess = regular_font_path.replace('Regular', 'Bold')
+            if os.path.exists(bold_guess):
+                return bold_guess
+        bold_fonts = [
+            "/usr/share/fonts/chinese/NotoSansSC-Bold.otf",
+            "C:/Windows/Fonts/NotoSansSC-Bold.otf",
+            "C:/Windows/Fonts/msyhbd.ttc",
+            "/usr/share/fonts/chinese/NotoSerifSC-Bold.otf",
+            "C:/Windows/Fonts/NotoSerifSC-Bold.otf",
+        ]
+        for path in bold_fonts:
+            if os.path.exists(path):
+                return path
+        return None
+
     def _hex_to_rgba(self, hex_color: str, alpha: int = 255) -> tuple[int, int, int, int]:
         h = hex_color.lstrip("#")
         if len(h) >= 6:
@@ -249,20 +273,33 @@ class OverlayService:
         frames_dir = os.path.join(output_dir, "title_overlay_frames")
         os.makedirs(frames_dir, exist_ok=True)
 
-        font_size = int(config.font_size * video_width / 1080)
+        # 计算缩放比例
+        scale = video_width / 1080
+        scaleX = scale
+        scaleY = scale
+
+        font_size = int(config.font_size * scale)
+        font_path = self._font_path
+        # 当 font_weight >= 600 时优先使用 Bold 字体变体
+        if config.font_weight >= 600:
+            bold_path = self._find_bold_font(font_path)
+            if bold_path:
+                font_path = bold_path
         try:
-            font = ImageFont.truetype(self._font_path, font_size)
+            font = ImageFont.truetype(font_path, font_size)
         except Exception:
             font = ImageFont.load_default()
 
         fg_color = self._hex_to_rgba(config.font_color)
         border_color = self._hex_to_rgba(config.font_border_color) if config.font_border_width > 0 else None
-        border_width = max(0, config.font_border_width)
 
-        # 计算缩放比例
-        scale = video_width / 1080
+        # 边框宽度缩放
+        border_width = max(0, int(config.font_border_width * scale))
 
-        # 将文本分割为行（支持多行 + 自动换行）
+        # 标题字间距固定为 5px（与前端一致）
+        letter_spacing = 3
+
+        # 将文本分割为多行（支持多行 + 自动换行）
         max_width_px = int(config.max_width * scale)
         lines = self._split_text_into_lines(config.text, font, max_width_px)
 
@@ -273,18 +310,24 @@ class OverlayService:
         ascent, descent = font.getmetrics()
         line_height = ascent + descent
 
+        # 计算带字间距的行宽
+        def get_line_width(txt: str) -> int:
+            if letter_spacing > 0 and len(txt) > 1:
+                return int(font.getlength(txt)) + letter_spacing * (len(txt) - 1)
+            return int(font.getlength(txt))
+
         # 计算最大行宽
-        line_widths = [int(font.getlength(line)) for line in lines]
+        line_widths = [get_line_width(line) for line in lines]
         max_line_width = max(line_widths) if line_widths else 0
 
         # 背景内边距
-        pad = int(15 * scale)
+        pad = int(10 * scale)
         bg_width = max_line_width + pad * 2
         bg_height = len(lines) * line_height + pad * 2
 
         # 位置
-        offset_x = int(config.position_x * scale)
-        offset_y = int(config.position_y * scale)
+        offset_x = int(config.position_x * scaleX)
+        offset_y = int(config.position_y * scaleY)
         center_x = video_width // 2 + offset_x
         center_y = video_height + offset_y if offset_y < 0 else offset_y
 
@@ -317,27 +360,57 @@ class OverlayService:
 
         # 逐行绘制文字（带边框，支持对齐方式）
         text_align = getattr(config, 'text_align', 'center')
-        y_correction = (ascent + descent - config.font_size) / 2
+        y_correction = (ascent + descent - font_size) / 2
+
         for i, line in enumerate(lines):
-            line_width = int(font.getlength(line))
+            line_width = get_line_width(line)
             if text_align == 'left':
-                text_x = bg_x + pad
+                text_x = bg_x + pad + 0
             elif text_align == 'right':
-                text_x = bg_x + bg_width - line_width - pad
+                text_x = bg_x + bg_width - line_width - pad - 0
             else:
-                text_x = bg_x + (bg_width - line_width) // 2
-            text_y = bg_y + pad + line_height // 2 + i * line_height + y_correction
+                text_x = bg_x + (bg_width - line_width) // 2 + 0
+            text_y = bg_y + pad + line_height // 2 + i * line_height + y_correction - 5
 
             if border_color and border_width > 0:
-                draw.text(
-                    (text_x, text_y), line, fill=fg_color, font=font,
-                    anchor='lm', stroke_width=border_width, stroke_fill=border_color,
-                )
+                # 带字间距和边框绘制
+                if letter_spacing > 0 and len(line) > 1:
+                    # 前端逻辑：不需要减去 line_width/2，直接使用 text_x 开始
+                    current_x = text_x
+                    for char in line:
+                        # 计算不带字间距的字符宽度
+                        char_width_no_spacing = int(font.getlength(char)) if letter_spacing > 0 and len(line) > 1 else 0
+                        # 对于带字间距的绘制，需要调整 start_x 为文本开始位置
+                        # 前端 Canvas 默认是 left baseline，后端使用 'mm' anchor
+                        # 需要计算第一个字符的中心位置
+                        char_width = font.getlength(char)
+                        draw.text(
+                            (current_x + char_width / 2, text_y), char, fill=fg_color, font=font,
+                            anchor='mm', stroke_width=border_width, stroke_fill=border_color,
+                        )
+                        advance = char_width + (border_width if border_width > 0 else 0)
+                        current_x += advance + letter_spacing
+                else:
+                    draw.text(
+                        (text_x, text_y), line, fill=fg_color, font=font,
+                        anchor='mm', stroke_width=border_width, stroke_fill=border_color,
+                    )
             else:
-                draw.text(
-                    (text_x, text_y), line, fill=fg_color, font=font,
-                    anchor='lm',
-                )
+                # 带字间距绘制
+                if letter_spacing > 0 and len(line) > 1:
+                    current_x = text_x
+                    for char in line:
+                        char_width = font.getlength(char)
+                        draw.text(
+                            (current_x + char_width / 2, text_y), char, fill=fg_color, font=font,
+                            anchor='mm',
+                        )
+                        current_x += char_width + letter_spacing
+                else:
+                    draw.text(
+                        (text_x, text_y), line, fill=fg_color, font=font,
+                        anchor='mm',
+                    )
 
         # 保存单帧
         frame_filename = f"title_{uuid.uuid4().hex[:8]}_000000.png"

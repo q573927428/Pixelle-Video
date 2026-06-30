@@ -403,23 +403,17 @@ class SubtitleService:
         # 对于带 letter_spacing 的文本，需要手动计算居中位置
         # 获取字体 metrics
         ascent, descent = font.getmetrics()
-        text_width = self._get_text_width_with_spacing(text, font, letter_spacing)
+        # text_width = self._get_text_width_with_spacing(text, font, letter_spacing)  # 不需要这个
         
-        # 根据 anchor 调整起始位置
-        if anchor == 'mm':
-            # 居中锚点：x 是文本中心，y 是文本垂直中心
-            start_x = x - text_width / 2
-            # y 已经是垂直中心，不需要调整
-        else:
-            start_x = x
-        
-        current_x = start_x
+        # 前端逻辑：x 已经是文本开始位置，不是中心位置
+        # 所以直接从 x 开始绘制，不需要减去 text_width / 2
+        current_x = x
         for char in text:
-            if stroke_width > 0 and stroke_fill:
-                draw.text((current_x, y), char, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor='mm')
-            else:
-                draw.text((current_x, y), char, fill=fill, font=font, anchor='mm')
             char_width = font.getlength(char)
+            if stroke_width > 0 and stroke_fill:
+                draw.text((current_x + char_width / 2, y), char, fill=fill, font=font, stroke_width=stroke_width, stroke_fill=stroke_fill, anchor='mm')
+            else:
+                draw.text((current_x + char_width / 2, y), char, fill=fill, font=font, anchor='mm')
             # 当有描边时，getlength() 返回的是无描边宽度，需加上描边避免右侧字符重叠左移
             advance = char_width + (stroke_width if stroke_width > 0 else 0)
             current_x += advance + letter_spacing
@@ -576,8 +570,8 @@ class SubtitleService:
             # 每行宽度取最大行宽（考虑 letter_spacing）
             line_widths = [get_text_width(line) for line in lines]
             max_line_width = max(line_widths) if line_widths else 0
-            bg_width = max_line_width + pad_left + pad_right
-            bg_height = text_height + pad_top + pad_bottom
+            bg_width = max_line_width + pad_left + pad_right + 10
+            bg_height = text_height + pad_top + pad_bottom + 2
 
             # 背景左上角坐标
             bg_x1 = base_x - bg_width // 2 + offset_x
@@ -600,15 +594,16 @@ class SubtitleService:
             # 逐行绘制文字（支持 letter_spacing）
             for j, line in enumerate(lines):
                 # 水平居中：x 坐标是文本中心
-                line_x = base_x + offset_x + 5
+                lineWidth = get_text_width(line)
+                line_x = bg_x1 + (bg_width - lineWidth) / 2 - 1
                 # 垂直居中：计算每行的中心位置
                 # 背景框的中心是 bg_y1 + bg_height / 2
                 # 多行文本时，第一行的中心位置是：
                 # bg_y1 + pad_top + line_height / 2 + j * line_height
                 # 视觉居中补偿：Pillow anchor=mm 对中文(ascent>descent) 调整到 em-square 中心
                 ascent, descent = font.getmetrics()
-                y_correction = (ascent + descent - config.font_size) / 2
-                line_y = bg_y1 + (pad_top + pad_bottom) / 2 + line_height / 2 + j * line_height + y_correction
+                y_correction = (ascent + descent - font_size) / 2
+                line_y = bg_y1 + (pad_top + pad_bottom) / 2 + line_height / 2 + j * line_height + y_correction + 0
                 
                 if border_width > 0 and border_color:
                     self._draw_text_with_letter_spacing(
