@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import math
 from loguru import logger
 from pixelle_video.services.publisher.publisher_base import BasePublisher
 from pixelle_video.services.publisher.session_manager import session_manager
@@ -697,15 +698,19 @@ class DouyinPublisher(BasePublisher):
                 await self._random_delay(500, 1000)
 
             # 填写文案 + 话题
-            full_text = self.params.full_text if hasattr(self, 'params') else text
-            if topics:
-                topics_str = " ".join(topics)
-                if full_text:
-                    full_text = f"{full_text}\n{topics_str}"
-                else:
-                    full_text = topics_str
+            # 注意：self.params.full_text 已经通过 BasePublisher 的 property 自动拼接了 topics
+            # 如果直接用 self.params.full_text 后又在此追加 topics，会导致话题被填写两次
+            if hasattr(self, "params") and getattr(self.params, "full_text", None):
+                full_text = self.params.full_text
+            else:
+                # 兜底：手动拼接
+                full_text = text or ""
+                if topics:
+                    topics_str = " ".join(topics)
+                    full_text = f"{full_text}\n{topics_str}" if full_text else topics_str
 
             if full_text:
+
                 # 查找文案输入框（通常是更大的编辑区域、textarea 或 contenteditable div）
                 for selector in [
                     # 新版 post 页面 - 文案区域
@@ -747,26 +752,27 @@ class DouyinPublisher(BasePublisher):
         self,
         base64_str: str,
         suffix: str = ".jpg",
-        min_width: int = 1080,
-        min_height: int = 1920,
+        target_width: int = 1440,
+        target_height: int = 1920,
         quality: int = 95,
     ) -> str:
-        """将 base64 图片保存为临时文件，确保分辨率满足最低要求
+        """将 base64 图片保存为临时文件，并精确匹配抖音要求的封面比例
 
-        抖音封面推荐标准:
-        - 竖屏封面: 9:16 比例，至少 1080x1920
-        - 横屏封面: 16:9 比例，至少 1920x1080
+        抖音封面推荐标准（实际生效比例）:
+        - 竖屏封面: 3:4 比例，例如 1440x1920（抖音的"竖封面预览（3:4）"）
+        - 横屏封面: 16:9 比例，例如 1920x1080（或 4:3 也可）
 
-        图片处理策略:
-        1. 如果原始分辨率已满足最低要求，直接保存（不破坏画质）
-        2. 如果分辨率不足，按原始宽高比缩放至满足最低要求
-        3. 不裁剪图片，保持完整内容
+        为了避免抖音上传封面后弹出"设置封面/裁剪封面"弹窗，本方法会：
+        1. 按目标比例把原图 letterbox（用黑色补边）到目标 target_width x target_height
+           - 不会切掉原图的任何内容
+           - 输出的图片精确等于目标宽高（即目标宽高比 == 目标比例）
+        2. 保存为高质量 JPEG
 
         Args:
             base64_str: base64 图片数据（data:image/... 格式或裸 base64）
             suffix: 文件后缀
-            min_width: 最小宽度
-            min_height: 最小高度
+            target_width: 目标输出宽度（精确）
+            target_height: 目标输出高度（精确）
             quality: JPEG 保存质量 (1-100)
 
         Returns:
@@ -783,37 +789,42 @@ class DouyinPublisher(BasePublisher):
         else:
             img_data = base64.b64decode(base64_str)
 
-        # 打开图片检查分辨率
         try:
             img = Image.open(io.BytesIO(img_data))
+            if img.mode != "RGB":
+                img = img.convert("RGB")
             width, height = img.size
-
-            if width >= min_width and height >= min_height:
-                # 尺寸已满足要求，直接保存
-                with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
-                    f.write(img_data)
-                    return f.name
+            src_ratio = width / height if height > 0 else 1
+            target_ratio = target_width / target_height if target_height > 0 else 1
 
             logger.info(
-                f"Image too small: {width}x{height}, "
-                f"upscaling to at least {min_width}x{min_height} "
-                f"(preserving original aspect ratio {width/height:.2f})..."
+                f"Resizing cover image: src={width}x{height} "
+                f"(ratio={src_ratio:.3f}) -> target={target_width}x{target_height} "
+                f"(ratio={target_ratio:.3f})"
             )
 
-            # 计算保持原始宽高比的最小缩放比例
-            ratio = max(min_width / width, min_height / height)
-            new_width = int(width * ratio) + 1  # +1 确保严格大于最小值
-            new_height = int(height * ratio) + 1
+            # 计算缩放比例 —— 让原图完整放入目标画布内（fit）
+            scale = min(target_width / width, target_height / height)
+            new_w = max(1, int(round(width * scale)))
+            new_h = max(1, int(round(height * scale)))
 
-            # 使用高质量的 Lanczos 重采样
-            img = img.resize((new_width, new_height), Image.LANCZOS)
+            # 使用 Lanczos 重采样
+            resized = img.resize((new_w, new_h), Image.LANCZOS)
 
-            logger.info(f"Image upscaled from {width}x{height} to {new_width}x{new_height}")
+            # 创建目标画布，将 resized 图片居中粘贴（其余部分黑色）
+            canvas = Image.new("RGB", (target_width, target_height), (0, 0, 0))
+            offset_x = (target_width - new_w) // 2
+            offset_y = (target_height - new_h) // 2
+            canvas.paste(resized, (offset_x, offset_y))
 
-            # 保存到临时文件
+            logger.info(
+                f"Image letterboxed to exact {target_width}x{target_height} "
+                f"(inner {new_w}x{new_h} at offset {offset_x},{offset_y})"
+            )
+
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 save_format = "JPEG" if suffix.lower() in (".jpg", ".jpeg") else "PNG"
-                img.save(f, format=save_format, quality=quality)
+                canvas.save(f, format=save_format, quality=quality)
                 return f.name
 
         except Exception as e:
@@ -822,6 +833,7 @@ class DouyinPublisher(BasePublisher):
             with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as f:
                 f.write(img_data)
                 return f.name
+
 
     async def _upload_cover_file(self, file_input_locator, image_path: str) -> bool:
         """上传封面文件到指定的 file input
@@ -862,6 +874,187 @@ class DouyinPublisher(BasePublisher):
             except Exception:
                 continue
         return False
+
+    async def _confirm_crop_dialog(self, max_wait_ms: int = 6000) -> bool:
+        """处理封面上传后弹出的裁剪弹窗
+
+        抖音的实际交互（从截图分析）：
+        - 上传封面后，会在"设置封面"外层弹窗之上再叠加一个中间弹窗
+        - 这个中间裁剪弹窗标题也是"设置封面"（！），底部按钮是"取消"和"保存（红色主按钮）"
+        - 用户必须点击这个中间弹窗里的红色"保存"按钮，图片才真正应用
+        - 如果找错了按钮（比如点了外层弹窗底部的"完成"），会导致：
+          - 裁剪弹窗依然显示
+          - 外层"设置封面"弹窗被过早关闭
+          - 最终封面未真正设置，且流程错乱
+
+        本方法策略：
+        1. 使用 JS 在浏览器端遍历 DOM，找出"最顶层可见的 dialog/modal"节点（即
+           z-index 或 DOM 位置最靠后的弹窗，就是刚打开的裁剪弹窗）
+        2. 在该弹窗内优先点击"保存"（这是裁剪弹窗真正的确认按钮）
+        3. 若找不到"保存"再降级尝试"确定/确认/完成/应用"
+
+        Args:
+            max_wait_ms: 最长等待裁剪弹窗出现的时间(ms)
+
+        Returns:
+            是否检测到并成功关闭裁剪弹窗（未出现弹窗返回 False）
+        """
+        if not self.page:
+            return False
+
+        # 使用 JS 一体化处理：等待弹窗出现 → 找出最顶层弹窗 → 点击其中"保存"按钮
+        # 这样最可靠，避免 Playwright 多层 locator 定位错弹窗
+        js_result = await self.page.evaluate(
+            """
+            async ({ maxWaitMs }) => {
+                function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+                function isVisible(el) {
+                    if (!el) return false;
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width < 50 || rect.height < 50) return false;
+                    const style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+                    return true;
+                }
+
+                function findTopmostCropDialog() {
+                    // 查找所有可能的 dialog/modal 容器
+                    const candidates = document.querySelectorAll(
+                        '[role="dialog"], [class*="dialog"], [class*="Dialog"], ' +
+                        '[class*="modal"], [class*="Modal"]'
+                    );
+                    const visibleDialogs = [];
+                    for (const el of candidates) {
+                        if (!isVisible(el)) continue;
+                        // 必须包含"保存"或"确定"按钮才可能是要处理的确认弹窗
+                        const btns = el.querySelectorAll('button');
+                        let hasConfirmButton = false;
+                        let hasCancelButton = false;
+                        for (const b of btns) {
+                            const t = (b.textContent || '').trim();
+                            if (t === '保存' || t === '确定' || t === '确认') hasConfirmButton = true;
+                            if (t === '取消') hasCancelButton = true;
+                        }
+                        // 裁剪弹窗的典型特征：同时有"取消"和"保存/确定"按钮
+                        if (hasConfirmButton && hasCancelButton) {
+                            const rect = el.getBoundingClientRect();
+                            const z = parseInt(window.getComputedStyle(el).zIndex) || 0;
+                            visibleDialogs.push({ el, rect, z });
+                        }
+                    }
+                    if (visibleDialogs.length === 0) return null;
+                    // 按 z-index 降序、然后按面积升序（越小越可能是"叠在最上层"的裁剪弹窗）
+                    visibleDialogs.sort((a, b) => {
+                        if (b.z !== a.z) return b.z - a.z;
+                        const areaA = a.rect.width * a.rect.height;
+                        const areaB = b.rect.width * b.rect.height;
+                        return areaA - areaB;  // 面积小的优先（更居中的裁剪弹窗）
+                    });
+                    return visibleDialogs[0].el;
+                }
+
+                // 阶段 1：等待裁剪弹窗出现
+                const start = Date.now();
+                let dialog = null;
+                while (Date.now() - start < maxWaitMs) {
+                    dialog = findTopmostCropDialog();
+                    if (dialog) break;
+                    await sleep(300);
+                }
+                if (!dialog) return { found: false };
+
+                // 阶段 2：等待弹窗内的图片加载完成
+                await sleep(1500);
+
+                // 阶段 3：在弹窗内查找并点击"保存"按钮（红色主按钮）
+                // 优先级：保存 > 确定 > 确认 > 完成 > 应用
+                const priorityTexts = ["保存", "确定", "确认", "完成", "应用"];
+                let clickedText = null;
+                for (const txt of priorityTexts) {
+                    const btns = dialog.querySelectorAll('button');
+                    for (const b of btns) {
+                        const bt = (b.textContent || '').trim();
+                        if (bt !== txt) continue;
+                        // 检查按钮是否可用
+                        if (b.disabled) continue;
+                        const cls = (b.className || '').toLowerCase();
+                        if (cls.includes('disabled')) continue;
+                        // 直接触发 click
+                        b.click();
+                        clickedText = txt;
+                        break;
+                    }
+                    if (clickedText) break;
+                }
+
+                if (!clickedText) return { found: true, clicked: false };
+
+                // 阶段 4：等待弹窗关闭（DOM 消失或 opacity 变 0）
+                await sleep(1500);
+                const stillVisible = isVisible(dialog);
+                return { found: true, clicked: true, clickedText, stillVisible };
+            }
+            """,
+            {"maxWaitMs": max_wait_ms},
+        )
+
+        if not js_result or not js_result.get("found"):
+            logger.info("No crop dialog detected (may not be required)")
+            return False
+
+        if not js_result.get("clicked"):
+            logger.warning("⚠️  Crop dialog detected but no confirm button clicked")
+            return False
+
+        clicked_text = js_result.get("clickedText")
+        still_visible = js_result.get("stillVisible")
+        logger.info(f"✅ Crop dialog confirmed via '{clicked_text}' button")
+
+        if still_visible:
+            logger.warning("Crop dialog still visible after click, waiting extra 2s...")
+            await self._random_delay(2000, 2500)
+            # 再检查一次，如果仍在，尝试再次点击
+            js_recheck = await self.page.evaluate(
+                """
+                () => {
+                    const dialogs = document.querySelectorAll(
+                        '[role="dialog"], [class*="dialog"], [class*="modal"]'
+                    );
+                    for (const el of dialogs) {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width < 50 || rect.height < 50) continue;
+                        const style = window.getComputedStyle(el);
+                        if (style.display === 'none' || style.visibility === 'hidden') continue;
+                        const btns = el.querySelectorAll('button');
+                        let hasSave = false, hasCancel = false;
+                        for (const b of btns) {
+                            const t = (b.textContent || '').trim();
+                            if (t === '保存' || t === '确定') hasSave = true;
+                            if (t === '取消') hasCancel = true;
+                        }
+                        if (hasSave && hasCancel) {
+                            // 再次尝试点击"保存"
+                            for (const b of btns) {
+                                if ((b.textContent || '').trim() === '保存' && !b.disabled) {
+                                    b.click();
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                    return false;
+                }
+                """
+            )
+            if js_recheck:
+                logger.info("✅ Crop dialog re-clicked '保存'")
+                await self._random_delay(1500, 2000)
+
+        await self._random_delay(500, 1000)
+        return True
+
+
 
     async def _set_cover(self, portrait: str, landscape: str):
         """设置封面（竖封面 + 横封面）
@@ -910,13 +1103,14 @@ class DouyinPublisher(BasePublisher):
             await cover_btn.click()
             await self._random_delay(1500, 2500)
 
-            # Step 2: 上传竖封面（9:16 比例，至少 1080x1920）
+            # Step 2: 上传竖封面（抖音竖封面预览标注 3:4，使用 1440x1920）
             if portrait:
                 logger.info("Uploading vertical (portrait) cover...")
                 portrait_path = await self._save_temp_image(
                     portrait, ".jpg",
-                    min_width=1080, min_height=1920,
+                    target_width=1440, target_height=1920,
                 )
+
                 temp_files.append(portrait_path)
 
                 # 查找竖封面上传区域 - 可能有多个 file input，第一个通常对应竖封面
@@ -972,12 +1166,20 @@ class DouyinPublisher(BasePublisher):
                 if portrait_uploaded:
                     logger.info("✅ Vertical cover uploaded successfully")
                     await self._random_delay(2000, 3000)
+                    # 关键：抖音上传封面后会弹出裁剪对话框，必须先点击"确定"
+                    # 关闭裁剪弹窗，否则后续所有操作（切换横封面、点击完成、
+                    # 甚至最后的发布按钮）都会被裁剪弹窗遮挡或点击错位。
+                    crop_confirmed = await self._confirm_crop_dialog(max_wait_ms=8000)
+                    if crop_confirmed:
+                        logger.info("✅ Portrait crop dialog confirmed")
+                    await self._random_delay(1000, 1500)
                 else:
                     logger.warning("Vertical cover upload may have failed")
 
             # Step 3: 点击"设置横封面"切换到横封面上传
             if landscape:
                 logger.info("Switching to landscape cover upload...")
+
                 landscape_clicked = await self._click_by_text(
                     ["设置横封面", "横版封面", "横封面", "横版", "landscape"],
                     timeout=3000,
@@ -996,11 +1198,11 @@ class DouyinPublisher(BasePublisher):
                 if landscape_clicked:
                     await self._random_delay(1500, 2500)
 
-                    # Step 4: 上传横封面（16:9 比例，至少 1920x1080）
+                    # Step 4: 上传横封面（16:9 比例，1920x1080）
                     logger.info("Uploading horizontal (landscape) cover...")
                     landscape_path = await self._save_temp_image(
                         landscape, ".jpg",
-                        min_width=1920, min_height=1080,
+                        target_width=1920, target_height=1080,
                     )
                     temp_files.append(landscape_path)
 
@@ -1033,10 +1235,16 @@ class DouyinPublisher(BasePublisher):
                     if landscape_uploaded:
                         logger.info("✅ Horizontal cover uploaded successfully")
                         await self._random_delay(2000, 3000)
+                        # 同样：横封面上传后也可能弹出裁剪弹窗，需要点"确定"关闭
+                        crop_confirmed_h = await self._confirm_crop_dialog(max_wait_ms=8000)
+                        if crop_confirmed_h:
+                            logger.info("✅ Landscape crop dialog confirmed")
+                        await self._random_delay(1000, 1500)
                     else:
                         logger.warning("Horizontal cover upload may have failed")
                 else:
                     logger.info("Landscape cover switch button not found, skipping")
+
 
             # Step 5: 点击"完成"或"确定"
             completed = await self._click_by_text(
@@ -1059,66 +1267,12 @@ class DouyinPublisher(BasePublisher):
                 except Exception:
                     logger.info("Cover done button not found, continuing")
 
-            # Step 6: 处理可能再次弹出的"设置封面"弹窗，需要点击"完成"关闭
+            # Step 6: 强力关闭"设置封面"外层弹窗（关键步骤）
+            # 裁剪弹窗关闭后，外层"设置封面"弹窗可能仍然存在，底部有"完成"按钮，
+            # 必须点击"完成"关闭此弹窗，否则发布按钮会被遮挡无法点击
             await self._random_delay(1500, 2500)
-            try:
-                # 检测是否又有设置封面弹窗弹出
-                cover_popup_selectors = [
-                    '[class*="cover"] [class*="dialog"]',
-                    '[class*="cover"] [class*="modal"]',
-                    '[class*="cover"] [class*="popup"]',
-                    'div[class*="cover"]:has(button:has-text("完成"))',
-                    'div[class*="cover"]:has(button:has-text("保存"))',
-                ]
-                has_cover_popup = False
-                for selector in cover_popup_selectors:
-                    popup = self.page.locator(selector).first
-                    if await popup.is_visible(timeout=1500):
-                        has_cover_popup = True
-                        logger.info(f"Detected secondary cover popup via selector: {selector}")
-                        break
+            await self._close_cover_setting_dialog(max_wait_ms=8000)
 
-                if not has_cover_popup:
-                    # 更通用的检测：查找可见的"完成"或"保存"按钮，但排除页面上已有的主操作区
-                    finish_btn = self.page.locator(
-                        'button:has-text("完成"), button:has-text("保存")'
-                    ).first
-                    if await finish_btn.is_visible(timeout=1000):
-                        # 检查是否在弹窗/对话框上下文中
-                        parent_dialog = finish_btn.locator(
-                            'xpath=ancestor::div[contains(@class, "dialog") or contains(@class, "modal") or contains(@class, "popup") or contains(@class, "cover")]'
-                        )
-                        if await parent_dialog.count() > 0:
-                            has_cover_popup = True
-                            logger.info("Detected secondary cover popup via finish button in dialog context")
-
-                if has_cover_popup:
-                    # 点击弹窗中的"完成"按钮
-                    second_completed = await self._click_by_text(
-                        ["完成", "保存", "确定", "确认"],
-                        timeout=3000,
-                    )
-                    if second_completed:
-                        logger.info("✅ Secondary cover popup dismissed")
-                        await self._random_delay(1000, 2000)
-                    else:
-                        # 尝试直接点击弹窗中的按钮
-                        try:
-                            btn = self.page.locator(
-                                '[class*="dialog"] button:has-text("完成"), '
-                                '[class*="modal"] button:has-text("完成"), '
-                                '[class*="popup"] button:has-text("完成"), '
-                                '[class*="dialog"] button:has-text("保存"), '
-                                '[class*="modal"] button:has-text("保存")'
-                            ).first
-                            if await btn.is_visible(timeout=2000):
-                                await btn.click()
-                                await self._random_delay(1000, 1500)
-                                logger.info("✅ Secondary cover popup dismissed (by class)")
-                        except Exception:
-                            logger.info("Secondary cover popup finish button not found, continuing")
-            except Exception as e:
-                logger.info(f"Secondary cover popup handling (non-critical): {e}")
 
         except Exception as e:
             logger.warning(f"Set cover failed (non-critical): {e}")
@@ -1131,58 +1285,349 @@ class DouyinPublisher(BasePublisher):
                 except Exception:
                     pass
 
+    async def _close_cover_setting_dialog(self, max_wait_ms: int = 10000) -> bool:
+        """关闭"设置封面"外层弹窗
+
+        裁剪弹窗内的"保存"按钮关闭裁剪弹窗后，外层"设置封面"弹窗仍然显示在页面上，
+        其底部有"完成"按钮。必须点击这个"完成"按钮关闭外层弹窗，
+        否则发布按钮会被遮挡而无法点击。
+
+        本方法使用 JS 在浏览器端强力处理：
+        策略 A: 查找包含"封面"/"cover"且有"完成"按钮的 dialog/modal → 点击"完成"
+        策略 B: 查找任意可见的、含"完成"按钮的顶层 dialog/modal（兜底）
+        策略 C: 直接查找页面上任意"完成"按钮并点击
+
+        Args:
+            max_wait_ms: 最长等待时间(ms)
+
+        Returns:
+            是否成功关闭弹窗（未检测到弹窗也返回 True）
+        """
+        if not self.page:
+            return True
+
+        js_result = await self.page.evaluate(
+            """
+            async ({ maxWaitMs }) => {
+                function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+                function isVisible(el) {
+                    if (!el) return false;
+                    try {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width < 30 || rect.height < 30) return false;
+                        const style = window.getComputedStyle(el);
+                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+                        return true;
+                    } catch (e) { return false; }
+                }
+
+                // 查找所有弹窗容器（按 z-index 降序排列，取最顶层）
+                function getAllDialogs() {
+                    const selectors = [
+                        '[role="dialog"]', '[role="presentation"]',
+                        '[class*="dialog"]', '[class*="Dialog"]',
+                        '[class*="modal"]', '[class*="Modal"]',
+                        '[class*="popup"]', '[class*="Popup"]',
+                        '[class*="overlay"]', '[class*="Overlay"]',
+                        '.ant-modal', '.el-dialog', '.el-overlay',
+                    ];
+                    const result = [];
+                    for (const sel of selectors) {
+                        try {
+                            const els = document.querySelectorAll(sel);
+                            for (const el of els) {
+                                if (!isVisible(el)) continue;
+                                const z = parseInt(window.getComputedStyle(el).zIndex) || 0;
+                                result.push({ el, z });
+                            }
+                        } catch (e) {}
+                    }
+                    // 去重
+                    const seen = new Set();
+                    const unique = [];
+                    for (const item of result) {
+                        const key = item.el.tagName + '-' + (item.el.className || '');
+                        if (!seen.has(key)) { seen.add(key); unique.push(item); }
+                    }
+                    unique.sort((a, b) => b.z - a.z);  // z-index 降序
+                    return unique.map(item => item.el);
+                }
+
+                // 查找弹窗中指定文本的按钮
+                function findButtonInDialog(dialog, text) {
+                    const btns = dialog.querySelectorAll('button, div[role="button"], a[role="button"]');
+                    for (const b of btns) {
+                        try {
+                            const t = (b.textContent || '').trim();
+                            if (t === text && !b.disabled) {
+                                const cls = (b.className || '').toLowerCase();
+                                if (!cls.includes('disabled')) return b;
+                            }
+                        } catch (e) {}
+                    }
+                    return null;
+                }
+
+                // ====== 策略 A: 查找包含"封面"文字且有"完成"按钮的弹窗 ======
+                const start = Date.now();
+                let clickedAny = false;
+
+                while (Date.now() - start < maxWaitMs) {
+                    const dialogs = getAllDialogs();
+                    for (const dialog of dialogs) {
+                        try {
+                            const text = (dialog.textContent || '').toLowerCase();
+                            // 策略 A1: 包含"封面"且包含"完成"按钮
+                            if (text.includes('封面') || text.includes('cover')) {
+                                const finishBtn = findButtonInDialog(dialog, '完成');
+                                if (finishBtn) {
+                                    finishBtn.click();
+                                    clickedAny = true;
+                                    await sleep(2000);
+                                    // 检查是否关闭了
+                                    if (!isVisible(dialog)) {
+                                        return { success: true, strategy: 'A1', dialogText: text.substring(0, 50) };
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    // 策略 A2: 如果露出来的 dialog 不多，直接找"完成"按钮
+                    if (dialogs.length > 0 && dialogs.length <= 3) {
+                        for (const dialog of dialogs) {
+                            const finishBtn = findButtonInDialog(dialog, '完成');
+                            if (finishBtn) {
+                                finishBtn.click();
+                                clickedAny = true;
+                                await sleep(2000);
+                                if (!isVisible(dialog)) {
+                                    return { success: true, strategy: 'A2' };
+                                }
+                            }
+                        }
+                    }
+
+                    await sleep(300);
+                }
+
+                // ====== 策略 B: 兜底 - 直接点"完成"按钮 ======
+                if (!clickedAny) {
+                    const allButtons = document.querySelectorAll('button');
+                    for (const b of allButtons) {
+                        try {
+                            if ((b.textContent || '').trim() === '完成' && !b.disabled && isVisible(b)) {
+                                // 检查是否在弹窗内
+                                let parent = b.parentElement;
+                                let inDialog = false;
+                                while (parent) {
+                                    const pCls = (parent.className || '').toLowerCase();
+                                    if (pCls.includes('dialog') || pCls.includes('modal') || pCls.includes('popup') || pCls.includes('overlay')) {
+                                        inDialog = true; break;
+                                    }
+                                    parent = parent.parentElement;
+                                }
+                                if (inDialog) {
+                                    b.click();
+                                    await sleep(2000);
+                                    return { success: true, strategy: 'B' };
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+
+                return { success: false, clickedAny };
+            }
+            """,
+            {"maxWaitMs": max_wait_ms},
+        )
+
+        if not js_result:
+            logger.info("No JS result from cover dialog close")
+            return True
+
+        if js_result.get("success"):
+            strategy = js_result.get("strategy", "?")
+            logger.info(f"✅ Cover setting dialog closed (strategy: {strategy})")
+            await self._random_delay(1000, 1500)
+            return True
+
+        logger.info("No cover setting dialog detected, continuing")
+        return True
+
     async def _click_publish(self):
-        """点击发布按钮并等待成功"""
+        """点击发布按钮并等待成功
+
+        改进版本：
+        1. 点击发布前，先关闭任何遗留的裁剪/编辑弹窗，避免遮挡发布按钮
+        2. 精确匹配"发布"文本按钮，避免误点"发"开头的其他按钮
+        3. 检查发布按钮是否处于 disabled 状态（表单未通过校验），若是则报错
+        4. 点击后必须检测到真正的成功信号（成功文案 / URL 跳转 / 落到管理页），
+           否则报错，不再打"可能成功"的模糊信息
+        """
         if not self.page:
             return
 
         try:
-            # 抖音的发布按钮有多种可能的选择器
-            publish_selectors = [
-                'button:has-text("发布")',
-                '.publish-btn',
-                '[class*="publish"] button',
-                'button[class*="publish"]',
-                'div[class*="publish"] button',
-                # 包含"发"字的按钮
-                'button:has-text("发")',
-            ]
+            # 点击发布前，兜底再清理一次可能残留的弹窗
+            try:
+                await self._confirm_crop_dialog(max_wait_ms=1500)
+            except Exception:
+                pass
+            try:
+                await self._close_cover_setting_dialog(max_wait_ms=3000)
+            except Exception:
+                pass
 
+            # 记录点击前 URL，便于后续判断是否跳转
+            url_before = self.page.url
+
+            # 精确匹配"发布"按钮 —— 使用 name 精确匹配的 role 定位器，
+            # 避免误匹配"发送"、"发起"等按钮
             publish_btn = None
-            for selector in publish_selectors:
-                btn = self.page.locator(selector).first
-                if await btn.is_visible(timeout=2000):
-                    publish_btn = btn
-                    logger.info(f"Found publish button with selector: {selector}")
-                    break
+            try:
+                exact_btn = self.page.get_by_role("button", name="发布", exact=True).first
+                if await exact_btn.is_visible(timeout=2000):
+                    publish_btn = exact_btn
+                    logger.info("Found publish button via role=button name='发布' (exact)")
+            except Exception:
+                pass
 
-            if publish_btn:
-                await publish_btn.click()
-                logger.info("🚀 Publish button clicked")
+            if not publish_btn:
+                # 兜底选择器（保持向后兼容）
+                publish_selectors = [
+                    'button:has-text("发布"):not(:has-text("发布视频"))',
+                    'button:text-is("发布")',
+                    'button:has-text("发布")',
+                    '.publish-btn',
+                    '[class*="publish"] button',
+                    'button[class*="publish"]',
+                    'div[class*="publish"] button',
+                ]
+                for selector in publish_selectors:
+                    try:
+                        btn = self.page.locator(selector).first
+                        if await btn.is_visible(timeout=1500):
+                            publish_btn = btn
+                            logger.info(f"Found publish button with selector: {selector}")
+                            break
+                    except Exception:
+                        continue
 
-                # 等待发布完成（检测成功提示或跳转）
-                await self.page.wait_for_timeout(5000)
-                for _ in range(60):
-                    success_text = self.page.locator(
-                        'text=发布成功, text=作品已发布, text=视频发布成功'
-                    ).first
-                    if await success_text.is_visible(timeout=1000):
-                        self._platform_url = self.page.url
-                        logger.info(f"✅ Published successfully! URL: {self._platform_url}")
-                        return
-                    current_url = self.page.url
-                    if "/video/" in current_url or "/work/" in current_url:
-                        self._platform_url = current_url
-                        logger.info(f"✅ Published! Redirected to: {current_url}")
-                        return
-                    await self.page.wait_for_timeout(1000)
-                logger.warning("Publish confirmation not detected, but may have succeeded")
-            else:
+            if not publish_btn:
                 logger.warning("Publish button not found with any selector")
-                # 打印页面内容帮助调试
                 html_snippet = await self.page.content()
                 logger.debug(f"Page HTML snippet (first 2000 chars): {html_snippet[:2000]}")
                 raise Exception("未找到发布按钮")
+
+            # 检查发布按钮是否可用（未被禁用）
+            # 抖音在封面未确认、必填项未填时会把发布按钮设为 disabled
+            try:
+                is_disabled_attr = await publish_btn.get_attribute("disabled")
+                aria_disabled = await publish_btn.get_attribute("aria-disabled")
+                cls = (await publish_btn.get_attribute("class")) or ""
+                disabled_by_class = any(
+                    kw in cls.lower() for kw in ["disabled", "is-disabled", "disable"]
+                )
+
+                if (
+                    is_disabled_attr is not None
+                    or (aria_disabled and aria_disabled.lower() == "true")
+                    or disabled_by_class
+                ):
+                    # 再等一下（可能是校验中），然后重试
+                    logger.warning(
+                        f"Publish button seems disabled "
+                        f"(disabled={is_disabled_attr}, aria-disabled={aria_disabled}, "
+                        f"class={cls}). Waiting 3s and retrying check..."
+                    )
+                    await self.page.wait_for_timeout(3000)
+                    is_disabled_attr = await publish_btn.get_attribute("disabled")
+                    aria_disabled = await publish_btn.get_attribute("aria-disabled")
+                    cls = (await publish_btn.get_attribute("class")) or ""
+                    disabled_by_class = any(
+                        kw in cls.lower() for kw in ["disabled", "is-disabled", "disable"]
+                    )
+                    if (
+                        is_disabled_attr is not None
+                        or (aria_disabled and aria_disabled.lower() == "true")
+                        or disabled_by_class
+                    ):
+                        raise Exception(
+                            "发布按钮处于不可用状态，可能是封面未确认或必填项未通过校验"
+                        )
+            except Exception as check_err:
+                # 如果是我们主动 raise 的，就直接抛出
+                if "发布按钮处于不可用状态" in str(check_err):
+                    raise
+
+            # 点击发布
+            await publish_btn.click()
+            logger.info("🚀 Publish button clicked")
+
+            # 等待发布结果 —— 检测以下任一信号即视为成功：
+            # 1. 出现"发布成功"文案
+            # 2. URL 跳转到作品管理页(/creator-micro/content/manage) 或 /video/ /work/
+            # 3. 页面出现"作品发布成功"toast/dialog
+            await self.page.wait_for_timeout(2000)
+
+            success_signals_detected = False
+            for i in range(60):  # 最多等 60 秒
+                current_url = self.page.url
+
+                # 信号 1: URL 已跳转到作品管理页面（抖音发布成功后的常见跳转）
+                if current_url != url_before and any(
+                    kw in current_url
+                    for kw in ["/content/manage", "/video/", "/work/", "/manage"]
+                ):
+                    self._platform_url = current_url
+                    logger.info(f"✅ Published! Redirected to: {current_url}")
+                    success_signals_detected = True
+                    return
+
+                # 信号 2: 页面上出现成功文案
+                try:
+                    success_text = self.page.locator(
+                        'text=发布成功, text=作品已发布, text=视频发布成功, '
+                        'text=发布中, text=正在发布'
+                    ).first
+                    if await success_text.is_visible(timeout=500):
+                        # 出现"发布中"也算发起了发布流程，继续等待跳转
+                        content = (await success_text.text_content() or "").strip()
+                        if any(kw in content for kw in ["成功", "已发布"]):
+                            self._platform_url = self.page.url
+                            logger.info(
+                                f"✅ Published successfully! Text: {content}, "
+                                f"URL: {self._platform_url}"
+                            )
+                            success_signals_detected = True
+                            return
+                except Exception:
+                    pass
+
+                await self.page.wait_for_timeout(1000)
+
+            if not success_signals_detected:
+                # 检查是否有错误/提示信息
+                error_text = ""
+                try:
+                    err_locator = self.page.locator(
+                        '[class*="error"], [class*="Error"], [class*="warning"], '
+                        '[class*="Message"], [class*="toast"]'
+                    ).first
+                    if await err_locator.is_visible(timeout=500):
+                        error_text = (await err_locator.text_content() or "").strip()
+                except Exception:
+                    pass
+                raise Exception(
+                    f"发布未确认成功：60秒内未检测到跳转或成功提示 "
+                    f"(page url: {self.page.url}, error hint: {error_text or 'N/A'})"
+                )
+
         except Exception as e:
             logger.error(f"Click publish failed: {e}")
             raise
+
+

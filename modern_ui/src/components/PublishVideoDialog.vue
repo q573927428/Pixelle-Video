@@ -125,7 +125,7 @@
             <div class="cover-item">
               <div class="cover-label">竖屏封面 (3:4)</div>
               <div class="cover-upload-wrap">
-                <img v-if="frameSrc" :src="frameSrc" class="cover-preview" />
+                <img v-if="portraitCover" :src="portraitCover" class="cover-preview" />
                 <div v-else class="cover-placeholder">
                   <el-icon style="font-size:28px;color:#999;"><VideoCamera /></el-icon>
                   <span class="small muted">自动截取第一帧</span>
@@ -135,7 +135,7 @@
             <div class="cover-item">
               <div class="cover-label">横屏封面 (4:3)</div>
               <div class="cover-upload-wrap landscape">
-                <img v-if="frameSrc" :src="frameSrc" class="cover-preview" />
+                <img v-if="landscapeCover" :src="landscapeCover" class="cover-preview" />
                 <div v-else class="cover-placeholder">
                   <el-icon style="font-size:28px;color:#999;"><VideoCamera /></el-icon>
                   <span class="small muted">自动截取第一帧</span>
@@ -285,7 +285,8 @@ const platformLabel = computed(() => {
 const publishTitle = ref('')
 const publishText = ref('')
 const publishTopics = ref('')
-const frameSrc = ref<string>('')
+const portraitCover = ref<string>('')
+const landscapeCover = ref<string>('')
 
 const aiLoading = ref(false)
 const publishing = ref(false)
@@ -516,7 +517,8 @@ watch(() => props.visible, (val) => {
     publishTitle.value = props.initialTitle
     publishText.value = props.initialText
     publishTopics.value = props.initialTopics
-    frameSrc.value = ''
+    portraitCover.value = ''
+    landscapeCover.value = ''
     publishing.value = false
     publishStatus.value = ''
     publishSuccess.value = false
@@ -637,7 +639,37 @@ function captureVideoFrame() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.drawImage(video, 0, 0, w, h)
-    frameSrc.value = canvas.toDataURL('image/jpeg', 0.9)
+
+    // 生成竖屏封面 (3:4) — 从原始帧中心裁剪
+    const portraitCanvas = document.createElement('canvas')
+    const portraitW = Math.min(w, h * 3 / 4)
+    const portraitH = portraitW * 4 / 3
+    portraitCanvas.width = portraitW
+    portraitCanvas.height = portraitH
+    const portraitCtx = portraitCanvas.getContext('2d')
+    if (portraitCtx) {
+      const sx = (w - portraitW) / 2
+      const sy = (h - portraitH) / 2
+      portraitCtx.drawImage(canvas, sx, sy, portraitW, portraitH, 0, 0, portraitW, portraitH)
+      portraitCover.value = portraitCanvas.toDataURL('image/jpeg', 0.9)
+      portraitCanvas.remove()
+    }
+
+    // 生成横屏封面 (4:3) — 从原始帧中心裁剪
+    const landscapeCanvas = document.createElement('canvas')
+    const landscapeW = Math.min(w, h * 4 / 3)
+    const landscapeH = landscapeW * 3 / 4
+    landscapeCanvas.width = landscapeW
+    landscapeCanvas.height = landscapeH
+    const landscapeCtx = landscapeCanvas.getContext('2d')
+    if (landscapeCtx) {
+      const sx = (w - landscapeW) / 2
+      const sy = (h - landscapeH) / 2
+      landscapeCtx.drawImage(canvas, sx, sy, landscapeW, landscapeH, 0, 0, landscapeW, landscapeH)
+      landscapeCover.value = landscapeCanvas.toDataURL('image/jpeg', 0.9)
+      landscapeCanvas.remove()
+    }
+
     video.remove()
     canvas.remove()
   }
@@ -709,7 +741,8 @@ async function handlePublish() {
       title: publishTitle.value,
       text: publishText.value,
       topics: topics,
-      portrait_cover: frameSrc.value || undefined,
+      portrait_cover: portraitCover.value || undefined,
+      landscape_cover: landscapeCover.value || undefined,
     }
 
     const res = await startPublish(data)
@@ -1056,7 +1089,7 @@ function retryPublish() {
 .bound-accounts { margin-top: 16px; }
 .account-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .login-overlay {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
@@ -1065,8 +1098,7 @@ function retryPublish() {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  border-radius: 8px;
+  z-index: 9999;
 }
 .login-loading { text-align: center; color: #fff; }
 .login-loading p { margin-top: 12px; font-size: 15px; }
